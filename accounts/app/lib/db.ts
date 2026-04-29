@@ -165,11 +165,7 @@ export async function requestMembership(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const code = (err as { code?: string }).code ?? "";
-    if (
-      msg.includes("UNIQUE") ||
-      msg.includes("CONSTRAINT") ||
-      code === "SQLITE_CONSTRAINT"
-    ) {
+    if (msg.includes("UNIQUE") || msg.includes("CONSTRAINT") || code === "SQLITE_CONSTRAINT") {
       return { ok: false, reason: "already_has_membership" };
     }
     throw err;
@@ -197,7 +193,9 @@ export async function setRole(
   chapterId: number,
 ): Promise<void> {
   await db
-    .prepare("UPDATE memberships SET role = ? WHERE user_id = ? AND chapter_id = ? AND status = 'active'")
+    .prepare(
+      "UPDATE memberships SET role = ? WHERE user_id = ? AND chapter_id = ? AND status = 'active'",
+    )
     .bind(role, userId, chapterId)
     .run();
 }
