@@ -1,5 +1,18 @@
 import { type UserSummary, getUsersByIds, requireUser } from "@gdgjp/auth-lib";
+import { ArrowLeft, Check, MoreHorizontal, X } from "lucide-react";
 import { Form, Link, redirect } from "react-router";
+import { PageShell } from "~/components/page-shell";
+import { StatusBadge } from "~/components/status-badge";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   approveMembership,
   getChapterBySlug,
@@ -84,77 +97,145 @@ export async function action(args: Route.ActionArgs) {
 
 function userLabel(users: Record<string, UserSummary>, id: string) {
   const u = users[id];
-  if (!u) return id;
-  return u.name ? `${u.name} (${u.email})` : u.email || id;
+  if (!u) return { name: id, email: "" };
+  return { name: u.name || u.email || id, email: u.name ? u.email : "" };
 }
 
 export default function OrganizeChapter({ loaderData, actionData }: Route.ComponentProps) {
   const { chapter, pending, members, users } = loaderData;
   return (
-    <main style={{ maxWidth: 720, margin: "2rem auto", padding: "0 1rem" }}>
-      <p>
-        <Link to="/dashboard">← Back to dashboard</Link>
-      </p>
-      <h1>Organize {chapter.name}</h1>
+    <PageShell>
+      <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2 text-muted-foreground">
+        <Link to="/dashboard">
+          <ArrowLeft className="size-4" /> Back to dashboard
+        </Link>
+      </Button>
 
-      <section>
-        <h2>Pending requests ({pending.length})</h2>
-        {pending.length === 0 ? (
-          <p>No pending requests.</p>
-        ) : (
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {pending.map((m) => (
-              <li key={m.userId} style={{ margin: "0.5rem 0" }}>
-                {userLabel(users, m.userId)}{" "}
-                <Form method="post" style={{ display: "inline" }}>
-                  <input type="hidden" name="intent" value="approve" />
-                  <input type="hidden" name="userId" value={m.userId} />
-                  <button type="submit">Approve</button>
-                </Form>{" "}
-                <Form method="post" style={{ display: "inline" }}>
-                  <input type="hidden" name="intent" value="remove" />
-                  <input type="hidden" name="userId" value={m.userId} />
-                  <button type="submit">Reject</button>
-                </Form>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <div className="space-y-1">
+        <h1 className="text-3xl font-medium tracking-tight">Organize {chapter.name}</h1>
+        <p className="font-mono text-xs text-muted-foreground">{chapter.slug}</p>
+      </div>
 
-      <section style={{ marginTop: "2rem" }}>
-        <h2>Members ({members.length})</h2>
-        {members.length === 0 ? (
-          <p>No members yet.</p>
-        ) : (
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {members.map((m) => (
-              <li key={m.userId} style={{ margin: "0.5rem 0" }}>
-                <strong>{m.role === "organizer" ? "Organizer" : "Member"}</strong> —{" "}
-                {userLabel(users, m.userId)}{" "}
-                <Form method="post" style={{ display: "inline" }}>
-                  <input
-                    type="hidden"
-                    name="intent"
-                    value={m.role === "organizer" ? "demote" : "promote"}
-                  />
-                  <input type="hidden" name="userId" value={m.userId} />
-                  <button type="submit">
-                    {m.role === "organizer" ? "Demote to member" : "Promote to organizer"}
-                  </button>
-                </Form>{" "}
-                <Form method="post" style={{ display: "inline" }}>
-                  <input type="hidden" name="intent" value="remove" />
-                  <input type="hidden" name="userId" value={m.userId} />
-                  <button type="submit">Remove</button>
-                </Form>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {actionData?.error ? (
+        <Alert variant="destructive" className="mt-6">
+          <AlertTitle>Couldn't perform action</AlertTitle>
+          <AlertDescription>{actionData.error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-      {actionData?.error ? <p style={{ color: "crimson" }}>{actionData.error}</p> : null}
-    </main>
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Pending requests ({pending.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {pending.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No pending requests.</p>
+          ) : (
+            <ul className="divide-y">
+              {pending.map((m) => {
+                const u = userLabel(users, m.userId);
+                return (
+                  <li
+                    key={m.userId}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{u.name}</div>
+                      {u.email ? (
+                        <div className="truncate text-xs text-muted-foreground">{u.email}</div>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Form method="post">
+                        <input type="hidden" name="intent" value="approve" />
+                        <input type="hidden" name="userId" value={m.userId} />
+                        <Button type="submit" size="sm">
+                          <Check className="size-4" /> Approve
+                        </Button>
+                      </Form>
+                      <Form method="post">
+                        <input type="hidden" name="intent" value="remove" />
+                        <input type="hidden" name="userId" value={m.userId} />
+                        <Button type="submit" size="sm" variant="outline">
+                          <X className="size-4" /> Reject
+                        </Button>
+                      </Form>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Members ({members.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {members.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No members yet.</p>
+          ) : (
+            <ul className="divide-y">
+              {members.map((m) => {
+                const u = userLabel(users, m.userId);
+                const isOrganizer = m.role === "organizer";
+                return (
+                  <li
+                    key={m.userId}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <StatusBadge status={isOrganizer ? "organizer" : "member"}>
+                        {isOrganizer ? "Organizer" : "Member"}
+                      </StatusBadge>
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{u.name}</div>
+                        {u.email ? (
+                          <div className="truncate text-xs text-muted-foreground">{u.email}</div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-sm" aria-label={`Manage ${u.name}`}>
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <Form method="post">
+                          <input
+                            type="hidden"
+                            name="intent"
+                            value={isOrganizer ? "demote" : "promote"}
+                          />
+                          <input type="hidden" name="userId" value={m.userId} />
+                          <DropdownMenuItem asChild>
+                            <button type="submit" className="w-full text-left">
+                              {isOrganizer ? "Demote to member" : "Promote to organizer"}
+                            </button>
+                          </DropdownMenuItem>
+                        </Form>
+                        <DropdownMenuSeparator />
+                        <Form method="post">
+                          <input type="hidden" name="intent" value="remove" />
+                          <input type="hidden" name="userId" value={m.userId} />
+                          <DropdownMenuItem asChild variant="destructive">
+                            <button type="submit" className="w-full text-left">
+                              Remove from chapter
+                            </button>
+                          </DropdownMenuItem>
+                        </Form>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </PageShell>
   );
 }

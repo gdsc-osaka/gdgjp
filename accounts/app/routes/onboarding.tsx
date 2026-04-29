@@ -1,6 +1,11 @@
 import { requireUser } from "@gdgjp/auth-lib";
 import { Form, redirect } from "react-router";
+import { PageShell } from "~/components/page-shell";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { getMembership, listChapters, requestMembership } from "~/lib/db";
+import { cn } from "~/lib/utils";
 import type { Route } from "./+types/onboarding";
 
 export function meta() {
@@ -54,27 +59,63 @@ export async function action(args: Route.ActionArgs) {
 
 export default function Onboarding({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <main style={{ maxWidth: 480, margin: "2rem auto", padding: "0 1rem" }}>
-      <h1>Choose your chapter</h1>
-      <p>Pick the GDG or GDGoC chapter you belong to. An organizer will approve your request.</p>
+    <PageShell size="sm">
+      <div className="space-y-1">
+        <h1 className="text-3xl font-medium tracking-tight">Choose your chapter</h1>
+        <p className="text-sm text-muted-foreground">
+          Pick the GDG or GDGoC chapter you belong to. An organizer will approve your request.
+        </p>
+      </div>
+
       {loaderData.chapters.length === 0 ? (
-        <p>No chapters are available yet. Please check back later.</p>
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-base">No chapters yet</CardTitle>
+            <CardDescription>
+              No chapters are available yet. Please check back later.
+            </CardDescription>
+          </CardHeader>
+        </Card>
       ) : (
-        <Form method="post">
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {loaderData.chapters.map((c) => (
-              <li key={c.id} style={{ margin: "0.25rem 0" }}>
-                <label>
-                  <input type="radio" name="chapterId" value={c.id} required /> {c.name}{" "}
-                  <span style={{ color: "#666" }}>({c.kind === "gdg" ? "GDG" : "GDGoC"})</span>
+        <Form method="post" className="mt-6 space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="sr-only">Chapter</legend>
+            {loaderData.chapters.map((c) => {
+              const kindLabel = c.kind === "gdg" ? "GDG" : "GDGoC";
+              const accent = c.kind === "gdg" ? "text-gdg-blue" : "text-gdg-green";
+              return (
+                <label
+                  key={c.id}
+                  className="group flex cursor-pointer items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-accent has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                >
+                  <input
+                    type="radio"
+                    name="chapterId"
+                    value={c.id}
+                    required
+                    className="size-4 accent-primary"
+                  />
+                  <span className="flex flex-1 items-center justify-between gap-2">
+                    <span className="font-medium">{c.name}</span>
+                    <span className={cn("text-xs font-mono", accent)}>{kindLabel}</span>
+                  </span>
                 </label>
-              </li>
-            ))}
-          </ul>
-          <button type="submit">Request membership</button>
+              );
+            })}
+          </fieldset>
+
+          {actionData?.error ? (
+            <Alert variant="destructive">
+              <AlertTitle>Couldn't request membership</AlertTitle>
+              <AlertDescription>{actionData.error}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <Button type="submit" className="w-full">
+            Request membership
+          </Button>
         </Form>
       )}
-      {actionData?.error ? <p style={{ color: "crimson" }}>{actionData.error}</p> : null}
-    </main>
+    </PageShell>
   );
 }

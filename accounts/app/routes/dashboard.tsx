@@ -1,6 +1,10 @@
-import { UserButton } from "@clerk/react-router";
 import { requireUser } from "@gdgjp/auth-lib";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Link, redirect } from "react-router";
+import { PageShell } from "~/components/page-shell";
+import { StatusBadge } from "~/components/status-badge";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { getMembership } from "~/lib/db";
 import type { Route } from "./+types/dashboard";
 
@@ -27,49 +31,97 @@ function MembershipPanel({
 }: { membership: Route.ComponentProps["loaderData"]["membership"] }) {
   if (!membership) {
     return (
-      <section>
-        <p>You haven't joined a chapter yet.</p>
-        <Link to="/onboarding">Choose your chapter</Link>
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>No chapter yet</CardTitle>
+          <CardDescription>
+            Pick a GDG or GDGoC chapter to request membership. An organizer will approve your
+            request.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild>
+            <Link to="/onboarding">
+              Choose your chapter <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
-  const roleLabel = membership.role === "organizer" ? "Organizer" : "Member";
+
   if (membership.status === "pending") {
     return (
-      <section>
-        <p>
-          Awaiting approval to join <strong>{membership.chapter.name}</strong>.
-        </p>
-      </section>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle>{membership.chapter.name}</CardTitle>
+            <StatusBadge status="pending">Pending approval</StatusBadge>
+          </div>
+          <CardDescription>
+            An organizer will review your request soon. You'll get full access once approved.
+          </CardDescription>
+        </CardHeader>
+      </Card>
     );
   }
+
+  const isOrganizer = membership.role === "organizer";
   return (
-    <section>
-      <p>
-        {roleLabel} of <strong>{membership.chapter.name}</strong>.
-      </p>
-      {membership.role === "organizer" ? (
-        <Link to={`/chapters/${membership.chapter.slug}/organize`}>Organize chapter</Link>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle>{membership.chapter.name}</CardTitle>
+          <StatusBadge status={isOrganizer ? "organizer" : "active"}>
+            {isOrganizer ? "Organizer" : "Member"}
+          </StatusBadge>
+        </div>
+        <CardDescription>
+          {isOrganizer
+            ? "You can review pending requests and manage members."
+            : "You're an active member of this chapter."}
+        </CardDescription>
+      </CardHeader>
+      {isOrganizer ? (
+        <CardContent>
+          <Button asChild>
+            <Link to={`/chapters/${membership.chapter.slug}/organize`}>
+              Organize chapter <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </CardContent>
       ) : null}
-    </section>
+    </Card>
   );
 }
 
 export default function Dashboard({ loaderData }: Route.ComponentProps) {
   const { user, membership } = loaderData;
   return (
-    <main>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Dashboard</h1>
-        <UserButton />
-      </header>
-      <p>Signed in as {user.email}</p>
-      <MembershipPanel membership={membership} />
+    <PageShell>
+      <div className="space-y-1">
+        <h1 className="text-3xl font-medium tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">Signed in as {user.email}</p>
+      </div>
+      <div className="mt-6">
+        <MembershipPanel membership={membership} />
+      </div>
       {user.isAdmin ? (
-        <nav style={{ marginTop: "1rem" }}>
-          <Link to="/admin/chapters">Manage chapters (admin)</Link>
-        </nav>
+        <Card className="mt-6 border-gdg-blue/30 bg-gdg-blue/5">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="size-4 text-gdg-blue" />
+              <CardTitle className="text-base">Super admin tools</CardTitle>
+            </div>
+            <CardDescription>Create, edit, or delete chapters across GDG Japan.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline">
+              <Link to="/admin/chapters">Manage chapters</Link>
+            </Button>
+          </CardContent>
+        </Card>
       ) : null}
-    </main>
+    </PageShell>
   );
 }

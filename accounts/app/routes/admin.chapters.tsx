@@ -1,5 +1,38 @@
 import { requireUser } from "@gdgjp/auth-lib";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { Form, Link, redirect } from "react-router";
+import { PageShell } from "~/components/page-shell";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { type ChapterKind, createChapter, deleteChapter, listChapters } from "~/lib/db";
 import { requireSuperAdmin } from "~/lib/permissions";
 import type { Route } from "./+types/admin.chapters";
@@ -67,82 +100,131 @@ export async function action(args: Route.ActionArgs) {
 
 export default function AdminChapters({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <main style={{ maxWidth: 720, margin: "2rem auto", padding: "0 1rem" }}>
-      <p>
-        <Link to="/dashboard">← Back to dashboard</Link>
-      </p>
-      <h1>Manage chapters</h1>
+    <PageShell>
+      <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2 text-muted-foreground">
+        <Link to="/dashboard">
+          <ArrowLeft className="size-4" /> Back to dashboard
+        </Link>
+      </Button>
 
-      <section>
-        <h2>Create a chapter</h2>
-        <Form method="post">
-          <input type="hidden" name="intent" value="create" />
-          <p>
-            <label>
-              Slug <input name="slug" placeholder="gdg-tokyo" pattern="[a-z0-9-]+" required />
-            </label>
-          </p>
-          <p>
-            <label>
-              Name <input name="name" placeholder="GDG Tokyo" required />
-            </label>
-          </p>
-          <p>
-            <label>
-              Kind{" "}
-              <select name="kind" defaultValue="gdg">
-                <option value="gdg">GDG</option>
-                <option value="gdgoc">GDGoC</option>
-              </select>
-            </label>
-          </p>
-          <button type="submit">Create</button>
-        </Form>
-        {actionData?.error ? <p style={{ color: "crimson" }}>{actionData.error}</p> : null}
-      </section>
+      <h1 className="text-3xl font-medium tracking-tight">Manage chapters</h1>
 
-      <section style={{ marginTop: "2rem" }}>
-        <h2>Existing chapters</h2>
-        {loaderData.chapters.length === 0 ? (
-          <p>No chapters yet.</p>
-        ) : (
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
-            <thead>
-              <tr>
-                <th align="left">Name</th>
-                <th align="left">Slug</th>
-                <th align="left">Kind</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {loaderData.chapters.map((c) => (
-                <tr key={c.id}>
-                  <td>{c.name}</td>
-                  <td>{c.slug}</td>
-                  <td>{c.kind === "gdg" ? "GDG" : "GDGoC"}</td>
-                  <td align="right">
-                    <Link to={`/chapters/${c.slug}/organize`}>Organize</Link>{" "}
-                    <Form
-                      method="post"
-                      style={{ display: "inline" }}
-                      onSubmit={(e) => {
-                        if (!confirm(`Delete ${c.name}? Members will lose their membership.`)) {
-                          e.preventDefault();
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Create a chapter</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Form method="post" className="grid gap-4 sm:grid-cols-3">
+            <input type="hidden" name="intent" value="create" />
+            <div className="space-y-2">
+              <Label htmlFor="slug">Slug</Label>
+              <Input id="slug" name="slug" placeholder="gdg-tokyo" pattern="[a-z0-9-]+" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input id="name" name="name" placeholder="GDG Tokyo" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="kind">Kind</Label>
+              <Select name="kind" defaultValue="gdg">
+                <SelectTrigger id="kind" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gdg">GDG</SelectItem>
+                  <SelectItem value="gdgoc">GDGoC</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="sm:col-span-3">
+              <Button type="submit">Create chapter</Button>
+            </div>
+            {actionData?.error ? (
+              <div className="sm:col-span-3">
+                <Alert variant="destructive">
+                  <AlertTitle>Couldn't save</AlertTitle>
+                  <AlertDescription>{actionData.error}</AlertDescription>
+                </Alert>
+              </div>
+            ) : null}
+          </Form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Existing chapters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loaderData.chapters.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No chapters yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Slug</TableHead>
+                  <TableHead>Kind</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loaderData.chapters.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {c.slug}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={
+                          c.kind === "gdg"
+                            ? "font-mono text-xs text-gdg-blue"
+                            : "font-mono text-xs text-gdg-green"
                         }
-                      }}
-                    >
-                      <input type="hidden" name="intent" value="delete" />
-                      <input type="hidden" name="id" value={c.id} />
-                      <button type="submit">Delete</button>
-                    </Form>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-    </main>
+                      >
+                        {c.kind === "gdg" ? "GDG" : "GDGoC"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button asChild variant="outline" size="sm">
+                          <Link to={`/chapters/${c.slug}/organize`}>Organize</Link>
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon-sm" aria-label={`Delete ${c.name}`}>
+                              <Trash2 className="size-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete {c.name}?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Members will lose their membership. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <Form method="post">
+                                <input type="hidden" name="intent" value="delete" />
+                                <input type="hidden" name="id" value={c.id} />
+                                <AlertDialogAction type="submit" className="bg-destructive">
+                                  Delete chapter
+                                </AlertDialogAction>
+                              </Form>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </PageShell>
   );
 }
