@@ -68,6 +68,7 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
+    environment: Development
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -79,8 +80,8 @@ jobs:
       - name: Create accounts dev vars
         run: |
           cat > accounts/.dev.vars <<'EOF'
-          CLERK_PUBLISHABLE_KEY=pk_test_ZWFzeS1ncmFja2xlLTkyLmNsZXJrLmFjY291bnRzLmRldiQ
-          CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY || 'sk_test_ci_placeholder' }}
+          CLERK_PUBLISHABLE_KEY=${{ vars.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
           EOF
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
