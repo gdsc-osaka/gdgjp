@@ -1,5 +1,6 @@
 import { type UserSummary, getUsersByIds, requireUser } from "@gdgjp/auth-lib";
 import { ArrowLeft, Check, MoreHorizontal, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Form, Link } from "react-router";
 import { PageShell } from "~/components/page-shell";
 import { StatusBadge } from "~/components/status-badge";
@@ -23,11 +24,12 @@ import {
   removeMembership,
   setRole,
 } from "~/lib/db";
+import { i18n } from "~/lib/i18n/i18n.server";
 import { canManageChapter } from "~/lib/permissions";
 import type { Route } from "./+types/chapters.$slug.organize";
 
-export function meta({ params }: Route.MetaArgs) {
-  return [{ title: `Organize ${params.slug} — GDG Japan Accounts` }];
+export function meta({ data }: Route.MetaArgs) {
+  return [{ title: data?.title }];
 }
 
 async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
@@ -54,6 +56,7 @@ async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
 
 export async function loader(args: Route.LoaderArgs) {
   const { env, chapter } = await ensureAccess(args);
+  const t = await i18n.getFixedT(args.request);
   const [pending, members] = await Promise.all([
     listPendingForChapter(env.DB, chapter.id),
     listMembersForChapter(env.DB, chapter.id),
@@ -63,19 +66,26 @@ export async function loader(args: Route.LoaderArgs) {
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
     secretKey: env.CLERK_SECRET_KEY,
   });
-  return { chapter, pending, members, users };
+  return {
+    chapter,
+    pending,
+    members,
+    users,
+    title: t("meta.organize", { slug: chapter.slug }),
+  };
 }
 
 export async function action(args: Route.ActionArgs) {
   const { env, chapter } = await ensureAccess(args);
+  const t = await i18n.getFixedT(args.request);
   const form = await args.request.formData();
   const intent = form.get("intent");
   const targetUserId = String(form.get("userId") ?? "");
-  if (!targetUserId) return { error: "Missing user." };
+  if (!targetUserId) return { error: t("errors.missingUser") };
 
   const target = await getMembership(env.DB, targetUserId);
   if (!target || target.chapter.id !== chapter.id) {
-    return { error: "User is not in this chapter." };
+    return { error: t("errors.userNotInChapter") };
   }
 
   switch (intent) {
@@ -92,7 +102,7 @@ export async function action(args: Route.ActionArgs) {
       await removeMembership(env.DB, targetUserId);
       return null;
     default:
-      return { error: "Unknown action." };
+      return { error: t("errors.unknownAction") };
   }
 }
 
@@ -103,34 +113,37 @@ function userLabel(users: Record<string, UserSummary>, id: string) {
 }
 
 export default function OrganizeChapter({ loaderData, actionData }: Route.ComponentProps) {
+  const { t } = useTranslation();
   const { chapter, pending, members, users } = loaderData;
   return (
     <PageShell>
       <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2 text-muted-foreground">
         <Link to="/dashboard">
-          <ArrowLeft className="size-4" /> Back to dashboard
+          <ArrowLeft className="size-4" /> {t("nav.backToDashboard")}
         </Link>
       </Button>
 
       <div className="space-y-1">
-        <h1 className="text-3xl font-medium tracking-tight">Organize {chapter.name}</h1>
+        <h1 className="text-3xl font-medium tracking-tight">
+          {t("organize.title", { chapter: chapter.name })}
+        </h1>
         <p className="font-mono text-xs text-muted-foreground">{chapter.slug}</p>
       </div>
 
       {actionData?.error ? (
         <Alert variant="destructive" className="mt-6">
-          <AlertTitle>Couldn't perform action</AlertTitle>
+          <AlertTitle>{t("organize.errorTitle")}</AlertTitle>
           <AlertDescription>{actionData.error}</AlertDescription>
         </Alert>
       ) : null}
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Pending requests ({pending.length})</CardTitle>
+          <CardTitle>{t("organize.pending", { count: pending.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           {pending.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No pending requests.</p>
+            <p className="text-sm text-muted-foreground">{t("organize.noPending")}</p>
           ) : (
             <ul className="divide-y">
               {pending.map((m) => {
@@ -151,14 +164,14 @@ export default function OrganizeChapter({ loaderData, actionData }: Route.Compon
                         <input type="hidden" name="intent" value="approve" />
                         <input type="hidden" name="userId" value={m.userId} />
                         <Button type="submit" size="sm">
-                          <Check className="size-4" /> Approve
+                          <Check className="size-4" /> {t("organize.approve")}
                         </Button>
                       </Form>
                       <Form method="post">
                         <input type="hidden" name="intent" value="remove" />
                         <input type="hidden" name="userId" value={m.userId} />
                         <Button type="submit" size="sm" variant="outline">
-                          <X className="size-4" /> Reject
+                          <X className="size-4" /> {t("organize.reject")}
                         </Button>
                       </Form>
                     </div>
@@ -172,11 +185,11 @@ export default function OrganizeChapter({ loaderData, actionData }: Route.Compon
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Members ({members.length})</CardTitle>
+          <CardTitle>{t("organize.members", { count: members.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           {members.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No members yet.</p>
+            <p className="text-sm text-muted-foreground">{t("organize.noMembers")}</p>
           ) : (
             <ul className="divide-y">
               {members.map((m) => {
@@ -189,7 +202,7 @@ export default function OrganizeChapter({ loaderData, actionData }: Route.Compon
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <StatusBadge status={isOrganizer ? "organizer" : "member"}>
-                        {isOrganizer ? "Organizer" : "Member"}
+                        {isOrganizer ? t("organize.organizerBadge") : t("organize.memberBadge")}
                       </StatusBadge>
                       <div className="min-w-0">
                         <div className="truncate font-medium">{u.name}</div>
@@ -200,7 +213,11 @@ export default function OrganizeChapter({ loaderData, actionData }: Route.Compon
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label={`Manage ${u.name}`}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={t("organize.manageAria", { name: u.name })}
+                        >
                           <MoreHorizontal className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -214,7 +231,7 @@ export default function OrganizeChapter({ loaderData, actionData }: Route.Compon
                           <input type="hidden" name="userId" value={m.userId} />
                           <DropdownMenuItem asChild>
                             <button type="submit" className="w-full text-left">
-                              {isOrganizer ? "Demote to member" : "Promote to organizer"}
+                              {isOrganizer ? t("organize.demote") : t("organize.promote")}
                             </button>
                           </DropdownMenuItem>
                         </Form>
@@ -224,7 +241,7 @@ export default function OrganizeChapter({ loaderData, actionData }: Route.Compon
                           <input type="hidden" name="userId" value={m.userId} />
                           <DropdownMenuItem asChild variant="destructive">
                             <button type="submit" className="w-full text-left">
-                              Remove from chapter
+                              {t("organize.remove")}
                             </button>
                           </DropdownMenuItem>
                         </Form>

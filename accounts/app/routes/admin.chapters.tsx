@@ -1,5 +1,6 @@
 import { requireUser } from "@gdgjp/auth-lib";
 import { ArrowLeft, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Form, Link } from "react-router";
 import { PageShell } from "~/components/page-shell";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -35,15 +36,13 @@ import {
 } from "~/components/ui/table";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
 import { type ChapterKind, createChapter, deleteChapter, listChapters } from "~/lib/db";
+import { i18n } from "~/lib/i18n/i18n.server";
 import { requireSuperAdmin } from "~/lib/permissions";
 import type { Route } from "./+types/admin.chapters";
 
-export function meta() {
-  return [{ title: "Manage chapters — GDG Japan Accounts" }];
-}
-
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
+  const t = await i18n.getFixedT(args.request);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
     user = await requireUser(args.request, {
@@ -55,11 +54,16 @@ export async function loader(args: Route.LoaderArgs) {
   }
   requireSuperAdmin(user);
   const chapters = await listChapters(env.DB);
-  return { chapters };
+  return { chapters, title: t("meta.adminChapters") };
+}
+
+export function meta({ data }: Route.MetaArgs) {
+  return [{ title: data?.title }];
 }
 
 export async function action(args: Route.ActionArgs) {
   const env = args.context.cloudflare.env;
+  const t = await i18n.getFixedT(args.request);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
     user = await requireUser(args.request, {
@@ -84,66 +88,78 @@ export async function action(args: Route.ActionArgs) {
     const name = String(form.get("name") ?? "").trim();
     const kind = String(form.get("kind") ?? "") as ChapterKind;
     if (!slug || !name || (kind !== "gdg" && kind !== "gdgoc")) {
-      return { error: "All fields are required." };
+      return { error: t("errors.fieldsRequired") };
     }
     if (!/^[a-z0-9-]+$/.test(slug)) {
-      return { error: "Slug must be lowercase letters, numbers, and dashes." };
+      return { error: t("errors.slugFormat") };
     }
     try {
       await createChapter(env.DB, { slug, name, kind });
     } catch {
-      return { error: "Could not create chapter (slug may already exist)." };
+      return { error: t("errors.createChapterFailed") };
     }
     return null;
   }
-  return { error: "Unknown action." };
+  return { error: t("errors.unknownAction") };
 }
 
 export default function AdminChapters({ loaderData, actionData }: Route.ComponentProps) {
+  const { t } = useTranslation();
   return (
     <PageShell>
       <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2 text-muted-foreground">
         <Link to="/dashboard">
-          <ArrowLeft className="size-4" /> Back to dashboard
+          <ArrowLeft className="size-4" /> {t("nav.backToDashboard")}
         </Link>
       </Button>
 
-      <h1 className="text-3xl font-medium tracking-tight">Manage chapters</h1>
+      <h1 className="text-3xl font-medium tracking-tight">{t("admin.title")}</h1>
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Create a chapter</CardTitle>
+          <CardTitle>{t("admin.create.cardTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           <Form method="post" className="grid gap-4 sm:grid-cols-3">
             <input type="hidden" name="intent" value="create" />
             <div className="space-y-2">
-              <Label htmlFor="slug">Slug</Label>
-              <Input id="slug" name="slug" placeholder="gdg-tokyo" pattern="[a-z0-9-]+" required />
+              <Label htmlFor="slug">{t("admin.create.slugLabel")}</Label>
+              <Input
+                id="slug"
+                name="slug"
+                placeholder={t("admin.create.slugPlaceholder")}
+                pattern="[a-z0-9-]+"
+                required
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input id="name" name="name" placeholder="GDG Tokyo" required />
+              <Label htmlFor="name">{t("admin.create.nameLabel")}</Label>
+              <Input
+                id="name"
+                name="name"
+                placeholder={t("admin.create.namePlaceholder")}
+                required
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="kind">Kind</Label>
+              <Label htmlFor="kind">{t("admin.create.kindLabel")}</Label>
               <Select name="kind" defaultValue="gdg">
                 <SelectTrigger id="kind" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gdg">GDG</SelectItem>
-                  <SelectItem value="gdgoc">GDGoC</SelectItem>
+                  <SelectItem value="gdg">{t("kind.gdg")}</SelectItem>
+                  <SelectItem value="gdgoc">{t("kind.gdgoc")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="sm:col-span-3">
-              <Button type="submit">Create chapter</Button>
+              <Button type="submit">{t("admin.create.submit")}</Button>
             </div>
             {actionData?.error ? (
               <div className="sm:col-span-3">
                 <Alert variant="destructive">
-                  <AlertTitle>Couldn't save</AlertTitle>
+                  <AlertTitle>{t("admin.create.errorTitle")}</AlertTitle>
                   <AlertDescription>{actionData.error}</AlertDescription>
                 </Alert>
               </div>
@@ -154,19 +170,19 @@ export default function AdminChapters({ loaderData, actionData }: Route.Componen
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Existing chapters</CardTitle>
+          <CardTitle>{t("admin.list.cardTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           {loaderData.chapters.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No chapters yet.</p>
+            <p className="text-sm text-muted-foreground">{t("admin.list.empty")}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Slug</TableHead>
-                  <TableHead>Kind</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("admin.list.name")}</TableHead>
+                  <TableHead>{t("admin.list.slug")}</TableHead>
+                  <TableHead>{t("admin.list.kind")}</TableHead>
+                  <TableHead className="text-right">{t("admin.list.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -184,34 +200,42 @@ export default function AdminChapters({ loaderData, actionData }: Route.Componen
                             : "font-mono text-xs text-gdg-green"
                         }
                       >
-                        {c.kind === "gdg" ? "GDG" : "GDGoC"}
+                        {c.kind === "gdg" ? t("kind.gdg") : t("kind.gdgoc")}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Button asChild variant="outline" size="sm">
-                          <Link to={`/chapters/${c.slug}/organize`}>Organize</Link>
+                          <Link to={`/chapters/${c.slug}/organize`}>
+                            {t("admin.list.organize")}
+                          </Link>
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon-sm" aria-label={`Delete ${c.name}`}>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={t("admin.list.deleteAria", { name: c.name })}
+                            >
                               <Trash2 className="size-4 text-destructive" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Delete {c.name}?</AlertDialogTitle>
+                              <AlertDialogTitle>
+                                {t("admin.list.dialogTitle", { name: c.name })}
+                              </AlertDialogTitle>
                               <AlertDialogDescription>
-                                Members will lose their membership. This action cannot be undone.
+                                {t("admin.list.dialogDesc")}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogCancel>{t("admin.list.cancel")}</AlertDialogCancel>
                               <Form method="post">
                                 <input type="hidden" name="intent" value="delete" />
                                 <input type="hidden" name="id" value={c.id} />
                                 <AlertDialogAction type="submit" className="bg-destructive">
-                                  Delete chapter
+                                  {t("admin.list.deleteConfirm")}
                                 </AlertDialogAction>
                               </Form>
                             </AlertDialogFooter>

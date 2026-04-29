@@ -1,5 +1,6 @@
 import { requireUser } from "@gdgjp/auth-lib";
 import { ArrowRight, ShieldCheck } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { PageShell } from "~/components/page-shell";
 import { StatusBadge } from "~/components/status-badge";
@@ -7,43 +8,43 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
 import { getMembership } from "~/lib/db";
+import { i18n } from "~/lib/i18n/i18n.server";
 import type { Route } from "./+types/dashboard";
-
-export function meta() {
-  return [{ title: "Dashboard — GDG Japan Accounts" }];
-}
 
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
+  const t = await i18n.getFixedT(args.request);
   try {
     const user = await requireUser(args.request, {
       publishableKey: env.CLERK_PUBLISHABLE_KEY,
       secretKey: env.CLERK_SECRET_KEY,
     });
     const membership = await getMembership(env.DB, user.id);
-    return { user, membership };
+    return { user, membership, title: t("meta.dashboard") };
   } catch {
     throw buildSignInRedirect(args.request);
   }
 }
 
+export function meta({ data }: Route.MetaArgs) {
+  return [{ title: data?.title }];
+}
+
 function MembershipPanel({
   membership,
 }: { membership: Route.ComponentProps["loaderData"]["membership"] }) {
+  const { t } = useTranslation();
   if (!membership) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>No chapter yet</CardTitle>
-          <CardDescription>
-            Pick a GDG or GDGoC chapter to request membership. An organizer will approve your
-            request.
-          </CardDescription>
+          <CardTitle>{t("dashboard.noChapter.title")}</CardTitle>
+          <CardDescription>{t("dashboard.noChapter.description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Button asChild>
             <Link to="/onboarding">
-              Choose your chapter <ArrowRight className="size-4" />
+              {t("dashboard.noChapter.cta")} <ArrowRight className="size-4" />
             </Link>
           </Button>
         </CardContent>
@@ -57,11 +58,9 @@ function MembershipPanel({
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <CardTitle>{membership.chapter.name}</CardTitle>
-            <StatusBadge status="pending">Pending approval</StatusBadge>
+            <StatusBadge status="pending">{t("dashboard.pending.badge")}</StatusBadge>
           </div>
-          <CardDescription>
-            An organizer will review your request soon. You'll get full access once approved.
-          </CardDescription>
+          <CardDescription>{t("dashboard.pending.description")}</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -74,20 +73,18 @@ function MembershipPanel({
         <div className="flex items-center justify-between gap-2">
           <CardTitle>{membership.chapter.name}</CardTitle>
           <StatusBadge status={isOrganizer ? "organizer" : "active"}>
-            {isOrganizer ? "Organizer" : "Member"}
+            {isOrganizer ? t("dashboard.active.organizerBadge") : t("dashboard.active.memberBadge")}
           </StatusBadge>
         </div>
         <CardDescription>
-          {isOrganizer
-            ? "You can review pending requests and manage members."
-            : "You're an active member of this chapter."}
+          {isOrganizer ? t("dashboard.active.organizerDesc") : t("dashboard.active.memberDesc")}
         </CardDescription>
       </CardHeader>
       {isOrganizer ? (
         <CardContent>
           <Button asChild>
             <Link to={`/chapters/${membership.chapter.slug}/organize`}>
-              Organize chapter <ArrowRight className="size-4" />
+              {t("dashboard.active.organizeCta")} <ArrowRight className="size-4" />
             </Link>
           </Button>
         </CardContent>
@@ -97,12 +94,15 @@ function MembershipPanel({
 }
 
 export default function Dashboard({ loaderData }: Route.ComponentProps) {
+  const { t } = useTranslation();
   const { user, membership } = loaderData;
   return (
     <PageShell>
       <div className="space-y-1">
-        <h1 className="text-3xl font-medium tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Signed in as {user.email}</p>
+        <h1 className="text-3xl font-medium tracking-tight">{t("dashboard.title")}</h1>
+        <p className="text-sm text-muted-foreground">
+          {t("dashboard.signedInAs", { email: user.email })}
+        </p>
       </div>
       <div className="mt-6">
         <MembershipPanel membership={membership} />
@@ -112,13 +112,13 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
           <CardHeader>
             <div className="flex items-center gap-2">
               <ShieldCheck className="size-4 text-gdg-blue" />
-              <CardTitle className="text-base">Super admin tools</CardTitle>
+              <CardTitle className="text-base">{t("dashboard.superAdmin.title")}</CardTitle>
             </div>
-            <CardDescription>Create, edit, or delete chapters across GDG Japan.</CardDescription>
+            <CardDescription>{t("dashboard.superAdmin.description")}</CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">
-              <Link to="/admin/chapters">Manage chapters</Link>
+              <Link to="/admin/chapters">{t("dashboard.superAdmin.cta")}</Link>
             </Button>
           </CardContent>
         </Card>

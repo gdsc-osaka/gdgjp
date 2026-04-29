@@ -15,18 +15,22 @@
     "migrate:remote": "wrangler d1 migrations apply gdgjp-accounts --remote"
   },
   "dependencies": {
+    "@clerk/localizations": "^4.5.6",
     "@clerk/react-router": "^3.1.7",
     "@clerk/themes": "^2.4.57",
     "@gdgjp/auth-lib": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "i18next": "^26.0.8",
     "isbot": "^5.1.17",
     "lucide-react": "^1.14.0",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-i18next": "^17.0.6",
     "react-router": "^7.1.1",
+    "remix-i18next": "^7.5.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0"
   },

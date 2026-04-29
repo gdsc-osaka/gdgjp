@@ -8,4 +8,5 @@ export default [
   route("onboarding", "routes/onboarding.tsx"),
   route("admin/chapters", "routes/admin.chapters.tsx"),
   route("chapters/:slug/organize", "routes/chapters.$slug.organize.tsx"),
+  route("api/locale", "routes/api.locale.ts"),
 ] satisfies RouteConfig;

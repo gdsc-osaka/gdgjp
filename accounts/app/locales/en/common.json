@@ -1,0 +1,118 @@
+{
+  "app": {
+    "name": "GDG Japan Accounts"
+  },
+  "nav": {
+    "homeAria": "GDG Japan Accounts home",
+    "toggleTheme": "Toggle theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "localeLabel": "Language",
+    "localeJa": "日本語",
+    "localeEn": "English",
+    "backToDashboard": "Back to dashboard"
+  },
+  "meta": {
+    "signin": "Sign in — GDG Japan Accounts",
+    "signup": "Sign up — GDG Japan Accounts",
+    "dashboard": "Dashboard — GDG Japan Accounts",
+    "onboarding": "Choose your chapter — GDG Japan Accounts",
+    "adminChapters": "Manage chapters — GDG Japan Accounts",
+    "organize": "Organize {{slug}} — GDG Japan Accounts"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "signedInAs": "Signed in as {{email}}",
+    "noChapter": {
+      "title": "No chapter yet",
+      "description": "Pick a GDG or GDGoC chapter to request membership. An organizer will approve your request.",
+      "cta": "Choose your chapter"
+    },
+    "pending": {
+      "badge": "Pending approval",
+      "description": "An organizer will review your request soon. You'll get full access once approved."
+    },
+    "active": {
+      "memberBadge": "Member",
+      "organizerBadge": "Organizer",
+      "memberDesc": "You're an active member of this chapter.",
+      "organizerDesc": "You can review pending requests and manage members.",
+      "organizeCta": "Organize chapter"
+    },
+    "superAdmin": {
+      "title": "Super admin tools",
+      "description": "Create, edit, or delete chapters across GDG Japan.",
+      "cta": "Manage chapters"
+    }
+  },
+  "onboarding": {
+    "title": "Choose your chapter",
+    "subtitle": "Pick the GDG or GDGoC chapter you belong to. An organizer will approve your request.",
+    "empty": {
+      "title": "No chapters yet",
+      "description": "No chapters are available yet. Please check back later."
+    },
+    "fieldsetLegend": "Chapter",
+    "submit": "Request membership",
+    "errorTitle": "Couldn't request membership"
+  },
+  "admin": {
+    "title": "Manage chapters",
+    "create": {
+      "cardTitle": "Create a chapter",
+      "slugLabel": "Slug",
+      "slugPlaceholder": "gdg-tokyo",
+      "nameLabel": "Name",
+      "namePlaceholder": "GDG Tokyo",
+      "kindLabel": "Kind",
+      "submit": "Create chapter",
+      "errorTitle": "Couldn't save"
+    },
+    "list": {
+      "cardTitle": "Existing chapters",
+      "name": "Name",
+      "slug": "Slug",
+      "kind": "Kind",
+      "actions": "Actions",
+      "empty": "No chapters yet.",
+      "organize": "Organize",
+      "deleteAria": "Delete {{name}}",
+      "dialogTitle": "Delete {{name}}?",
+      "dialogDesc": "Members will lose their membership. This action cannot be undone.",
+      "deleteConfirm": "Delete chapter",
+      "cancel": "Cancel"
+    }
+  },
+  "organize": {
+    "title": "Organize {{chapter}}",
+    "pending": "Pending requests ({{count}})",
+    "members": "Members ({{count}})",
+    "noPending": "No pending requests.",
+    "noMembers": "No members yet.",
+    "approve": "Approve",
+    "reject": "Reject",
+    "demote": "Demote to member",
+    "promote": "Promote to organizer",
+    "remove": "Remove from chapter",
+    "errorTitle": "Couldn't perform action",
+    "memberBadge": "Member",
+    "organizerBadge": "Organizer",
+    "manageAria": "Manage {{name}}"
+  },
+  "kind": {
+    "gdg": "GDG",
+    "gdgoc": "GDGoC"
+  },
+  "errors": {
+    "selectChapter": "Please select a chapter.",
+    "chapterNotFound": "Chapter not found.",
+    "alreadyHasChapter": "You already have a chapter.",
+    "fieldsRequired": "All fields are required.",
+    "slugFormat": "Slug must be lowercase letters, numbers, and dashes.",
+    "createChapterFailed": "Could not create chapter (slug may already exist).",
+    "unknownAction": "Unknown action.",
+    "missingUser": "Missing user.",
+    "userNotInChapter": "User is not in this chapter."
+  }
+}
