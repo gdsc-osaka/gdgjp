@@ -1,5 +1,11 @@
 import { createRequestHandler } from "react-router";
 
+declare global {
+  interface Env {
+    CLERK_SECRET_KEY: string;
+  }
+}
+
 declare module "react-router" {
   export interface AppLoadContext {
     cloudflare: {

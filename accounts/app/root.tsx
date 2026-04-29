@@ -1,4 +1,13 @@
+import { ClerkProvider } from "@clerk/react-router";
+import { rootAuthLoader } from "@clerk/react-router/server";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import type { Route } from "./+types/root";
+
+export const loader = (args: Route.LoaderArgs) =>
+  rootAuthLoader(args, {
+    publishableKey: args.context.cloudflare.env.CLERK_PUBLISHABLE_KEY,
+    secretKey: args.context.cloudflare.env.CLERK_SECRET_KEY,
+  });
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -18,6 +27,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function App() {
-  return <Outlet />;
+export default function App({ loaderData }: Route.ComponentProps) {
+  return (
+    <ClerkProvider loaderData={loaderData}>
+      <Outlet />
+    </ClerkProvider>
+  );
 }
