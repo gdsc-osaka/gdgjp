@@ -78,11 +78,22 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Create accounts dev vars
+        env:
+          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
         run: |
-          cat > accounts/.dev.vars <<'EOF'
-          CLERK_PUBLISHABLE_KEY=${{ vars.CLERK_PUBLISHABLE_KEY }}
-          CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
-          EOF
+          if [ -z "$CLERK_PUBLISHABLE_KEY" ]; then
+            echo "Error: CLERK_PUBLISHABLE_KEY variable is not set" >&2
+            exit 1
+          fi
+          if [ -z "$CLERK_SECRET_KEY" ]; then
+            echo "Error: CLERK_SECRET_KEY secret is not set" >&2
+            exit 1
+          fi
+          {
+            printf 'CLERK_PUBLISHABLE_KEY=%s\n' "$CLERK_PUBLISHABLE_KEY"
+            printf 'CLERK_SECRET_KEY=%s\n' "$CLERK_SECRET_KEY"
+          } > accounts/.dev.vars
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
