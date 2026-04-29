@@ -1,6 +1,6 @@
 import { requireUser } from "@gdgjp/auth-lib";
 import { ArrowLeft, Trash2 } from "lucide-react";
-import { Form, Link, redirect } from "react-router";
+import { Form, Link } from "react-router";
 import { PageShell } from "~/components/page-shell";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import {
@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { buildSignInRedirect } from "~/lib/auth-redirect";
 import { type ChapterKind, createChapter, deleteChapter, listChapters } from "~/lib/db";
 import { requireSuperAdmin } from "~/lib/permissions";
 import type { Route } from "./+types/admin.chapters";
@@ -50,7 +51,7 @@ export async function loader(args: Route.LoaderArgs) {
       secretKey: env.CLERK_SECRET_KEY,
     });
   } catch {
-    throw redirect("/sign-in");
+    throw buildSignInRedirect(args.request);
   }
   requireSuperAdmin(user);
   const chapters = await listChapters(env.DB);
@@ -66,7 +67,7 @@ export async function action(args: Route.ActionArgs) {
       secretKey: env.CLERK_SECRET_KEY,
     });
   } catch {
-    throw redirect("/sign-in");
+    throw buildSignInRedirect(args.request);
   }
   requireSuperAdmin(user);
   const form = await args.request.formData();

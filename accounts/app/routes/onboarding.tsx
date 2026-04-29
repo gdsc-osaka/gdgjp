@@ -4,6 +4,7 @@ import { PageShell } from "~/components/page-shell";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { buildSignInRedirect } from "~/lib/auth-redirect";
 import { getMembership, listChapters, requestMembership } from "~/lib/db";
 import { cn } from "~/lib/utils";
 import type { Route } from "./+types/onboarding";
@@ -21,7 +22,7 @@ export async function loader(args: Route.LoaderArgs) {
       secretKey: env.CLERK_SECRET_KEY,
     });
   } catch {
-    throw redirect("/sign-in");
+    throw buildSignInRedirect(args.request);
   }
   const membership = await getMembership(env.DB, user.id);
   if (membership) throw redirect("/dashboard");
@@ -38,7 +39,7 @@ export async function action(args: Route.ActionArgs) {
       secretKey: env.CLERK_SECRET_KEY,
     });
   } catch {
-    throw redirect("/sign-in");
+    throw buildSignInRedirect(args.request);
   }
   const form = await args.request.formData();
   const chapterId = Number(form.get("chapterId"));

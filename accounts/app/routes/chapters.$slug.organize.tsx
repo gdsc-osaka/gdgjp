@@ -1,6 +1,6 @@
 import { type UserSummary, getUsersByIds, requireUser } from "@gdgjp/auth-lib";
 import { ArrowLeft, Check, MoreHorizontal, X } from "lucide-react";
-import { Form, Link, redirect } from "react-router";
+import { Form, Link } from "react-router";
 import { PageShell } from "~/components/page-shell";
 import { StatusBadge } from "~/components/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { buildSignInRedirect } from "~/lib/auth-redirect";
 import {
   approveMembership,
   getChapterBySlug,
@@ -38,7 +39,7 @@ async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
       secretKey: env.CLERK_SECRET_KEY,
     });
   } catch {
-    throw redirect("/sign-in");
+    throw buildSignInRedirect(args.request);
   }
   const slug = args.params.slug;
   if (!slug) throw new Response("Not found", { status: 404 });

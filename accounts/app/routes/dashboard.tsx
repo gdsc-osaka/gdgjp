@@ -1,10 +1,11 @@
 import { requireUser } from "@gdgjp/auth-lib";
 import { ArrowRight, ShieldCheck } from "lucide-react";
-import { Link, redirect } from "react-router";
+import { Link } from "react-router";
 import { PageShell } from "~/components/page-shell";
 import { StatusBadge } from "~/components/status-badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { buildSignInRedirect } from "~/lib/auth-redirect";
 import { getMembership } from "~/lib/db";
 import type { Route } from "./+types/dashboard";
 
@@ -22,7 +23,7 @@ export async function loader(args: Route.LoaderArgs) {
     const membership = await getMembership(env.DB, user.id);
     return { user, membership };
   } catch {
-    throw redirect("/sign-in");
+    throw buildSignInRedirect(args.request);
   }
 }
 
