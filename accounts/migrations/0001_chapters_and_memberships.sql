@@ -6,6 +6,7 @@ CREATE TABLE chapters (
   created_at  INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
+-- user_id is the sole PK: one membership per user across all chapters (single-chapter model)
 CREATE TABLE memberships (
   user_id     TEXT PRIMARY KEY,
   chapter_id  INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,

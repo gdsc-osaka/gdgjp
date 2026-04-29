@@ -3,6 +3,7 @@ import { redirect } from "react-router";
 export function safeReturnTo(value: string | null | undefined): string | null {
   if (!value) return null;
   if (!value.startsWith("/") || value.startsWith("//")) return null;
+  if (value.includes("\\") || value.includes("\r") || value.includes("\n")) return null;
   return value;
 }
 

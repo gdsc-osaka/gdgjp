@@ -14,7 +14,11 @@ export function LocaleSwitcher() {
   const { i18n, t } = useTranslation();
   const location = useLocation();
   const submit = useSubmit();
-  const current = i18n.resolvedLanguage as Locale;
+  const resolved = i18n.resolvedLanguage;
+  const current: Locale =
+    resolved !== undefined && supportedLngs.includes(resolved as Locale)
+      ? (resolved as Locale)
+      : supportedLngs[0];
   const returnTo = `${location.pathname}${location.search}`;
 
   return (

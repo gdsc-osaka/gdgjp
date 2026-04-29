@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/react-router";
 import { clerkMiddleware, rootAuthLoader } from "@clerk/react-router/server";
 import { dark } from "@clerk/themes";
 import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import { i18n } from "~/lib/i18n/i18n.server";
@@ -26,7 +27,7 @@ export const links: Route.LinksFunction = () => [
   { rel: "stylesheet", href: stylesheet },
 ];
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({ children }: { children: ReactNode }) {
   const lang = useRootLang();
   return (
     <html lang={lang} suppressHydrationWarning>
@@ -57,11 +58,10 @@ function ClerkAppearance({
   children,
 }: {
   loaderData: Route.ComponentProps["loaderData"];
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { resolvedTheme } = useTheme();
-  const { i18n: i18nClient } = useTranslation();
-  const localization = i18nClient.resolvedLanguage === "ja" ? jaJP : enUS;
+  const localization = loaderData.locale === "ja" ? jaJP : enUS;
   return (
     <ClerkProvider
       loaderData={loaderData}

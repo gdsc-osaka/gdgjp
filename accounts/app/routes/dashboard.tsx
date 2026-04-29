@@ -20,8 +20,11 @@ export async function loader(args: Route.LoaderArgs) {
       publishableKey: env.CLERK_PUBLISHABLE_KEY,
       secretKey: env.CLERK_SECRET_KEY,
     });
-  } catch {
-    throw buildSignInRedirect(args.request);
+  } catch (err) {
+    if (err instanceof Response && err.status === 401) {
+      throw buildSignInRedirect(args.request);
+    }
+    throw err;
   }
   const membership = await getMembership(env.DB, user.id);
   return { user, membership, title: t("meta.dashboard") };
