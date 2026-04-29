@@ -1,12 +1,9 @@
-export function meta() {
-  return [{ title: "GDG Japan TinyURL" }];
+import { redirect } from "react-router";
+
+export function loader() {
+  throw redirect("/dashboard");
 }
 
 export default function Home() {
-  return (
-    <main>
-      <h1>go.gdgs.jp</h1>
-      <p>GDG Japan URL shortener.</p>
-    </main>
-  );
+  return null;
 }

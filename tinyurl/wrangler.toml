@@ -4,14 +4,32 @@ compatibility_flags = ["nodejs_compat"]
 main = "./workers/app.ts"
 
 [vars]
-APP_URL = "https://go.gdgs.jp"
+APP_URL = "https://url.gdgs.jp"
 ACCOUNTS_URL = "https://accounts.gdgs.jp"
+APEX_HOST = "gdgs.jp"
+CLERK_PUBLISHABLE_KEY = "pk_test_ZWFzeS1ncmFja2xlLTkyLmNsZXJrLmFjY291bnRzLmRldiQ"
+CLERK_IS_SATELLITE = "true"
+CLERK_DOMAIN = "url.gdgs.jp"
+CLERK_SIGN_IN_URL = "https://accounts.gdgs.jp/signin"
 
 [assets]
 binding = "ASSETS"
 directory = "./build/client"
 
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "gdgjp-tinyurl"
-# database_id = "TODO"
+[[d1_databases]]
+binding = "DB"
+database_name = "gdgjp-tinyurl"
+database_id = "TODO_RUN_WRANGLER_D1_CREATE"
+migrations_dir = "./migrations"
+
+[[analytics_engine_datasets]]
+binding = "CLICKS_AE"
+dataset = "tinyurl_clicks"
+
+[[routes]]
+pattern = "url.gdgs.jp/*"
+zone_name = "gdgs.jp"
+
+[[routes]]
+pattern = "gdgs.jp/*"
+zone_name = "gdgs.jp"

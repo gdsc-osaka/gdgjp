@@ -1,0 +1,51 @@
+import { describe, expect, it } from "vitest";
+import { toLink } from "./db";
+
+describe("toLink", () => {
+  const row = {
+    id: 1,
+    slug: "test-slug",
+    destination_url: "https://example.com",
+    title: "Example",
+    description: "A test link",
+    og_image_url: "https://example.com/og.png",
+    owner_user_id: "user_abc",
+    owner_chapter_id: 42,
+    created_at: 1700000000,
+    updated_at: 1700001000,
+    deleted_at: null,
+  };
+
+  it("maps all columns to camelCase", () => {
+    const link = toLink(row);
+    expect(link).toEqual({
+      id: 1,
+      slug: "test-slug",
+      destinationUrl: "https://example.com",
+      title: "Example",
+      description: "A test link",
+      ogImageUrl: "https://example.com/og.png",
+      ownerUserId: "user_abc",
+      ownerChapterId: 42,
+      createdAt: 1700000000,
+      updatedAt: 1700001000,
+      deletedAt: null,
+    });
+  });
+
+  it("passes through nulls for optional fields", () => {
+    const link = toLink({
+      ...row,
+      title: null,
+      description: null,
+      og_image_url: null,
+      owner_chapter_id: null,
+      deleted_at: null,
+    });
+    expect(link.title).toBeNull();
+    expect(link.description).toBeNull();
+    expect(link.ogImageUrl).toBeNull();
+    expect(link.ownerChapterId).toBeNull();
+    expect(link.deletedAt).toBeNull();
+  });
+});
