@@ -10,7 +10,7 @@ vi.mock("@clerk/backend", () => ({
   })),
 }));
 
-const { getAuth, requireUser } = await import("./index");
+const { getAuth, requireUser, isSuperAdmin } = await import("./index");
 
 const options = { publishableKey: "pk_test", secretKey: "sk_test" } as const;
 
@@ -51,7 +51,26 @@ describe("getAuth", () => {
       id: "user_123",
       email: "ada@example.com",
       name: "Ada Lovelace",
+      isAdmin: false,
     });
+  });
+
+  it("surfaces publicMetadata.isAdmin", async () => {
+    authenticateRequest.mockResolvedValue({
+      isAuthenticated: true,
+      toAuth: () => ({ userId: "user_admin" }),
+    });
+    getUser.mockResolvedValue({
+      id: "user_admin",
+      firstName: "Admin",
+      lastName: null,
+      username: null,
+      primaryEmailAddressId: "idn_a",
+      emailAddresses: [{ id: "idn_a", emailAddress: "admin@example.com" }],
+      publicMetadata: { isAdmin: true },
+    });
+    const result = await getAuth(new Request("https://x.example/"), options);
+    expect(result?.isAdmin).toBe(true);
   });
 
   it("falls back to username when no name is set", async () => {
@@ -100,5 +119,15 @@ describe("requireUser", () => {
     });
     const result = await requireUser(new Request("https://x.example/"), options);
     expect(result.email).toBe("grace@example.com");
+  });
+});
+
+describe("isSuperAdmin", () => {
+  it("returns true when isAdmin is set", () => {
+    expect(isSuperAdmin({ id: "u", email: "e", name: "n", isAdmin: true })).toBe(true);
+  });
+
+  it("returns false when isAdmin is unset", () => {
+    expect(isSuperAdmin({ id: "u", email: "e", name: "n", isAdmin: false })).toBe(false);
   });
 });

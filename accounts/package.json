@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "migrate:local": "wrangler d1 migrations apply gdgjp-accounts --local",
+    "migrate:remote": "wrangler d1 migrations apply gdgjp-accounts --remote"
   },
   "dependencies": {
     "@clerk/react-router": "^3.1.7",

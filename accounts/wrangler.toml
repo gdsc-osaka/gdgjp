@@ -11,10 +11,11 @@ CLERK_PUBLISHABLE_KEY = "pk_test_ZWFzeS1ncmFja2xlLTkyLmNsZXJrLmFjY291bnRzLmRldiQ
 binding = "ASSETS"
 directory = "./build/client"
 
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "gdgjp-accounts"
-# database_id = "TODO"
+[[d1_databases]]
+binding = "DB"
+database_name = "gdgjp-accounts"
+database_id = "TODO_RUN_WRANGLER_D1_CREATE"
+migrations_dir = "./migrations"
 
 # [[kv_namespaces]]
 # binding = "AUTH_KV"
