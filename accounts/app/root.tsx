@@ -1,13 +1,11 @@
 import { ClerkProvider } from "@clerk/react-router";
-import { rootAuthLoader } from "@clerk/react-router/server";
+import { clerkMiddleware, rootAuthLoader } from "@clerk/react-router/server";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
 
-export const loader = (args: Route.LoaderArgs) =>
-  rootAuthLoader(args, {
-    publishableKey: args.context.cloudflare.env.CLERK_PUBLISHABLE_KEY,
-    secretKey: args.context.cloudflare.env.CLERK_SECRET_KEY,
-  });
+export const middleware: Route.MiddlewareFunction[] = [clerkMiddleware()];
+
+export const loader = (args: Route.LoaderArgs) => rootAuthLoader(args);
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
