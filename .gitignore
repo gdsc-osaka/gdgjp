@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+build/
+dist/
+.react-router/
+
+# Cloudflare
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Turborepo
+.turbo/
+
+# Test outputs
+coverage/
+playwright-report/
+test-results/
+.vitest-cache/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# TypeScript
+*.tsbuildinfo
+
+# Wrangler-generated types
+worker-configuration.d.ts

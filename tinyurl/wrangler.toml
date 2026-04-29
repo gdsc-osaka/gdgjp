@@ -1,0 +1,17 @@
+name = "gdgjp-tinyurl"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+main = "./workers/app.ts"
+
+[vars]
+APP_URL = "https://go.gdgs.jp"
+ACCOUNTS_URL = "https://accounts.gdgs.jp"
+
+[assets]
+binding = "ASSETS"
+directory = "./build/client"
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "gdgjp-tinyurl"
+# database_id = "TODO"
