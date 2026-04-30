@@ -1,12 +1,9 @@
-export function meta() {
-  return [{ title: "GDG Japan Accounts" }];
+import { redirect } from "react-router";
+
+export function loader() {
+  throw redirect("/dashboard");
 }
 
 export default function Home() {
-  return (
-    <main>
-      <h1>accounts.gdgs.jp</h1>
-      <p>GDG Japan central authentication.</p>
-    </main>
-  );
+  return null;
 }

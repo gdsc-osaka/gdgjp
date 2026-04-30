@@ -1,0 +1,25 @@
+import { UserButton } from "@clerk/react-router";
+import { useTranslation } from "react-i18next";
+import { Link } from "react-router";
+import { GdgMark } from "~/components/gdg-mark";
+import { LocaleSwitcher } from "~/components/locale-switcher";
+import { ThemeToggle } from "~/components/theme-toggle";
+
+export function TopBar() {
+  const { t } = useTranslation();
+  return (
+    <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+        <Link to="/dashboard" className="flex items-center gap-3">
+          <GdgMark size="sm" />
+          <span className="font-medium tracking-tight">{t("app.name")}</span>
+        </Link>
+        <div className="flex items-center gap-2">
+          <LocaleSwitcher />
+          <ThemeToggle />
+          <UserButton />
+        </div>
+      </div>
+    </header>
+  );
+}

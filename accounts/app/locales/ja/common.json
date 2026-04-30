@@ -1,0 +1,118 @@
+{
+  "app": {
+    "name": "GDG Japan Accounts"
+  },
+  "nav": {
+    "homeAria": "GDG Japan Accounts ホーム",
+    "toggleTheme": "テーマを切り替え",
+    "themeLight": "ライト",
+    "themeDark": "ダーク",
+    "themeSystem": "システム",
+    "localeLabel": "言語",
+    "localeJa": "日本語",
+    "localeEn": "English",
+    "backToDashboard": "ダッシュボードに戻る"
+  },
+  "meta": {
+    "signin": "サインイン — GDG Japan Accounts",
+    "signup": "サインアップ — GDG Japan Accounts",
+    "dashboard": "ダッシュボード — GDG Japan Accounts",
+    "onboarding": "チャプターを選ぶ — GDG Japan Accounts",
+    "adminChapters": "チャプター管理 — GDG Japan Accounts",
+    "organize": "{{slug}} を運営 — GDG Japan Accounts"
+  },
+  "dashboard": {
+    "title": "ダッシュボード",
+    "signedInAs": "{{email}} としてサインイン中",
+    "noChapter": {
+      "title": "チャプター未所属",
+      "description": "GDG または GDGoC のチャプターを選んで参加リクエストを送ってください。オーガナイザーが承認します。",
+      "cta": "チャプターを選ぶ"
+    },
+    "pending": {
+      "badge": "承認待ち",
+      "description": "オーガナイザーがリクエストを確認します。承認されると全機能をご利用いただけます。"
+    },
+    "active": {
+      "memberBadge": "メンバー",
+      "organizerBadge": "オーガナイザー",
+      "memberDesc": "このチャプターのアクティブメンバーです。",
+      "organizerDesc": "保留中のリクエストを確認し、メンバーを管理できます。",
+      "organizeCta": "チャプターを運営"
+    },
+    "superAdmin": {
+      "title": "スーパー管理者ツール",
+      "description": "GDG Japan のチャプターを作成・編集・削除できます。",
+      "cta": "チャプターを管理"
+    }
+  },
+  "onboarding": {
+    "title": "チャプターを選ぶ",
+    "subtitle": "所属する GDG または GDGoC チャプターを選んでください。オーガナイザーが承認します。",
+    "empty": {
+      "title": "チャプターがまだありません",
+      "description": "現時点で利用可能なチャプターはありません。後ほどお試しください。"
+    },
+    "fieldsetLegend": "チャプター",
+    "submit": "参加をリクエスト",
+    "errorTitle": "リクエストできませんでした"
+  },
+  "admin": {
+    "title": "チャプター管理",
+    "create": {
+      "cardTitle": "チャプターを作成",
+      "slugLabel": "Slug",
+      "slugPlaceholder": "gdg-tokyo",
+      "nameLabel": "名前",
+      "namePlaceholder": "GDG Tokyo",
+      "kindLabel": "種別",
+      "submit": "チャプターを作成",
+      "errorTitle": "保存できませんでした"
+    },
+    "list": {
+      "cardTitle": "既存のチャプター",
+      "name": "名前",
+      "slug": "Slug",
+      "kind": "種別",
+      "actions": "操作",
+      "empty": "チャプターはまだありません。",
+      "organize": "運営",
+      "deleteAria": "{{name}} を削除",
+      "dialogTitle": "{{name}} を削除しますか？",
+      "dialogDesc": "メンバーはメンバーシップを失います。この操作は取り消せません。",
+      "deleteConfirm": "チャプターを削除",
+      "cancel": "キャンセル"
+    }
+  },
+  "organize": {
+    "title": "{{chapter}} を運営",
+    "pending": "保留中のリクエスト ({{count}})",
+    "members": "メンバー ({{count}})",
+    "noPending": "保留中のリクエストはありません。",
+    "noMembers": "メンバーはまだいません。",
+    "approve": "承認",
+    "reject": "却下",
+    "demote": "メンバーに降格",
+    "promote": "オーガナイザーに昇格",
+    "remove": "チャプターから削除",
+    "errorTitle": "操作を実行できませんでした",
+    "memberBadge": "メンバー",
+    "organizerBadge": "オーガナイザー",
+    "manageAria": "{{name}} を管理"
+  },
+  "kind": {
+    "gdg": "GDG",
+    "gdgoc": "GDGoC"
+  },
+  "errors": {
+    "selectChapter": "チャプターを選択してください。",
+    "chapterNotFound": "チャプターが見つかりません。",
+    "alreadyHasChapter": "すでにチャプターに所属しています。",
+    "fieldsRequired": "すべての項目を入力してください。",
+    "slugFormat": "Slug は小文字・数字・ハイフンのみ使用できます。",
+    "createChapterFailed": "チャプターを作成できませんでした（slug が既に存在する可能性があります）。",
+    "unknownAction": "不明な操作です。",
+    "missingUser": "ユーザーが指定されていません。",
+    "userNotInChapter": "このユーザーはこのチャプターに所属していません。"
+  }
+}
