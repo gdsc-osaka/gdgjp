@@ -131,6 +131,31 @@ export async function topByBlob(
   }));
 }
 
+export function clicksByLinkIdSql(linkIds: number[], days = 7): string {
+  const d = intOrThrow(days, "days");
+  const filter = linkIdsFilter(linkIds);
+  return `SELECT index1 AS linkId, count() AS clicks
+FROM ${DATASET}
+WHERE ${filter} AND timestamp > now() - INTERVAL '${d}' DAY
+GROUP BY linkId`;
+}
+
+export async function clicksByLinkId(
+  env: AeEnv,
+  linkIds: number[],
+  days = 7,
+): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  if (linkIds.length === 0) return map;
+  const rows = await aeQuery(env, clicksByLinkIdSql(linkIds, days));
+  for (const row of rows) {
+    const id = Number(row.linkId);
+    const clicks = Number(row.clicks ?? 0);
+    if (Number.isFinite(id)) map.set(id, clicks);
+  }
+  return map;
+}
+
 export function totalSql(linkIds: number[] | "all", days = 7): string {
   const d = intOrThrow(days, "days");
   const filter = linkIdsFilter(linkIds);

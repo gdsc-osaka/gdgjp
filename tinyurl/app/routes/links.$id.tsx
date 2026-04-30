@@ -1,8 +1,22 @@
 import { type UserSummary, getUserChapter, getUsersByIds, requireUser } from "@gdgjp/auth-lib";
-import { ArrowLeft, BarChart3, RefreshCw, Trash2 } from "lucide-react";
+import {
+  BarChart3,
+  Check,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  Folder as FolderIcon,
+  MoreHorizontal,
+  Pencil,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { Form, Link, redirect } from "react-router";
-import { PageShell } from "~/components/page-shell";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Form, Link, redirect, useNavigation } from "react-router";
+import { toast } from "sonner";
+import { DashboardShell } from "~/components/dashboard-shell";
+import { TagCombobox } from "~/components/tag-combobox";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import {
   AlertDialog,
@@ -15,9 +29,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
+import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import {
@@ -28,6 +49,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
+import { clicksByLinkId } from "~/lib/analytics-engine";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
 import { clerkAuthOptions } from "~/lib/clerk-options";
 import {
@@ -80,27 +102,29 @@ async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
 
 export async function loader(args: Route.LoaderArgs) {
   const { env, user, chapter, link, permissions, editable } = await ensureAccess(args);
-  const [tags, userTags, chapterTags, comments] = await Promise.all([
+  const [tags, userTags, chapterTags, comments, clickMap] = await Promise.all([
     listTagsForLink(env.DB, link.id),
     listTagsForUser(env.DB, user.id),
     chapter ? listTagsForChapter(env.DB, chapter.chapterId) : Promise.resolve([]),
     listComments(env.DB, link.id),
+    clicksByLinkId(env, [link.id]).catch(() => new Map<number, number>()),
   ]);
-  const userIds = new Set<string>([link.ownerUserId, ...comments.map((c) => c.authorUserId)]);
-  const users = await getUsersByIds([...userIds], {
+  const users = await getUsersByIds([link.ownerUserId], {
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
     secretKey: env.CLERK_SECRET_KEY,
   });
+  const latestComment = comments.length > 0 ? comments[comments.length - 1] : null;
   return {
     link,
     permissions,
     tags,
     availableTags: [...userTags, ...chapterTags],
-    comments,
+    comment: latestComment?.body ?? "",
     users,
     editable,
     appUrl: env.APP_URL,
     shortUrlBase: env.SHORT_URL_BASE,
+    clicks: clickMap.get(link.id) ?? 0,
   };
 }
 
@@ -113,22 +137,6 @@ export async function action(args: Route.ActionArgs) {
   const form = await args.request.formData();
   const intent = form.get("intent");
 
-  if (intent === "addComment") {
-    const body = String(form.get("body") ?? "").trim();
-    if (!body) return { error: "Comment body is required." };
-    if (body.length > 2000) return { error: "Comment is too long (max 2000 chars)." };
-    await addComment(env.DB, { linkId: id, authorUserId: user.id, body });
-    return { success: "Comment posted." };
-  }
-
-  if (intent === "deleteComment") {
-    const commentId = Number(form.get("commentId"));
-    if (!Number.isInteger(commentId) || commentId <= 0) return { error: "Invalid comment id." };
-    if (!editable) return { error: "You don't have permission to delete comments." };
-    await deleteComment(env.DB, commentId);
-    return null;
-  }
-
   if (!editable) return { error: "You don't have permission to edit this link." };
 
   if (intent === "delete") {
@@ -137,37 +145,91 @@ export async function action(args: Route.ActionArgs) {
   }
 
   if (intent === "update") {
-    const slug = String(form.get("slug") ?? "").trim();
-    const destinationUrl = String(form.get("destinationUrl") ?? "").trim();
-    const title = String(form.get("title") ?? "").trim() || null;
-    const description = String(form.get("description") ?? "").trim() || null;
-    const ogImageUrl = String(form.get("ogImageUrl") ?? "").trim() || null;
+    const update: Parameters<typeof updateLink>[2] = {};
 
-    if (!destinationUrl) return { error: "Destination URL is required." };
-    try {
-      new URL(destinationUrl);
-    } catch {
-      return { error: "Destination URL is not a valid URL." };
-    }
-    if (!slug) return { error: "Slug is required." };
-
-    const validation = validateSlug(slug);
-    if (!validation.ok) {
-      return {
-        error:
-          validation.reason === "reserved"
-            ? `"${slug}" is a reserved slug.`
-            : "Slug may only contain letters, numbers, hyphens, and underscores (1–64 chars).",
-      };
+    if (form.has("destinationUrl")) {
+      const destinationUrl = String(form.get("destinationUrl") ?? "").trim();
+      if (!destinationUrl) return { error: "Destination URL is required." };
+      try {
+        new URL(destinationUrl);
+      } catch {
+        return { error: "Destination URL is not a valid URL." };
+      }
+      update.destinationUrl = destinationUrl;
     }
 
+    if (form.has("slug")) {
+      const slug = String(form.get("slug") ?? "").trim();
+      if (!slug) return { error: "Slug is required." };
+      const validation = validateSlug(slug);
+      if (!validation.ok) {
+        return {
+          error:
+            validation.reason === "reserved"
+              ? `"${slug}" is a reserved slug.`
+              : "Slug may only contain letters, numbers, hyphens, and underscores (1–64 chars).",
+        };
+      }
+      update.slug = slug;
+    }
+
+    if (form.has("title")) {
+      update.title = String(form.get("title") ?? "").trim() || null;
+    }
+    if (form.has("description")) {
+      update.description = String(form.get("description") ?? "").trim() || null;
+    }
+    if (form.has("ogImageUrl")) {
+      update.ogImageUrl = String(form.get("ogImageUrl") ?? "").trim() || null;
+    }
+
     try {
-      await updateLink(env.DB, id, { slug, destinationUrl, title, description, ogImageUrl });
+      await updateLink(env.DB, id, update);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("UNIQUE")) return { error: `The slug "${slug}" is already taken.` };
+      if (msg.includes("UNIQUE")) {
+        return { error: `The slug "${update.slug}" is already taken.` };
+      }
       throw err;
     }
+
+    if (form.has("manageTags")) {
+      const existingIds = form
+        .getAll("tagId")
+        .map((v) => Number(v))
+        .filter((n) => Number.isInteger(n) && n > 0);
+      const newNames = form
+        .getAll("newTagName")
+        .map((v) => String(v).trim())
+        .filter((n) => n.length > 0 && n.length <= 32);
+
+      const finalIds = new Set(existingIds);
+      for (const name of newNames) {
+        const result = await createTag(env.DB, { name, color: null, ownerUserId: user.id });
+        if (result.ok) {
+          finalIds.add(result.tag.id);
+        } else {
+          const row = await env.DB.prepare(
+            "SELECT id FROM tags WHERE name = ? AND (owner_user_id = ? OR owner_user_id IS NULL)",
+          )
+            .bind(name, user.id)
+            .first<{ id: number }>();
+          if (row?.id) finalIds.add(row.id);
+        }
+      }
+      await setLinkTags(env.DB, id, [...finalIds]);
+    }
+
+    if (form.has("comment")) {
+      const body = String(form.get("comment") ?? "").trim();
+      if (body.length > 2000) return { error: "Comment is too long (max 2000 chars)." };
+      const existing = await listComments(env.DB, id);
+      for (const c of existing) await deleteComment(env.DB, c.id);
+      if (body) {
+        await addComment(env.DB, { linkId: id, authorUserId: user.id, body });
+      }
+    }
+
     return { success: "Saved." };
   }
 
@@ -180,24 +242,6 @@ export async function action(args: Route.ActionArgs) {
       ogImageUrl: ogp.image ?? link.ogImageUrl,
     });
     return { success: "OGP data fetched." };
-  }
-
-  if (intent === "setTags") {
-    const ids = form
-      .getAll("tagId")
-      .map((v) => Number(v))
-      .filter((n) => Number.isInteger(n) && n > 0);
-    await setLinkTags(env.DB, id, ids);
-    return { success: "Tags updated." };
-  }
-
-  if (intent === "createTag") {
-    const name = String(form.get("name") ?? "").trim();
-    const color = String(form.get("color") ?? "").trim() || null;
-    if (!name) return { error: "Tag name required." };
-    const result = await createTag(env.DB, { name, color, ownerUserId: user.id });
-    if (!result.ok) return { error: `Tag "${name}" already exists.` };
-    return { success: `Tag "${name}" created.` };
   }
 
   if (intent === "addPermission") {
@@ -244,10 +288,51 @@ export async function action(args: Route.ActionArgs) {
   return { error: "Unknown action." };
 }
 
-function userLabel(users: Record<string, UserSummary>, id: string) {
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatDateShort(unix: number): string {
+  const d = new Date(unix * 1000);
+  const now = new Date();
+  return d.getUTCFullYear() === now.getUTCFullYear()
+    ? `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
+    : `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
+function userInitials(users: Record<string, UserSummary>, id: string): string {
   const u = users[id];
-  if (!u) return id;
-  return u.name || u.email || id;
+  const source = u?.name || u?.email || id;
+  const parts = source.split(/\s+|@/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
+}
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+function shortHostOf(base: string): string {
+  try {
+    return new URL(base).host;
+  } catch {
+    return base.replace(/^https?:\/\//, "");
+  }
+}
+
+function faviconUrl(url: string): string | null {
+  const host = hostnameOf(url);
+  if (!host) return null;
+  return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+}
+
+function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
+  return (
+    <Label htmlFor={htmlFor} className="text-sm font-medium">
+      {children}
+    </Label>
+  );
 }
 
 function PermissionRow({
@@ -258,10 +343,10 @@ function PermissionRow({
   editable: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 border-b last:border-b-0 py-2">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{permission.principalId}</p>
-        <p className="text-xs text-muted-foreground capitalize">{permission.principalType}</p>
+    <div className="flex items-center gap-3 border-b py-2 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{permission.principalId}</p>
+        <p className="text-xs capitalize text-muted-foreground">{permission.principalType}</p>
       </div>
       {editable ? (
         <>
@@ -269,7 +354,7 @@ function PermissionRow({
             <input type="hidden" name="intent" value="updatePermissionRole" />
             <input type="hidden" name="permissionId" value={permission.id} />
             <Select name="role" defaultValue={permission.role}>
-              <SelectTrigger className="w-[110px] h-8" size="sm">
+              <SelectTrigger className="h-8 w-[110px]" size="sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -296,334 +381,514 @@ function PermissionRow({
   );
 }
 
+type Draft = {
+  destinationUrl: string;
+  slug: string;
+  title: string;
+  description: string;
+  ogImageUrl: string;
+  tagIds: number[];
+  newTagNames: string[];
+  comment: string;
+};
+
+function buildInitial(loaderData: Route.ComponentProps["loaderData"]): Draft {
+  return {
+    destinationUrl: loaderData.link.destinationUrl,
+    slug: loaderData.link.slug,
+    title: loaderData.link.title ?? "",
+    description: loaderData.link.description ?? "",
+    ogImageUrl: loaderData.link.ogImageUrl ?? "",
+    tagIds: loaderData.tags.map((t) => t.id),
+    newTagNames: [],
+    comment: loaderData.comment,
+  };
+}
+
+function draftEqual(a: Draft, b: Draft): boolean {
+  if (
+    a.destinationUrl !== b.destinationUrl ||
+    a.slug !== b.slug ||
+    a.title !== b.title ||
+    a.description !== b.description ||
+    a.ogImageUrl !== b.ogImageUrl ||
+    a.comment !== b.comment ||
+    a.tagIds.length !== b.tagIds.length ||
+    a.newTagNames.length !== b.newTagNames.length
+  ) {
+    return false;
+  }
+  const aTagSet = new Set(a.tagIds);
+  for (const id of b.tagIds) if (!aTagSet.has(id)) return false;
+  for (let i = 0; i < a.newTagNames.length; i++) {
+    if (a.newTagNames[i] !== b.newTagNames[i]) return false;
+  }
+  return true;
+}
+
 export default function EditLink({ loaderData, actionData }: Route.ComponentProps) {
-  const {
-    link,
-    tags,
-    availableTags,
-    comments,
-    users,
-    permissions,
-    editable,
-    appUrl,
-    shortUrlBase,
-  } = loaderData;
-  const tagIds = new Set(tags.map((t) => t.id));
+  const { link, availableTags, permissions, users, editable, appUrl, shortUrlBase, clicks } =
+    loaderData;
   const shortUrl = `${appUrl}/${link.slug}`;
   const apexShortUrl = `${shortUrlBase}/${link.slug}`;
+  const shortHost = shortHostOf(shortUrlBase);
+  const favicon = faviconUrl(link.destinationUrl);
+  const owner = users[link.ownerUserId];
+
+  const initial = useMemo(() => buildInitial(loaderData), [loaderData]);
+  const [draft, setDraft] = useState<Draft>(initial);
+  const [slugUnlocked, setSlugUnlocked] = useState(false);
+  const [slugDialogOpen, setSlugDialogOpen] = useState(false);
+  useEffect(() => {
+    setDraft(initial);
+    setSlugUnlocked(false);
+  }, [initial]);
+
+  const navigation = useNavigation();
+  const isSaving = navigation.state !== "idle";
+
+  const lastToastedRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (!actionData || lastToastedRef.current === actionData) return;
+    lastToastedRef.current = actionData;
+    if ("success" in actionData && actionData.success) {
+      toast.success("Successfully updated short link!", { icon: <Check className="size-4" /> });
+    } else if ("error" in actionData && actionData.error) {
+      toast.error(actionData.error);
+    }
+  }, [actionData]);
+
+  const isDirty = !draftEqual(draft, initial);
+
+  function discard() {
+    setDraft(initial);
+    setSlugUnlocked(false);
+  }
+
+  function copyShort() {
+    navigator.clipboard.writeText(apexShortUrl).then(() => toast.success("Copied to clipboard"));
+  }
+
+  function setField<K extends keyof Draft>(key: K, value: Draft[K]) {
+    setDraft((d) => ({ ...d, [key]: value }));
+  }
 
   return (
-    <PageShell>
-      <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2 text-muted-foreground">
-        <Link to="/dashboard">
-          <ArrowLeft className="size-4" /> Back to dashboard
-        </Link>
-      </Button>
-
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-medium tracking-tight">
-          {editable ? "Edit link" : "View link"}
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to={`/links/${link.id}/analytics`}>
-              <BarChart3 className="size-4" />
-              Analytics
+    <DashboardShell>
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 pb-24">
+        {/* Top bar: breadcrumb + actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <nav className="flex min-w-0 items-center gap-2 text-sm" aria-label="Breadcrumb">
+            <Link
+              to="/dashboard"
+              className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-foreground hover:bg-accent"
+            >
+              <FolderIcon className="size-4 text-primary" />
+              Links
             </Link>
-          </Button>
-          {editable ? (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="Delete link">
-                  <Trash2 className="size-4 text-destructive" />
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border bg-card px-2 py-1 font-medium">
+              {favicon ? (
+                <img src={favicon} alt="" width={16} height={16} className="size-4 rounded-sm" />
+              ) : (
+                <ExternalLink className="size-4 text-muted-foreground" />
+              )}
+              <span className="truncate">
+                {shortHost}/{link.slug}
+              </span>
+            </span>
+          </nav>
+          <div className="flex items-center gap-1.5">
+            <Button variant="outline" size="sm" onClick={copyShort}>
+              <Copy className="size-4" />
+              Copy link
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/links/${link.id}/analytics`}>
+                <BarChart3 className="size-4 text-primary" />
+                {clicks} {clicks === 1 ? "click" : "clicks"}
+              </Link>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon-sm" aria-label="Link actions">
+                  <MoreHorizontal className="size-4" />
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete "{link.slug}"?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently remove the short link.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <Form method="post">
-                    <input type="hidden" name="intent" value="delete" />
-                    <AlertDialogAction type="submit" className="bg-destructive">
-                      Delete
-                    </AlertDialogAction>
-                  </Form>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          ) : null}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={copyShort}>
+                  <Copy className="size-4" />
+                  Copy short URL
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={link.destinationUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="size-4" />
+                    Visit destination
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={shortUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="size-4" />
+                    Visit short URL
+                  </a>
+                </DropdownMenuItem>
+                {editable ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={(e) => e.preventDefault()}
+                        >
+                          <Trash2 className="size-4" />
+                          Delete link…
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete "{link.slug}"?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently remove the short link.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <Form method="post">
+                            <input type="hidden" name="intent" value="delete" />
+                            <AlertDialogAction type="submit" className="bg-destructive">
+                              Delete
+                            </AlertDialogAction>
+                          </Form>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </div>
 
-      <p className="mt-2 text-sm text-muted-foreground">
-        Short URL: <span className="font-mono text-gdg-blue">{apexShortUrl}</span>
-      </p>
+        {actionData && "error" in actionData && actionData.error ? (
+          <Alert variant="destructive">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{actionData.error}</AlertDescription>
+          </Alert>
+        ) : null}
 
-      {actionData?.error ? (
-        <Alert variant="destructive" className="mt-4">
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{actionData.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {actionData?.success ? (
-        <Alert className="mt-4">
-          <AlertTitle>Success</AlertTitle>
-          <AlertDescription>{actionData.success}</AlertDescription>
-        </Alert>
-      ) : null}
+        {/* Hidden update form — visible inputs reference it via `form="link-update"` */}
+        <Form id="link-update" method="post" className="hidden">
+          <input type="hidden" name="intent" value="update" />
+          <input type="hidden" name="manageTags" value="1" />
+          {draft.tagIds.map((tagId) => (
+            <input key={`tag-${tagId}`} type="hidden" name="tagId" value={tagId} />
+          ))}
+          {draft.newTagNames.map((name, idx) => (
+            <input key={`new-tag-${idx}-${name}`} type="hidden" name="newTagName" value={name} />
+          ))}
+        </Form>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Link details</CardTitle>
+        {/* Body grid */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* LEFT COLUMN */}
+          <div className="space-y-8 lg:col-span-2">
+            {/* Destination URL */}
+            <div className="space-y-2">
+              <FieldLabel htmlFor="destinationUrl">Destination URL</FieldLabel>
+              <Input
+                id="destinationUrl"
+                form="link-update"
+                name="destinationUrl"
+                type="url"
+                value={draft.destinationUrl}
+                onChange={(e) => setField("destinationUrl", e.target.value)}
+                required
+                disabled={!editable}
+              />
+            </div>
+
+            {/* Short Link */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <FieldLabel htmlFor="slug">Short Link</FieldLabel>
+                {editable ? (
+                  <AlertDialog open={slugDialogOpen} onOpenChange={setSlugDialogOpen}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Edit short link"
+                        disabled={slugUnlocked}
+                      >
+                        <Pencil className="size-3.5 text-muted-foreground" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Edit short link?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Editing an existing short link could potentially break existing links. Are
+                          you sure you want to continue?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            setSlugUnlocked(true);
+                            setSlugDialogOpen(false);
+                          }}
+                        >
+                          Continue
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : null}
+              </div>
+              <div className="flex gap-2">
+                <div className="inline-flex h-9 items-center gap-1 rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
+                  {shortHost}
+                </div>
+                <Input
+                  id="slug"
+                  form="link-update"
+                  name="slug"
+                  value={draft.slug}
+                  onChange={(e) => setField("slug", e.target.value)}
+                  pattern="[a-zA-Z0-9_\-]{1,64}"
+                  required
+                  disabled={!editable || !slugUnlocked}
+                  className="flex-1"
+                />
+              </div>
+            </div>
+
+            {/* Tags */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <FieldLabel>Tags</FieldLabel>
+              </div>
+              <TagCombobox
+                availableTags={availableTags}
+                selectedIds={draft.tagIds}
+                newTagNames={draft.newTagNames}
+                onChange={(ids, names) =>
+                  setDraft((d) => ({ ...d, tagIds: ids, newTagNames: names }))
+                }
+                disabled={!editable}
+              />
+            </div>
+
+            {/* Comment (single) */}
+            <div className="space-y-2">
+              <FieldLabel htmlFor="comment">Comment</FieldLabel>
+              <Textarea
+                id="comment"
+                form="link-update"
+                name="comment"
+                value={draft.comment}
+                onChange={(e) => setField("comment", e.target.value)}
+                placeholder="Add a comment"
+                maxLength={2000}
+                rows={3}
+                disabled={!editable}
+              />
+            </div>
+
+            {/* Sharing */}
+            <div className="space-y-3">
+              <FieldLabel>Sharing</FieldLabel>
+              <div className="rounded-md border bg-card">
+                {permissions.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-muted-foreground">Not shared with anyone.</p>
+                ) : (
+                  <div className="px-3">
+                    {permissions.map((perm) => (
+                      <PermissionRow key={perm.id} permission={perm} editable={editable} />
+                    ))}
+                  </div>
+                )}
+              </div>
               {editable ? (
-                <Form method="post">
-                  <input type="hidden" name="intent" value="fetchOgp" />
-                  <Button type="submit" variant="outline" size="sm">
-                    <RefreshCw className="size-4" />
-                    Fetch OGP
+                <Form
+                  method="post"
+                  className="grid gap-2 rounded-md border bg-card p-3 sm:grid-cols-[140px_1fr_120px_auto]"
+                >
+                  <input type="hidden" name="intent" value="addPermission" />
+                  <Select name="principalType" defaultValue="user">
+                    <SelectTrigger size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">Email</SelectItem>
+                      <SelectItem value="chapter">Chapter id</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input name="principalId" placeholder="alice@example.com or 1" required />
+                  <Select name="role" defaultValue="viewer">
+                    <SelectTrigger size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                      <SelectItem value="editor">Editor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button type="submit" size="sm">
+                    Share
                   </Button>
                 </Form>
               ) : null}
             </div>
-          </CardHeader>
-          <CardContent>
-            <Form method="post" className="grid gap-4">
-              <input type="hidden" name="intent" value="update" />
-              <div className="space-y-2">
-                <Label htmlFor="destinationUrl">Destination URL</Label>
-                <Input
-                  id="destinationUrl"
-                  name="destinationUrl"
-                  type="url"
-                  defaultValue={link.destinationUrl}
-                  required
-                  disabled={!editable}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="slug">Slug</Label>
-                <Input
-                  id="slug"
-                  name="slug"
-                  defaultValue={link.slug}
-                  pattern="[a-zA-Z0-9_\-]{1,64}"
-                  required
-                  disabled={!editable}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
-                <Input
-                  id="title"
-                  name="title"
-                  defaultValue={link.title ?? ""}
-                  disabled={!editable}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  defaultValue={link.description ?? ""}
-                  disabled={!editable}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ogImageUrl">OG image URL</Label>
-                <Input
-                  id="ogImageUrl"
-                  name="ogImageUrl"
-                  type="url"
-                  defaultValue={link.ogImageUrl ?? ""}
-                  disabled={!editable}
-                />
-              </div>
-              {link.ogImageUrl ? (
-                <img
-                  src={link.ogImageUrl}
-                  alt="OGP preview"
-                  className="rounded-md border max-h-48 object-contain"
-                />
-              ) : null}
-              {editable ? (
-                <Button type="submit" className="w-fit">
-                  Save changes
-                </Button>
-              ) : null}
-            </Form>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>QR code</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-4">
-            <div className="rounded-md bg-white p-4">
-              <QRCodeSVG value={apexShortUrl} size={160} />
+            {/* Created by footer */}
+            <div className="flex items-center gap-2 border-t pt-4 text-sm text-muted-foreground">
+              <Avatar size="sm">
+                <AvatarFallback>{userInitials(users, link.ownerUserId)}</AvatarFallback>
+              </Avatar>
+              <span>
+                Created by{" "}
+                <span className="font-medium text-foreground">
+                  {owner ? owner.email || owner.name || link.ownerUserId : link.ownerUserId}
+                </span>
+                {" · "}
+                {formatDateShort(link.createdAt)}
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground font-mono break-all text-center">
-              {apexShortUrl}
-            </p>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Tags</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {tags.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No tags yet.</p>
-              ) : (
-                tags.map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    style={tag.color ? { backgroundColor: tag.color } : undefined}
-                  >
-                    {tag.name}
-                  </Badge>
-                ))
-              )}
+          {/* RIGHT COLUMN */}
+          <div className="space-y-6">
+            {/* QR Code */}
+            <div className="space-y-2">
+              <FieldLabel>QR Code</FieldLabel>
+              <div className="flex items-center justify-center rounded-md border bg-card p-4">
+                <QRCodeSVG value={apexShortUrl} size={140} />
+              </div>
+              <p className="break-all text-center font-mono text-xs text-muted-foreground">
+                {apexShortUrl}
+              </p>
             </div>
-            {editable && availableTags.length > 0 ? (
-              <Form method="post" className="space-y-3">
-                <input type="hidden" name="intent" value="setTags" />
-                <fieldset className="grid gap-2">
-                  <legend className="text-sm font-medium mb-1">Available</legend>
-                  {availableTags.map((tag) => (
-                    <label key={tag.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        name="tagId"
-                        value={tag.id}
-                        defaultChecked={tagIds.has(tag.id)}
-                      />
-                      <Badge style={tag.color ? { backgroundColor: tag.color } : undefined}>
-                        {tag.name}
-                      </Badge>
-                    </label>
-                  ))}
-                </fieldset>
-                <Button type="submit" size="sm">
-                  Apply tags
-                </Button>
-              </Form>
-            ) : null}
-            {editable ? (
-              <Form method="post" className="grid gap-2 sm:grid-cols-3 border-t pt-4">
-                <input type="hidden" name="intent" value="createTag" />
-                <Input name="name" placeholder="New tag name" maxLength={32} required />
-                <Input name="color" type="color" defaultValue="#4285F4" />
-                <Button type="submit" size="sm">
-                  Create tag
-                </Button>
-              </Form>
-            ) : null}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Sharing</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {permissions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Not shared with anyone.</p>
-            ) : (
-              permissions.map((perm) => (
-                <PermissionRow key={perm.id} permission={perm} editable={editable} />
-              ))
-            )}
-            {editable ? (
-              <Form method="post" className="grid gap-2 border-t pt-4">
-                <input type="hidden" name="intent" value="addPermission" />
-                <Select name="principalType" defaultValue="user">
-                  <SelectTrigger size="sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">Email</SelectItem>
-                    <SelectItem value="chapter">Chapter id</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input name="principalId" placeholder="alice@example.com or 1" required />
-                <Select name="role" defaultValue="viewer">
-                  <SelectTrigger size="sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                    <SelectItem value="editor">Editor</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button type="submit" size="sm">
-                  Share
-                </Button>
-              </Form>
-            ) : null}
-          </CardContent>
-        </Card>
+            {/* Custom Link Preview */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <FieldLabel>Custom Link Preview</FieldLabel>
+                {editable ? (
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="fetchOgp" />
+                    <Button type="submit" variant="ghost" size="xs">
+                      <RefreshCw className="size-3" />
+                      Fetch
+                    </Button>
+                  </Form>
+                ) : null}
+              </div>
 
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Comments</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {comments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No comments yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {comments.map((comment) => (
-                  <div key={comment.id} className="border rounded-md p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm font-medium">
-                        {userLabel(users, comment.authorUserId)}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(comment.createdAt * 1000).toLocaleString()}
-                        </p>
-                        {editable ? (
-                          <Form method="post">
-                            <input type="hidden" name="intent" value="deleteComment" />
-                            <input type="hidden" name="commentId" value={comment.id} />
-                            <Button
-                              type="submit"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Delete comment"
-                            >
-                              <Trash2 className="size-3 text-destructive" />
-                            </Button>
-                          </Form>
-                        ) : null}
-                      </div>
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap">{comment.body}</p>
+              <div className="overflow-hidden rounded-md border bg-card">
+                {draft.ogImageUrl ? (
+                  <img
+                    src={draft.ogImageUrl}
+                    alt="OGP preview"
+                    className="aspect-video w-full bg-muted object-cover"
+                  />
+                ) : (
+                  <div className="flex aspect-video w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+                    Enter a link to generate a preview
                   </div>
-                ))}
+                )}
+                <div className="space-y-1 px-3 py-2">
+                  <p className="truncate text-sm font-medium">
+                    {draft.title || hostnameOf(draft.destinationUrl) || "Untitled"}
+                  </p>
+                  {draft.description ? (
+                    <p className="line-clamp-2 text-xs text-muted-foreground">
+                      {draft.description}
+                    </p>
+                  ) : null}
+                </div>
               </div>
-            )}
-            <Form method="post" className="space-y-2">
-              <input type="hidden" name="intent" value="addComment" />
-              <Textarea name="body" placeholder="Leave a comment…" required maxLength={2000} />
-              <Button type="submit" size="sm">
-                Post comment
-              </Button>
-            </Form>
-          </CardContent>
-        </Card>
+
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="title" className="text-xs text-muted-foreground">
+                    Title
+                  </Label>
+                  <Input
+                    id="title"
+                    form="link-update"
+                    name="title"
+                    value={draft.title}
+                    onChange={(e) => setField("title", e.target.value)}
+                    disabled={!editable}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="description" className="text-xs text-muted-foreground">
+                    Description
+                  </Label>
+                  <Textarea
+                    id="description"
+                    form="link-update"
+                    name="description"
+                    value={draft.description}
+                    onChange={(e) => setField("description", e.target.value)}
+                    disabled={!editable}
+                    rows={2}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ogImageUrl" className="text-xs text-muted-foreground">
+                    Image URL
+                  </Label>
+                  <Input
+                    id="ogImageUrl"
+                    form="link-update"
+                    name="ogImageUrl"
+                    type="url"
+                    value={draft.ogImageUrl}
+                    onChange={(e) => setField("ogImageUrl", e.target.value)}
+                    disabled={!editable}
+                  />
+                </div>
+              </div>
+
+              <a
+                href={link.destinationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="size-3" />
+                <span className="truncate">{link.destinationUrl}</span>
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
-    </PageShell>
+
+      {editable && isDirty ? <FloatingBar onDiscard={discard} isSaving={isSaving} /> : null}
+    </DashboardShell>
+  );
+}
+
+function FloatingBar({ onDiscard, isSaving }: { onDiscard: () => void; isSaving: boolean }) {
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 px-4 md:left-60">
+      <div className="pointer-events-auto mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-lg">
+        <p className="text-sm font-medium">Unsaved changes</p>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onDiscard} disabled={isSaving}>
+            Discard
+          </Button>
+          <Button type="submit" form="link-update" size="sm" disabled={isSaving}>
+            {isSaving ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
