@@ -77,12 +77,15 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Create accounts dev vars
+        run: |
+          cat > accounts/.dev.vars <<EOF
+          CLERK_PUBLISHABLE_KEY=${{ vars.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+          EOF
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
       - name: Run E2E testing
-        env:
-          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
         run: pnpm test:e2e
       - name: Upload Playwright report
         if: always()
