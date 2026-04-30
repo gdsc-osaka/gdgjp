@@ -1,5 +1,5 @@
 import { type UserSummary, getUserChapter, getUsersByIds, requireUser } from "@gdgjp/auth-lib";
-import { ArrowLeft, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, BarChart3, RefreshCw, Trash2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Form, Link, redirect } from "react-router";
 import { PageShell } from "~/components/page-shell";
@@ -100,6 +100,7 @@ export async function loader(args: Route.LoaderArgs) {
     users,
     editable,
     appUrl: env.APP_URL,
+    shortUrlBase: env.SHORT_URL_BASE,
   };
 }
 
@@ -296,10 +297,20 @@ function PermissionRow({
 }
 
 export default function EditLink({ loaderData, actionData }: Route.ComponentProps) {
-  const { link, tags, availableTags, comments, users, permissions, editable, appUrl } = loaderData;
+  const {
+    link,
+    tags,
+    availableTags,
+    comments,
+    users,
+    permissions,
+    editable,
+    appUrl,
+    shortUrlBase,
+  } = loaderData;
   const tagIds = new Set(tags.map((t) => t.id));
   const shortUrl = `${appUrl}/${link.slug}`;
-  const apexShortUrl = `https://gdgs.jp/${link.slug}`;
+  const apexShortUrl = `${shortUrlBase}/${link.slug}`;
 
   return (
     <PageShell>
@@ -313,32 +324,40 @@ export default function EditLink({ loaderData, actionData }: Route.ComponentProp
         <h1 className="text-3xl font-medium tracking-tight">
           {editable ? "Edit link" : "View link"}
         </h1>
-        {editable ? (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Delete link">
-                <Trash2 className="size-4 text-destructive" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete "{link.slug}"?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently remove the short link.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <Form method="post">
-                  <input type="hidden" name="intent" value="delete" />
-                  <AlertDialogAction type="submit" className="bg-destructive">
-                    Delete
-                  </AlertDialogAction>
-                </Form>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/links/${link.id}/analytics`}>
+              <BarChart3 className="size-4" />
+              Analytics
+            </Link>
+          </Button>
+          {editable ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label="Delete link">
+                  <Trash2 className="size-4 text-destructive" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete "{link.slug}"?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently remove the short link.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="delete" />
+                    <AlertDialogAction type="submit" className="bg-destructive">
+                      Delete
+                    </AlertDialogAction>
+                  </Form>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
+        </div>
       </div>
 
       <p className="mt-2 text-sm text-muted-foreground">

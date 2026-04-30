@@ -17,7 +17,8 @@ const requestHandler = createRequestHandler(
 function isApexRedirect(request: Request, env: Env): { slug: string } | null {
   const url = new URL(request.url);
   const host = request.headers.get("host") ?? url.host;
-  if (host === env.APEX_HOST) {
+  const apexHost = new URL(env.SHORT_URL_BASE).host;
+  if (host === apexHost) {
     const slug = url.pathname.slice(1).split("/")[0];
     if (!slug) return null;
     return { slug };

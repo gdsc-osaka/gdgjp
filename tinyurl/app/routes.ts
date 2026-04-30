@@ -5,6 +5,9 @@ export default [
   route("dashboard", "routes/dashboard.tsx"),
   route("links/new", "routes/links.new.tsx"),
   route("links/:id", "routes/links.$id.tsx"),
+  route("links/:id/analytics", "routes/links.$id.analytics.tsx"),
+  route("analytics", "routes/analytics.tsx"),
   route("tags", "routes/tags.tsx"),
   route("notfound", "routes/notfound.tsx"),
+  route(":slug", "routes/$slug.tsx"),
 ] satisfies RouteConfig;

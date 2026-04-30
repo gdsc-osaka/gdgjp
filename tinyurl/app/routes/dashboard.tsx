@@ -1,5 +1,5 @@
 import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
-import { Copy, ExternalLink, Plus, Tag as TagIcon } from "lucide-react";
+import { BarChart3, Copy, ExternalLink, Plus, Tag as TagIcon } from "lucide-react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 import { PageShell } from "~/components/page-shell";
@@ -40,20 +40,26 @@ export async function loader(args: Route.LoaderArgs) {
   ]);
   const ownIds = new Set(ownLinks.map((l) => l.id));
   const sharedFiltered = sharedLinks.filter((l) => !ownIds.has(l.id));
-  return { user, chapter, ownLinks, sharedLinks: sharedFiltered };
+  return {
+    user,
+    chapter,
+    ownLinks,
+    sharedLinks: sharedFiltered,
+    shortUrlBase: env.SHORT_URL_BASE,
+  };
 }
 
 function LinkTable({
   links,
-  appUrl,
+  shortUrlBase,
   showOwner,
 }: {
   links: DbLink[];
-  appUrl: string;
+  shortUrlBase: string;
   showOwner?: boolean;
 }) {
   async function copyApex(slug: string) {
-    await navigator.clipboard.writeText(`https://gdgs.jp/${slug}`);
+    await navigator.clipboard.writeText(`${shortUrlBase}/${slug}`);
     toast.success("Copied to clipboard");
   }
 
@@ -111,8 +117,7 @@ function LinkTable({
 }
 
 export default function Dashboard({ loaderData }: Route.ComponentProps) {
-  const { user, ownLinks, sharedLinks } = loaderData;
-  const appUrl = "https://url.gdgs.jp";
+  const { user, ownLinks, sharedLinks, shortUrlBase } = loaderData;
 
   return (
     <PageShell>
@@ -122,6 +127,12 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
           <p className="text-sm text-muted-foreground">Signed in as {user.email}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/analytics">
+              <BarChart3 className="size-4" />
+              Analytics
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link to="/tags">
               <TagIcon className="size-4" />
@@ -154,7 +165,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
             </CardContent>
           </>
         ) : (
-          <LinkTable links={ownLinks} appUrl={appUrl} />
+          <LinkTable links={ownLinks} shortUrlBase={shortUrlBase} />
         )}
       </Card>
 
@@ -165,7 +176,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
             <CardDescription>Links shared with your email or chapter.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <LinkTable links={sharedLinks} appUrl={appUrl} showOwner />
+            <LinkTable links={sharedLinks} shortUrlBase={shortUrlBase} showOwner />
           </CardContent>
         </Card>
       ) : null}
