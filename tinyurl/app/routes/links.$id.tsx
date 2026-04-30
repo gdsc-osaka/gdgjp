@@ -70,10 +70,10 @@ import {
   updateLink,
   updatePermissionRole,
 } from "~/lib/db";
+import { isLinkId } from "~/lib/id";
 import { fetchOgp } from "~/lib/ogp";
 import { type ViewerContext, canEditLink, canViewLink } from "~/lib/permissions";
 import { validateSlug } from "~/lib/slug";
-import { isLinkId } from "~/lib/id";
 import type { Route } from "./+types/links.$id";
 
 async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {

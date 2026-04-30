@@ -25,8 +25,8 @@ import {
   listLinksForUser,
   listPermissionsForLink,
 } from "~/lib/db";
-import { type ViewerContext, canViewLink } from "~/lib/permissions";
 import { isLinkId } from "~/lib/id";
+import { type ViewerContext, canViewLink } from "~/lib/permissions";
 import type { Route } from "./+types/analytics";
 
 export function meta({ data }: Route.MetaArgs) {
