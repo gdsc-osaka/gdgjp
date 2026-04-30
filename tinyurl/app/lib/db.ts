@@ -81,9 +81,7 @@ export type CreateLinkInput = {
   ownerChapterId?: number | null;
 };
 
-export type CreateLinkResult =
-  | { ok: true; link: Link }
-  | { ok: false; reason: "slug_taken" };
+export type CreateLinkResult = { ok: true; link: Link } | { ok: false; reason: "slug_taken" };
 
 export async function createLink(
   db: D1Database,
@@ -166,4 +164,314 @@ export async function softDeleteLink(db: D1Database, id: number): Promise<void> 
     .prepare("UPDATE links SET deleted_at = unixepoch() WHERE id = ? AND deleted_at IS NULL")
     .bind(id)
     .run();
+}
+
+// ---------- Tags ----------
+
+export type Tag = {
+  id: number;
+  name: string;
+  color: string | null;
+  ownerUserId: string | null;
+  ownerChapterId: number | null;
+  createdAt: number;
+};
+
+type TagRow = {
+  id: number;
+  name: string;
+  color: string | null;
+  owner_user_id: string | null;
+  owner_chapter_id: number | null;
+  created_at: number;
+};
+
+export function toTag(row: TagRow): Tag {
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color,
+    ownerUserId: row.owner_user_id,
+    ownerChapterId: row.owner_chapter_id,
+    createdAt: row.created_at,
+  };
+}
+
+const TAG_COLS = "id, name, color, owner_user_id, owner_chapter_id, created_at";
+
+export async function listTagsForUser(db: D1Database, userId: string): Promise<Tag[]> {
+  const { results } = await db
+    .prepare(`SELECT ${TAG_COLS} FROM tags WHERE owner_user_id = ? ORDER BY name`)
+    .bind(userId)
+    .all<TagRow>();
+  return results.map(toTag);
+}
+
+export async function listTagsForChapter(db: D1Database, chapterId: number): Promise<Tag[]> {
+  const { results } = await db
+    .prepare(`SELECT ${TAG_COLS} FROM tags WHERE owner_chapter_id = ? ORDER BY name`)
+    .bind(chapterId)
+    .all<TagRow>();
+  return results.map(toTag);
+}
+
+export async function listTagsForLink(db: D1Database, linkId: number): Promise<Tag[]> {
+  const cols = TAG_COLS.split(", ")
+    .map((c) => `t.${c}`)
+    .join(", ");
+  const { results } = await db
+    .prepare(
+      `SELECT ${cols}
+       FROM tags t
+       JOIN link_tags lt ON lt.tag_id = t.id
+       WHERE lt.link_id = ?
+       ORDER BY t.name`,
+    )
+    .bind(linkId)
+    .all<TagRow>();
+  return results.map(toTag);
+}
+
+export type CreateTagInput = {
+  name: string;
+  color?: string | null;
+  ownerUserId?: string | null;
+  ownerChapterId?: number | null;
+};
+
+export type CreateTagResult = { ok: true; tag: Tag } | { ok: false; reason: "duplicate" };
+
+export async function createTag(db: D1Database, input: CreateTagInput): Promise<CreateTagResult> {
+  try {
+    const row = await db
+      .prepare(
+        `INSERT INTO tags (name, color, owner_user_id, owner_chapter_id)
+         VALUES (?, ?, ?, ?)
+         RETURNING ${TAG_COLS}`,
+      )
+      .bind(
+        input.name,
+        input.color ?? null,
+        input.ownerUserId ?? null,
+        input.ownerChapterId ?? null,
+      )
+      .first<TagRow>();
+    if (!row) throw new Error("Insert returned no row");
+    return { ok: true, tag: toTag(row) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE") || msg.includes("CONSTRAINT")) {
+      return { ok: false, reason: "duplicate" };
+    }
+    throw err;
+  }
+}
+
+export async function deleteTag(db: D1Database, id: number): Promise<void> {
+  await db.prepare("DELETE FROM tags WHERE id = ?").bind(id).run();
+}
+
+export async function setLinkTags(db: D1Database, linkId: number, tagIds: number[]): Promise<void> {
+  const stmts: D1PreparedStatement[] = [
+    db.prepare("DELETE FROM link_tags WHERE link_id = ?").bind(linkId),
+  ];
+  for (const tagId of tagIds) {
+    stmts.push(
+      db
+        .prepare("INSERT OR IGNORE INTO link_tags (link_id, tag_id) VALUES (?, ?)")
+        .bind(linkId, tagId),
+    );
+  }
+  await db.batch(stmts);
+}
+
+// ---------- Comments ----------
+
+export type Comment = {
+  id: number;
+  linkId: number;
+  authorUserId: string;
+  body: string;
+  createdAt: number;
+};
+
+type CommentRow = {
+  id: number;
+  link_id: number;
+  author_user_id: string;
+  body: string;
+  created_at: number;
+};
+
+export function toComment(row: CommentRow): Comment {
+  return {
+    id: row.id,
+    linkId: row.link_id,
+    authorUserId: row.author_user_id,
+    body: row.body,
+    createdAt: row.created_at,
+  };
+}
+
+const COMMENT_COLS = "id, link_id, author_user_id, body, created_at";
+
+export async function listComments(db: D1Database, linkId: number): Promise<Comment[]> {
+  const { results } = await db
+    .prepare(`SELECT ${COMMENT_COLS} FROM comments WHERE link_id = ? ORDER BY created_at`)
+    .bind(linkId)
+    .all<CommentRow>();
+  return results.map(toComment);
+}
+
+export async function addComment(
+  db: D1Database,
+  input: { linkId: number; authorUserId: string; body: string },
+): Promise<Comment> {
+  const row = await db
+    .prepare(
+      `INSERT INTO comments (link_id, author_user_id, body)
+       VALUES (?, ?, ?)
+       RETURNING ${COMMENT_COLS}`,
+    )
+    .bind(input.linkId, input.authorUserId, input.body)
+    .first<CommentRow>();
+  if (!row) throw new Error("Insert returned no row");
+  return toComment(row);
+}
+
+export async function deleteComment(db: D1Database, id: number): Promise<void> {
+  await db.prepare("DELETE FROM comments WHERE id = ?").bind(id).run();
+}
+
+// ---------- Permissions ----------
+
+export type LinkRole = "editor" | "viewer";
+export type PrincipalType = "user" | "chapter";
+
+export type LinkPermission = {
+  id: number;
+  linkId: number;
+  principalType: PrincipalType;
+  principalId: string;
+  role: LinkRole;
+  createdAt: number;
+};
+
+type LinkPermissionRow = {
+  id: number;
+  link_id: number;
+  principal_type: PrincipalType;
+  principal_id: string;
+  role: LinkRole;
+  created_at: number;
+};
+
+export function toLinkPermission(row: LinkPermissionRow): LinkPermission {
+  return {
+    id: row.id,
+    linkId: row.link_id,
+    principalType: row.principal_type,
+    principalId: row.principal_id,
+    role: row.role,
+    createdAt: row.created_at,
+  };
+}
+
+const PERM_COLS = "id, link_id, principal_type, principal_id, role, created_at";
+
+export async function listPermissionsForLink(
+  db: D1Database,
+  linkId: number,
+): Promise<LinkPermission[]> {
+  const { results } = await db
+    .prepare(`SELECT ${PERM_COLS} FROM link_permissions WHERE link_id = ? ORDER BY created_at`)
+    .bind(linkId)
+    .all<LinkPermissionRow>();
+  return results.map(toLinkPermission);
+}
+
+export async function listLinksAccessibleByEmail(
+  db: D1Database,
+  email: string,
+  chapterId: number | null,
+): Promise<Link[]> {
+  const linkCols = LINK_COLS.split(", ")
+    .map((c) => `l.${c}`)
+    .join(", ");
+  if (chapterId == null) {
+    const { results } = await db
+      .prepare(
+        `SELECT DISTINCT ${linkCols}
+         FROM links l
+         JOIN link_permissions p ON p.link_id = l.id
+         WHERE l.deleted_at IS NULL
+           AND p.principal_type = 'user' AND p.principal_id = ?
+         ORDER BY l.created_at DESC`,
+      )
+      .bind(email)
+      .all<LinkRow>();
+    return results.map(toLink);
+  }
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT ${linkCols}
+       FROM links l
+       JOIN link_permissions p ON p.link_id = l.id
+       WHERE l.deleted_at IS NULL
+         AND (
+           (p.principal_type = 'user' AND p.principal_id = ?)
+           OR (p.principal_type = 'chapter' AND p.principal_id = ?)
+         )
+       ORDER BY l.created_at DESC`,
+    )
+    .bind(email, String(chapterId))
+    .all<LinkRow>();
+  return results.map(toLink);
+}
+
+export type AddPermissionInput = {
+  linkId: number;
+  principalType: PrincipalType;
+  principalId: string;
+  role: LinkRole;
+};
+
+export type AddPermissionResult =
+  | { ok: true; permission: LinkPermission }
+  | { ok: false; reason: "duplicate" };
+
+export async function addPermission(
+  db: D1Database,
+  input: AddPermissionInput,
+): Promise<AddPermissionResult> {
+  try {
+    const row = await db
+      .prepare(
+        `INSERT INTO link_permissions (link_id, principal_type, principal_id, role)
+         VALUES (?, ?, ?, ?)
+         RETURNING ${PERM_COLS}`,
+      )
+      .bind(input.linkId, input.principalType, input.principalId, input.role)
+      .first<LinkPermissionRow>();
+    if (!row) throw new Error("Insert returned no row");
+    return { ok: true, permission: toLinkPermission(row) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE") || msg.includes("CONSTRAINT")) {
+      return { ok: false, reason: "duplicate" };
+    }
+    throw err;
+  }
+}
+
+export async function removePermission(db: D1Database, id: number): Promise<void> {
+  await db.prepare("DELETE FROM link_permissions WHERE id = ?").bind(id).run();
+}
+
+export async function updatePermissionRole(
+  db: D1Database,
+  id: number,
+  role: LinkRole,
+): Promise<void> {
+  await db.prepare("UPDATE link_permissions SET role = ? WHERE id = ?").bind(role, id).run();
 }

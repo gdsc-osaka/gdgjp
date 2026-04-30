@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
+import { syncMembershipMetadata } from "~/lib/clerk-metadata";
 import {
   approveMembership,
   getChapterBySlug,
@@ -100,15 +101,19 @@ export async function action(args: Route.ActionArgs) {
   switch (intent) {
     case "approve":
       await approveMembership(env.DB, targetUserId, chapter.id);
+      await syncMembershipMetadata(targetUserId, env);
       return null;
     case "promote":
       await setRole(env.DB, targetUserId, "organizer", chapter.id);
+      await syncMembershipMetadata(targetUserId, env);
       return null;
     case "demote":
       await setRole(env.DB, targetUserId, "member", chapter.id);
+      await syncMembershipMetadata(targetUserId, env);
       return null;
     case "remove":
       await removeMembership(env.DB, targetUserId, chapter.id);
+      await syncMembershipMetadata(targetUserId, env);
       return null;
     default:
       return { error: t("errors.unknownAction") };

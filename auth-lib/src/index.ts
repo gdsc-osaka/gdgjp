@@ -52,6 +52,48 @@ export async function requireUser(request: Request, options: AuthOptions): Promi
 
 export type UserSummary = { id: string; email: string; name: string };
 
+export type UserChapter = {
+  chapterId: number;
+  chapterSlug: string;
+  role: "organizer" | "member";
+};
+
+export async function setUserChapter(
+  userId: string,
+  chapter: UserChapter | null,
+  options: Pick<AuthOptions, "publishableKey" | "secretKey">,
+): Promise<void> {
+  const client = createClerkClient({
+    publishableKey: options.publishableKey,
+    secretKey: options.secretKey,
+  });
+  await client.users.updateUserMetadata(userId, {
+    publicMetadata: { chapter },
+  });
+}
+
+export async function getUserChapter(
+  userId: string,
+  options: Pick<AuthOptions, "publishableKey" | "secretKey">,
+): Promise<UserChapter | null> {
+  const client = createClerkClient({
+    publishableKey: options.publishableKey,
+    secretKey: options.secretKey,
+  });
+  const user = await client.users.getUser(userId);
+  const chapter = (user.publicMetadata as { chapter?: unknown } | null)?.chapter;
+  if (!chapter || typeof chapter !== "object") return null;
+  const c = chapter as { chapterId?: unknown; chapterSlug?: unknown; role?: unknown };
+  if (
+    typeof c.chapterId !== "number" ||
+    typeof c.chapterSlug !== "string" ||
+    (c.role !== "organizer" && c.role !== "member")
+  ) {
+    return null;
+  }
+  return { chapterId: c.chapterId, chapterSlug: c.chapterSlug, role: c.role };
+}
+
 export async function getUsersByIds(
   ids: string[],
   options: Pick<AuthOptions, "publishableKey" | "secretKey">,

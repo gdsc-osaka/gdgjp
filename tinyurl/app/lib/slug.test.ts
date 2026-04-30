@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateRandomSlug, RESERVED_SLUGS, SLUG_RE, validateSlug } from "./slug";
+import { RESERVED_SLUGS, SLUG_RE, generateRandomSlug, validateSlug } from "./slug";
 
 describe("validateSlug", () => {
   it("accepts alphanumerics, underscore and hyphen", () => {

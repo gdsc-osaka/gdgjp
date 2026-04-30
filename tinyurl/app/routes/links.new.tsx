@@ -118,14 +118,12 @@ export default function NewLink({ actionData }: Route.ComponentProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="slug">
-                Slug <span className="text-muted-foreground font-normal">(leave blank to auto-generate)</span>
+                Slug{" "}
+                <span className="text-muted-foreground font-normal">
+                  (leave blank to auto-generate)
+                </span>
               </Label>
-              <Input
-                id="slug"
-                name="slug"
-                placeholder="my-link"
-                pattern="[a-zA-Z0-9_\-]{1,64}"
-              />
+              <Input id="slug" name="slug" placeholder="my-link" pattern="[a-zA-Z0-9_\-]{1,64}" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="title">
