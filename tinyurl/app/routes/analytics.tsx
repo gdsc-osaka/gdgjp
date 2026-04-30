@@ -1,13 +1,19 @@
 import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
-import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router";
-import { BarList } from "~/components/charts/bar-list";
+import {
+  CalendarRange,
+  Globe,
+  Laptop,
+  Link as LinkIcon,
+  SlidersHorizontal,
+  Smartphone,
+  Tablet,
+} from "lucide-react";
 import { HourlyChart } from "~/components/charts/hourly-chart";
-import { MetricCard } from "~/components/charts/metric-card";
-import { PageShell } from "~/components/page-shell";
+import { type BarTab, TabbedBarCard } from "~/components/charts/tabbed-bar-card";
+import { DashboardShell } from "~/components/dashboard-shell";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { hourlyClicks, topByBlob, totalClicks } from "~/lib/analytics-engine";
+import { Card } from "~/components/ui/card";
+import { type TopRow, hourlyClicks, topByBlob, totalClicks } from "~/lib/analytics-engine";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
 import { clerkAuthOptions } from "~/lib/clerk-options";
 import { listLinksAccessibleByEmail, listLinksForUser } from "~/lib/db";
@@ -46,25 +52,38 @@ export async function loader(args: Route.LoaderArgs) {
       countries: [],
       regions: [],
       cities: [],
+      continents: [],
       browsers: [],
       oses: [],
       devices: [],
     };
   }
 
-  const [hourly, total, slugs, referrers, countries, regions, cities, browsers, oses, devices] =
-    await Promise.all([
-      hourlyClicks(env, ids).catch(() => []),
-      totalClicks(env, ids).catch(() => 0),
-      topByBlob(env, "slug", ids).catch(() => []),
-      topByBlob(env, "referer", ids).catch(() => []),
-      topByBlob(env, "country", ids).catch(() => []),
-      topByBlob(env, "region", ids).catch(() => []),
-      topByBlob(env, "city", ids).catch(() => []),
-      topByBlob(env, "browser", ids).catch(() => []),
-      topByBlob(env, "os", ids).catch(() => []),
-      topByBlob(env, "device", ids).catch(() => []),
-    ]);
+  const [
+    hourly,
+    total,
+    slugs,
+    referrers,
+    countries,
+    regions,
+    cities,
+    continents,
+    browsers,
+    oses,
+    devices,
+  ] = await Promise.all([
+    hourlyClicks(env, ids).catch(() => []),
+    totalClicks(env, ids).catch(() => 0),
+    topByBlob(env, "slug", ids).catch(() => []),
+    topByBlob(env, "referer", ids).catch(() => []),
+    topByBlob(env, "country", ids).catch(() => []),
+    topByBlob(env, "region", ids).catch(() => []),
+    topByBlob(env, "city", ids).catch(() => []),
+    topByBlob(env, "continent", ids).catch(() => []),
+    topByBlob(env, "browser", ids).catch(() => []),
+    topByBlob(env, "os", ids).catch(() => []),
+    topByBlob(env, "device", ids).catch(() => []),
+  ]);
 
   return {
     hasLinks: true as const,
@@ -75,10 +94,67 @@ export async function loader(args: Route.LoaderArgs) {
     countries,
     regions,
     cities,
+    continents,
     browsers,
     oses,
     devices,
   };
+}
+
+const REGIONAL_OFFSET = 0x1f1e6 - "A".charCodeAt(0);
+
+function countryFlag(code: string): string {
+  const trimmed = code.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(trimmed)) return "🌐";
+  return [...trimmed].map((c) => String.fromCodePoint(c.charCodeAt(0) + REGIONAL_OFFSET)).join("");
+}
+
+function CountryIcon({ row }: { row: TopRow }) {
+  return <span className="text-base leading-none">{countryFlag(row.name)}</span>;
+}
+
+function ReferrerIcon({ row }: { row: TopRow }) {
+  if (!row.name || row.name === "(unknown)") {
+    return <LinkIcon className="size-4 text-muted-foreground" />;
+  }
+  try {
+    const host = new URL(row.name).hostname || row.name;
+    const src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`;
+    return (
+      <img
+        src={src}
+        alt=""
+        className="size-4 rounded-sm"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+      />
+    );
+  } catch {
+    return <Globe className="size-4 text-muted-foreground" />;
+  }
+}
+
+function DeviceIcon({ row }: { row: TopRow }) {
+  const name = row.name.toLowerCase();
+  if (name.includes("mobile") || name.includes("phone")) {
+    return <Smartphone className="size-4 text-muted-foreground" />;
+  }
+  if (name.includes("tablet")) {
+    return <Tablet className="size-4 text-muted-foreground" />;
+  }
+  return <Laptop className="size-4 text-muted-foreground" />;
+}
+
+function ClicksTile({ total }: { total: number }) {
+  return (
+    <div className="flex max-w-xs flex-col gap-2 border-b-2 border-foreground pb-4">
+      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <span className="size-2 rounded-sm bg-gdg-blue" aria-hidden />
+        Clicks
+      </div>
+      <p className="text-3xl font-medium tracking-tight">{total.toLocaleString()}</p>
+    </div>
+  );
 }
 
 export default function Analytics({ loaderData }: Route.ComponentProps) {
@@ -91,130 +167,92 @@ export default function Analytics({ loaderData }: Route.ComponentProps) {
     countries,
     regions,
     cities,
+    continents,
     browsers,
     oses,
     devices,
   } = loaderData;
 
+  const linksTabs: BarTab[] = [
+    { key: "links", label: "Short Links", rows: slugs, emptyLabel: "No clicks yet." },
+  ];
+
+  const referrerTabs: BarTab[] = [
+    {
+      key: "referrers",
+      label: "Referrers",
+      rows: referrers,
+      emptyLabel: "No referrers yet.",
+      renderIcon: (r) => <ReferrerIcon row={r} />,
+    },
+  ];
+
+  const locationTabs: BarTab[] = [
+    {
+      key: "countries",
+      label: "Countries",
+      rows: countries,
+      renderIcon: (r) => <CountryIcon row={r} />,
+    },
+    { key: "cities", label: "Cities", rows: cities },
+    { key: "regions", label: "Regions", rows: regions },
+    { key: "continents", label: "Continents", rows: continents },
+  ];
+
+  const deviceTabs: BarTab[] = [
+    {
+      key: "devices",
+      label: "Devices",
+      rows: devices,
+      renderIcon: (r) => <DeviceIcon row={r} />,
+    },
+    { key: "browsers", label: "Browsers", rows: browsers },
+    { key: "os", label: "OS", rows: oses },
+  ];
+
   return (
-    <PageShell>
-      <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2 text-muted-foreground">
-        <Link to="/dashboard">
-          <ArrowLeft className="size-4" /> Back to dashboard
-        </Link>
-      </Button>
+    <DashboardShell>
+      <div className="mx-auto flex max-w-6xl flex-col gap-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
 
-      <div className="space-y-1">
-        <h1 className="text-3xl font-medium tracking-tight">Analytics</h1>
-        <p className="text-sm text-muted-foreground">
-          Aggregate clicks across your links and links shared with you. Last 7 days. Updated every
-          minute.
-        </p>
-      </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" disabled>
+            <SlidersHorizontal className="size-4" />
+            Filter
+          </Button>
+          <Button variant="outline" size="sm" disabled>
+            <CalendarRange className="size-4" />
+            Last 7 days
+          </Button>
+        </div>
 
-      {!hasLinks ? (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>No links yet</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="sm">
-              <Link to="/links/new">Create a link</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            <MetricCard title="Total clicks" value={total} />
-            <MetricCard title="Top short links" value={slugs.length} />
-            <MetricCard title="Unique countries" value={countries.length} />
-          </div>
-
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Hourly clicks</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <HourlyChart data={hourly} />
-            </CardContent>
+        {!hasLinks ? (
+          <Card className="px-6 py-8 text-center">
+            <p className="text-base font-medium">No links yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Create a link to start collecting analytics.
+            </p>
           </Card>
-
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Top short links</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarList rows={slugs} />
-              </CardContent>
+        ) : (
+          <>
+            <Card className="gap-0 py-0">
+              <div className="border-b px-6 pt-5">
+                <ClicksTile total={total} />
+              </div>
+              <div className="px-4 pb-4 pt-6 sm:px-6">
+                <HourlyChart data={hourly} />
+              </div>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Top referrers</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarList rows={referrers} emptyLabel="No referrers yet." />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Top countries</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarList rows={countries} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Top regions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarList rows={regions} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Top cities</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarList rows={cities} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Browsers</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarList rows={browsers} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Operating systems</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarList rows={oses} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Devices</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarList rows={devices} />
-              </CardContent>
-            </Card>
-          </div>
-        </>
-      )}
-    </PageShell>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <TabbedBarCard tabs={linksTabs} tone="amber" />
+              <TabbedBarCard tabs={referrerTabs} tone="rose" />
+              <TabbedBarCard tabs={locationTabs} tone="blue" />
+              <TabbedBarCard tabs={deviceTabs} tone="emerald" />
+            </div>
+          </>
+        )}
+      </div>
+    </DashboardShell>
   );
 }
