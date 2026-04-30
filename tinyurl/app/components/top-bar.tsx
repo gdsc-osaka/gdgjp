@@ -7,7 +7,7 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-        <Link to="/dashboard" className="flex items-center gap-3">
+        <Link to="/links" className="flex items-center gap-3">
           <GdgMark size="sm" />
           <span className="font-medium tracking-tight">GDG Japan Links</span>
         </Link>

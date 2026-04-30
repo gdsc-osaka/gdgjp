@@ -12,12 +12,16 @@ import {
 
 const env = { CF_ACCOUNT_ID: "acc_123", CF_AE_API_TOKEN: "token_abc" };
 
+const ID_A = "link_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+const ID_B = "link_01ARZ3NDEKTSV4RRFFQ69G5FBW";
+const ID_C = "link_01ARZ3NDEKTSV4RRFFQ69G5FCX";
+
 describe("analytics-engine SQL", () => {
   it("hourlySql for a single link", () => {
-    expect(hourlySql([42], 7)).toMatchInlineSnapshot(`
+    expect(hourlySql([ID_A], 7)).toMatchInlineSnapshot(`
       "SELECT toStartOfHour(timestamp) AS hour, count() AS clicks
       FROM tinyurl_clicks
-      WHERE index1 IN ('42') AND timestamp > now() - INTERVAL '7' DAY
+      WHERE index1 IN ('link_01ARZ3NDEKTSV4RRFFQ69G5FAV') AND timestamp > now() - INTERVAL '7' DAY
       GROUP BY hour
       ORDER BY hour"
     `);
@@ -32,10 +36,10 @@ describe("analytics-engine SQL", () => {
   });
 
   it("topSql produces the right blob index", () => {
-    expect(topSql("country", [1])).toMatchInlineSnapshot(`
+    expect(topSql("country", [ID_A])).toMatchInlineSnapshot(`
       "SELECT blob2 AS name, count() AS clicks
       FROM tinyurl_clicks
-      WHERE index1 IN ('1') AND timestamp > now() - INTERVAL '7' DAY
+      WHERE index1 IN ('link_01ARZ3NDEKTSV4RRFFQ69G5FAV') AND timestamp > now() - INTERVAL '7' DAY
       GROUP BY name
       ORDER BY clicks DESC
       LIMIT 10"
@@ -46,13 +50,13 @@ describe("analytics-engine SQL", () => {
   });
 
   it("totalSql counts rows", () => {
-    expect(totalSql([1, 2, 3])).toContain("SELECT count() AS clicks");
-    expect(totalSql([1, 2, 3])).toContain("index1 IN ('1', '2', '3')");
+    expect(totalSql([ID_A, ID_B, ID_C])).toContain("SELECT count() AS clicks");
+    expect(totalSql([ID_A, ID_B, ID_C])).toContain(`index1 IN ('${ID_A}', '${ID_B}', '${ID_C}')`);
   });
 
-  it("rejects non-integer link ids", () => {
-    expect(() => hourlySql([1.5])).toThrow(/non-negative integer/);
-    expect(() => hourlySql([-1])).toThrow(/non-negative integer/);
+  it("rejects malformed link ids", () => {
+    expect(() => hourlySql(["not-a-link-id"])).toThrow(/link id/);
+    expect(() => hourlySql(["link_short"])).toThrow(/link id/);
   });
 });
 
@@ -132,7 +136,7 @@ describe("typed helpers normalize rows", () => {
           ),
       ),
     );
-    const result = await hourlyClicks(env, [1]);
+    const result = await hourlyClicks(env, [ID_A]);
     expect(result).toEqual([{ hour: "2026-04-30T10:00:00Z", clicks: 7 }]);
   });
 
@@ -154,7 +158,7 @@ describe("typed helpers normalize rows", () => {
           ),
       ),
     );
-    const result = await topByBlob(env, "country", [1]);
+    const result = await topByBlob(env, "country", [ID_A]);
     expect(result).toEqual([
       { name: "JP", clicks: 10 },
       { name: "(unknown)", clicks: 3 },
@@ -171,6 +175,6 @@ describe("typed helpers normalize rows", () => {
           }),
       ),
     );
-    expect(await totalClicks(env, [1])).toBe(42);
+    expect(await totalClicks(env, [ID_A])).toBe(42);
   });
 });

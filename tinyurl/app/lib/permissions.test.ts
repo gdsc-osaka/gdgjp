@@ -17,8 +17,10 @@ const stranger: AuthUser = {
 };
 const admin: AuthUser = { id: "u_admin", email: "admin@example.com", name: "Admin", isAdmin: true };
 
+const LINK_ID = "link_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+
 const link: Link = {
-  id: 1,
+  id: LINK_ID,
   slug: "abc",
   destinationUrl: "https://example.com",
   title: null,
@@ -34,7 +36,7 @@ const link: Link = {
 function perm(overrides: Partial<LinkPermission>): LinkPermission {
   return {
     id: 1,
-    linkId: 1,
+    linkId: LINK_ID,
     principalType: "user",
     principalId: "stranger@example.com",
     role: "viewer",

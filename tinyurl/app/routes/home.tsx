@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 
 export function loader() {
-  throw redirect("/dashboard");
+  throw redirect("/links");
 }
 
 export default function Home() {

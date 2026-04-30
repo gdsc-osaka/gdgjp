@@ -73,6 +73,7 @@ import {
 import { fetchOgp } from "~/lib/ogp";
 import { type ViewerContext, canEditLink, canViewLink } from "~/lib/permissions";
 import { validateSlug } from "~/lib/slug";
+import { isLinkId } from "~/lib/id";
 import type { Route } from "./+types/links.$id";
 
 async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
@@ -83,8 +84,8 @@ async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
   } catch {
     throw buildSignInRedirect(args.request, env);
   }
-  const id = Number(args.params.id);
-  if (!Number.isInteger(id) || id <= 0) throw new Response("Not found", { status: 404 });
+  const id = String(args.params.id ?? "");
+  if (!isLinkId(id)) throw new Response("Not found", { status: 404 });
   const link = await getLinkById(env.DB, id);
   if (!link) throw new Response("Not found", { status: 404 });
   const permissions = await listPermissionsForLink(env.DB, id);
@@ -107,7 +108,7 @@ export async function loader(args: Route.LoaderArgs) {
     listTagsForUser(env.DB, user.id),
     chapter ? listTagsForChapter(env.DB, chapter.chapterId) : Promise.resolve([]),
     listComments(env.DB, link.id),
-    clicksByLinkId(env, [link.id]).catch(() => new Map<number, number>()),
+    clicksByLinkId(env, [link.id]).catch(() => new Map<string, number>()),
   ]);
   const users = await getUsersByIds([link.ownerUserId], {
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
@@ -141,7 +142,7 @@ export async function action(args: Route.ActionArgs) {
 
   if (intent === "delete") {
     await softDeleteLink(env.DB, id);
-    throw redirect("/dashboard");
+    throw redirect("/links");
   }
 
   if (intent === "update") {
@@ -480,7 +481,7 @@ export default function EditLink({ loaderData, actionData }: Route.ComponentProp
         <div className="flex flex-wrap items-center justify-between gap-3">
           <nav className="flex min-w-0 items-center gap-2 text-sm" aria-label="Breadcrumb">
             <Link
-              to="/dashboard"
+              to="/links"
               className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-foreground hover:bg-accent"
             >
               <FolderIcon className="size-4 text-primary" />
@@ -504,7 +505,7 @@ export default function EditLink({ loaderData, actionData }: Route.ComponentProp
               Copy link
             </Button>
             <Button asChild variant="outline" size="sm">
-              <Link to={`/links/${link.id}/analytics`}>
+              <Link to={`/analytics?linkId=${link.id}`}>
                 <BarChart3 className="size-4 text-primary" />
                 {clicks} {clicks === 1 ? "click" : "clicks"}
               </Link>

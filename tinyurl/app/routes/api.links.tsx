@@ -53,7 +53,7 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
     return { error: "Destination URL is not a valid URL." };
   }
 
-  async function applyExtras(linkId: number) {
+  async function applyExtras(linkId: string) {
     const finalTagIds = new Set(tagIds);
     for (const name of newTagNames) {
       const result = await createTag(env.DB, { name, color: null, ownerUserId: user.id });

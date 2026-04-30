@@ -56,7 +56,7 @@ export async function loader(args: Route.LoaderArgs) {
   const linkIds = allLinks.map((l) => l.id);
 
   const [clickMap, owners] = await Promise.all([
-    clicksByLinkId(env, linkIds).catch(() => new Map<number, number>()),
+    clicksByLinkId(env, linkIds).catch(() => new Map<string, number>()),
     ownerIds.length > 0
       ? getUsersByIds(ownerIds, {
           publishableKey: env.CLERK_PUBLISHABLE_KEY,
@@ -64,7 +64,7 @@ export async function loader(args: Route.LoaderArgs) {
         }).catch(() => ({}) as Record<string, UserSummary>)
       : Promise.resolve({} as Record<string, UserSummary>),
   ]);
-  const clicks: Record<number, number> = {};
+  const clicks: Record<string, number> = {};
   for (const [id, n] of clickMap) clicks[id] = n;
 
   return {

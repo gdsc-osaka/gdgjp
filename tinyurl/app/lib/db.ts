@@ -1,5 +1,7 @@
+import { newLinkId } from "./id";
+
 export type Link = {
-  id: number;
+  id: string;
   slug: string;
   destinationUrl: string;
   title: string | null;
@@ -13,7 +15,7 @@ export type Link = {
 };
 
 type LinkRow = {
-  id: number;
+  id: string;
   slug: string;
   destination_url: string;
   title: string | null;
@@ -63,7 +65,7 @@ export async function getLinkBySlug(db: D1Database, slug: string): Promise<Link 
   return row ? toLink(row) : null;
 }
 
-export async function getLinkById(db: D1Database, id: number): Promise<Link | null> {
+export async function getLinkById(db: D1Database, id: string): Promise<Link | null> {
   const row = await db
     .prepare(`SELECT ${LINK_COLS} FROM links WHERE id = ? AND deleted_at IS NULL`)
     .bind(id)
@@ -90,11 +92,12 @@ export async function createLink(
   try {
     const row = await db
       .prepare(
-        `INSERT INTO links (slug, destination_url, title, description, og_image_url, owner_user_id, owner_chapter_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO links (id, slug, destination_url, title, description, og_image_url, owner_user_id, owner_chapter_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING ${LINK_COLS}`,
       )
       .bind(
+        newLinkId(),
         input.slug,
         input.destinationUrl,
         input.title ?? null,
@@ -123,7 +126,7 @@ export type UpdateLinkInput = {
 
 export async function updateLink(
   db: D1Database,
-  id: number,
+  id: string,
   input: UpdateLinkInput,
 ): Promise<Link | null> {
   const sets: string[] = [];
@@ -159,7 +162,7 @@ export async function updateLink(
   return row ? toLink(row) : null;
 }
 
-export async function softDeleteLink(db: D1Database, id: number): Promise<void> {
+export async function softDeleteLink(db: D1Database, id: string): Promise<void> {
   await db
     .prepare("UPDATE links SET deleted_at = unixepoch() WHERE id = ? AND deleted_at IS NULL")
     .bind(id)
@@ -215,7 +218,7 @@ export async function listTagsForChapter(db: D1Database, chapterId: number): Pro
   return results.map(toTag);
 }
 
-export async function listTagsForLink(db: D1Database, linkId: number): Promise<Tag[]> {
+export async function listTagsForLink(db: D1Database, linkId: string): Promise<Tag[]> {
   const cols = TAG_COLS.split(", ")
     .map((c) => `t.${c}`)
     .join(", ");
@@ -271,7 +274,75 @@ export async function deleteTag(db: D1Database, id: number): Promise<void> {
   await db.prepare("DELETE FROM tags WHERE id = ?").bind(id).run();
 }
 
-export async function setLinkTags(db: D1Database, linkId: number, tagIds: number[]): Promise<void> {
+export type UpdateTagInput = {
+  id: number;
+  name: string;
+  color?: string | null;
+};
+
+export type UpdateTagResult = { ok: true; tag: Tag } | { ok: false; reason: "duplicate" };
+
+export async function updateTag(db: D1Database, input: UpdateTagInput): Promise<UpdateTagResult> {
+  try {
+    const row = await db
+      .prepare(
+        `UPDATE tags SET name = ?, color = ? WHERE id = ?
+         RETURNING ${TAG_COLS}`,
+      )
+      .bind(input.name, input.color ?? null, input.id)
+      .first<TagRow>();
+    if (!row) throw new Error("Update returned no row");
+    return { ok: true, tag: toTag(row) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE") || msg.includes("CONSTRAINT")) {
+      return { ok: false, reason: "duplicate" };
+    }
+    throw err;
+  }
+}
+
+export type TagWithCount = Tag & { linkCount: number };
+
+type TagWithCountRow = TagRow & { link_count: number };
+
+const TAG_WITH_COUNT_SELECT = `
+  SELECT ${TAG_COLS.split(", ")
+    .map((c) => `t.${c}`)
+    .join(", ")},
+    (SELECT COUNT(*) FROM link_tags lt
+       JOIN links l ON l.id = lt.link_id
+      WHERE lt.tag_id = t.id AND l.deleted_at IS NULL) AS link_count
+  FROM tags t
+`;
+
+function toTagWithCount(row: TagWithCountRow): TagWithCount {
+  return { ...toTag(row), linkCount: row.link_count };
+}
+
+export async function listTagsForUserWithCounts(
+  db: D1Database,
+  userId: string,
+): Promise<TagWithCount[]> {
+  const { results } = await db
+    .prepare(`${TAG_WITH_COUNT_SELECT} WHERE t.owner_user_id = ? ORDER BY t.name`)
+    .bind(userId)
+    .all<TagWithCountRow>();
+  return results.map(toTagWithCount);
+}
+
+export async function listTagsForChapterWithCounts(
+  db: D1Database,
+  chapterId: number,
+): Promise<TagWithCount[]> {
+  const { results } = await db
+    .prepare(`${TAG_WITH_COUNT_SELECT} WHERE t.owner_chapter_id = ? ORDER BY t.name`)
+    .bind(chapterId)
+    .all<TagWithCountRow>();
+  return results.map(toTagWithCount);
+}
+
+export async function setLinkTags(db: D1Database, linkId: string, tagIds: number[]): Promise<void> {
   const stmts: D1PreparedStatement[] = [
     db.prepare("DELETE FROM link_tags WHERE link_id = ?").bind(linkId),
   ];
@@ -289,7 +360,7 @@ export async function setLinkTags(db: D1Database, linkId: number, tagIds: number
 
 export type Comment = {
   id: number;
-  linkId: number;
+  linkId: string;
   authorUserId: string;
   body: string;
   createdAt: number;
@@ -297,7 +368,7 @@ export type Comment = {
 
 type CommentRow = {
   id: number;
-  link_id: number;
+  link_id: string;
   author_user_id: string;
   body: string;
   created_at: number;
@@ -315,7 +386,7 @@ export function toComment(row: CommentRow): Comment {
 
 const COMMENT_COLS = "id, link_id, author_user_id, body, created_at";
 
-export async function listComments(db: D1Database, linkId: number): Promise<Comment[]> {
+export async function listComments(db: D1Database, linkId: string): Promise<Comment[]> {
   const { results } = await db
     .prepare(`SELECT ${COMMENT_COLS} FROM comments WHERE link_id = ? ORDER BY created_at`)
     .bind(linkId)
@@ -325,7 +396,7 @@ export async function listComments(db: D1Database, linkId: number): Promise<Comm
 
 export async function addComment(
   db: D1Database,
-  input: { linkId: number; authorUserId: string; body: string },
+  input: { linkId: string; authorUserId: string; body: string },
 ): Promise<Comment> {
   const row = await db
     .prepare(
@@ -350,7 +421,7 @@ export type PrincipalType = "user" | "chapter";
 
 export type LinkPermission = {
   id: number;
-  linkId: number;
+  linkId: string;
   principalType: PrincipalType;
   principalId: string;
   role: LinkRole;
@@ -359,7 +430,7 @@ export type LinkPermission = {
 
 type LinkPermissionRow = {
   id: number;
-  link_id: number;
+  link_id: string;
   principal_type: PrincipalType;
   principal_id: string;
   role: LinkRole;
@@ -381,7 +452,7 @@ const PERM_COLS = "id, link_id, principal_type, principal_id, role, created_at";
 
 export async function listPermissionsForLink(
   db: D1Database,
-  linkId: number,
+  linkId: string,
 ): Promise<LinkPermission[]> {
   const { results } = await db
     .prepare(`SELECT ${PERM_COLS} FROM link_permissions WHERE link_id = ? ORDER BY created_at`)
@@ -430,7 +501,7 @@ export async function listLinksAccessibleByEmail(
 }
 
 export type AddPermissionInput = {
-  linkId: number;
+  linkId: string;
   principalType: PrincipalType;
   principalId: string;
   role: LinkRole;

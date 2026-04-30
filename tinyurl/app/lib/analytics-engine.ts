@@ -27,6 +27,15 @@ function intOrThrow(value: number, name: string): number {
   return value;
 }
 
+const LINK_ID_RE = /^link_[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+
+function linkIdOrThrow(value: string, name: string): string {
+  if (!LINK_ID_RE.test(value)) {
+    throw new Error(`${name} must be a link id (got ${value})`);
+  }
+  return value;
+}
+
 export type AeEnv = {
   CF_ACCOUNT_ID: string;
   CF_AE_API_TOKEN: string;
@@ -57,7 +66,7 @@ export async function aeQuery(env: AeEnv, sql: string): Promise<AeRow[]> {
 
 export type HourlyPoint = { hour: string; clicks: number };
 
-export function hourlySql(linkIds: number[] | "all", days = 7): string {
+export function hourlySql(linkIds: string[] | "all", days = 7): string {
   const d = intOrThrow(days, "days");
   const filter = linkIdsFilter(linkIds);
   return `SELECT toStartOfHour(timestamp) AS hour, count() AS clicks
@@ -69,7 +78,7 @@ ORDER BY hour`;
 
 export async function hourlyClicks(
   env: AeEnv,
-  linkIds: number[] | "all",
+  linkIds: string[] | "all",
   days = 7,
 ): Promise<HourlyPoint[]> {
   const rows = await aeQuery(env, hourlySql(linkIds, days));
@@ -104,7 +113,7 @@ const BLOB_INDEX: Record<TopBlob, number> = {
 
 export type TopRow = { name: string; clicks: number };
 
-export function topSql(field: TopBlob, linkIds: number[] | "all", limit = 10, days = 7): string {
+export function topSql(field: TopBlob, linkIds: string[] | "all", limit = 10, days = 7): string {
   const blob = `blob${BLOB_INDEX[field]}`;
   const lim = intOrThrow(limit, "limit");
   const d = intOrThrow(days, "days");
@@ -120,7 +129,7 @@ LIMIT ${lim}`;
 export async function topByBlob(
   env: AeEnv,
   field: TopBlob,
-  linkIds: number[] | "all",
+  linkIds: string[] | "all",
   limit = 10,
   days = 7,
 ): Promise<TopRow[]> {
@@ -131,7 +140,7 @@ export async function topByBlob(
   }));
 }
 
-export function clicksByLinkIdSql(linkIds: number[], days = 7): string {
+export function clicksByLinkIdSql(linkIds: string[], days = 7): string {
   const d = intOrThrow(days, "days");
   const filter = linkIdsFilter(linkIds);
   return `SELECT index1 AS linkId, count() AS clicks
@@ -142,21 +151,21 @@ GROUP BY linkId`;
 
 export async function clicksByLinkId(
   env: AeEnv,
-  linkIds: number[],
+  linkIds: string[],
   days = 7,
-): Promise<Map<number, number>> {
-  const map = new Map<number, number>();
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
   if (linkIds.length === 0) return map;
   const rows = await aeQuery(env, clicksByLinkIdSql(linkIds, days));
   for (const row of rows) {
-    const id = Number(row.linkId);
+    const id = String(row.linkId ?? "");
     const clicks = Number(row.clicks ?? 0);
-    if (Number.isFinite(id)) map.set(id, clicks);
+    if (id) map.set(id, clicks);
   }
   return map;
 }
 
-export function totalSql(linkIds: number[] | "all", days = 7): string {
+export function totalSql(linkIds: string[] | "all", days = 7): string {
   const d = intOrThrow(days, "days");
   const filter = linkIdsFilter(linkIds);
   return `SELECT count() AS clicks
@@ -166,16 +175,16 @@ WHERE ${filter} AND timestamp > now() - INTERVAL '${d}' DAY`;
 
 export async function totalClicks(
   env: AeEnv,
-  linkIds: number[] | "all",
+  linkIds: string[] | "all",
   days = 7,
 ): Promise<number> {
   const rows = await aeQuery(env, totalSql(linkIds, days));
   return Number(rows[0]?.clicks ?? 0);
 }
 
-function linkIdsFilter(linkIds: number[] | "all"): string {
+function linkIdsFilter(linkIds: string[] | "all"): string {
   if (linkIds === "all") return "1=1";
   if (linkIds.length === 0) return "1=0";
-  const ids = linkIds.map((id) => quote(String(intOrThrow(id, "linkId")))).join(", ");
+  const ids = linkIds.map((id) => quote(linkIdOrThrow(id, "linkId"))).join(", ");
   return `index1 IN (${ids})`;
 }

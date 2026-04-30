@@ -3,7 +3,7 @@ import { toLink } from "./db";
 
 describe("toLink", () => {
   const row = {
-    id: 1,
+    id: "link_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     slug: "test-slug",
     destination_url: "https://example.com",
     title: "Example",
@@ -19,7 +19,7 @@ describe("toLink", () => {
   it("maps all columns to camelCase", () => {
     const link = toLink(row);
     expect(link).toEqual({
-      id: 1,
+      id: "link_01ARZ3NDEKTSV4RRFFQ69G5FAV",
       slug: "test-slug",
       destinationUrl: "https://example.com",
       title: "Example",

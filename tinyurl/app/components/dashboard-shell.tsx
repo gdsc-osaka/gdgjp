@@ -19,7 +19,7 @@ type NavGroup = {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    items: [{ to: "/dashboard", label: "Links", icon: LinkIcon }],
+    items: [{ to: "/links", label: "Links", icon: LinkIcon }],
   },
   {
     heading: "Insights",
@@ -73,8 +73,10 @@ function Sidebar() {
                     key={item.to}
                     item={item}
                     active={
-                      item.to === "/dashboard"
-                        ? pathname === "/" || pathname === "/dashboard"
+                      item.to === "/links"
+                        ? pathname === "/" ||
+                          pathname === "/links" ||
+                          pathname.startsWith("/links/")
                         : pathname === item.to || pathname.startsWith(`${item.to}/`)
                     }
                   />
@@ -95,7 +97,7 @@ function Sidebar() {
 function MobileBar() {
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:hidden">
-      <Link to="/dashboard" className="flex items-center gap-2">
+      <Link to="/links" className="flex items-center gap-2">
         <GdgMark size="sm" />
         <span className="font-medium tracking-tight">GDG Japan Links</span>
       </Link>

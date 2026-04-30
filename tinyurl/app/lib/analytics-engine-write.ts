@@ -14,6 +14,6 @@ export function writeClickEvent(env: Env, request: Request, link: Link): void {
 
   env.CLICKS_AE.writeDataPoint({
     blobs: [link.slug, country, region, city, continent, referer, browser, os, device],
-    indexes: [String(link.id)],
+    indexes: [link.id],
   });
 }

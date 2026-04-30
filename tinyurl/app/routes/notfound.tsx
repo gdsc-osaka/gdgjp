@@ -14,7 +14,7 @@ export default function NotFound() {
         This short link doesn't exist or has been removed.
       </p>
       <Button asChild variant="outline" size="sm">
-        <Link to="/dashboard">Go to dashboard</Link>
+        <Link to="/links">Go to links</Link>
       </Button>
     </div>
   );

@@ -1,13 +1,16 @@
 import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
 import {
   CalendarRange,
+  ExternalLink,
   Globe,
   Laptop,
   Link as LinkIcon,
   SlidersHorizontal,
   Smartphone,
   Tablet,
+  X,
 } from "lucide-react";
+import { Link } from "react-router";
 import { HourlyChart } from "~/components/charts/hourly-chart";
 import { type BarTab, TabbedBarCard } from "~/components/charts/tabbed-bar-card";
 import { DashboardShell } from "~/components/dashboard-shell";
@@ -16,10 +19,20 @@ import { Card } from "~/components/ui/card";
 import { type TopRow, hourlyClicks, topByBlob, totalClicks } from "~/lib/analytics-engine";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
 import { clerkAuthOptions } from "~/lib/clerk-options";
-import { listLinksAccessibleByEmail, listLinksForUser } from "~/lib/db";
+import {
+  getLinkById,
+  listLinksAccessibleByEmail,
+  listLinksForUser,
+  listPermissionsForLink,
+} from "~/lib/db";
+import { type ViewerContext, canViewLink } from "~/lib/permissions";
+import { isLinkId } from "~/lib/id";
 import type { Route } from "./+types/analytics";
 
-export function meta() {
+export function meta({ data }: Route.MetaArgs) {
+  if (data?.focus) {
+    return [{ title: `${data.focus.slug} analytics — GDG Japan Links` }];
+  }
   return [{ title: "Analytics — GDG Japan Links" }];
 }
 
@@ -35,16 +48,43 @@ export async function loader(args: Route.LoaderArgs) {
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
     secretKey: env.CLERK_SECRET_KEY,
   });
-  const [own, shared] = await Promise.all([
-    listLinksForUser(env.DB, user.id),
-    listLinksAccessibleByEmail(env.DB, user.email, chapter?.chapterId ?? null),
-  ]);
-  const idSet = new Set<number>([...own.map((l) => l.id), ...shared.map((l) => l.id)]);
-  const ids = [...idSet];
+
+  const url = new URL(args.request.url);
+  const linkIdParam = url.searchParams.get("linkId");
+  let focus: { id: string; slug: string; destinationUrl: string; shortUrl: string } | null = null;
+  let ids: string[];
+
+  if (linkIdParam !== null) {
+    if (!isLinkId(linkIdParam)) {
+      throw new Response("Not found", { status: 404 });
+    }
+    const link = await getLinkById(env.DB, linkIdParam);
+    if (!link) throw new Response("Not found", { status: 404 });
+    const permissions = await listPermissionsForLink(env.DB, linkIdParam);
+    const ctx: ViewerContext = { user, chapterId: chapter?.chapterId ?? null };
+    if (!canViewLink(ctx, link, permissions)) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    focus = {
+      id: link.id,
+      slug: link.slug,
+      destinationUrl: link.destinationUrl,
+      shortUrl: `${env.SHORT_URL_BASE}/${link.slug}`,
+    };
+    ids = [linkIdParam];
+  } else {
+    const [own, shared] = await Promise.all([
+      listLinksForUser(env.DB, user.id),
+      listLinksAccessibleByEmail(env.DB, user.email, chapter?.chapterId ?? null),
+    ]);
+    const idSet = new Set<string>([...own.map((l) => l.id), ...shared.map((l) => l.id)]);
+    ids = [...idSet];
+  }
 
   if (ids.length === 0) {
     return {
       hasLinks: false as const,
+      focus,
       hourly: [],
       total: 0,
       slugs: [],
@@ -87,6 +127,7 @@ export async function loader(args: Route.LoaderArgs) {
 
   return {
     hasLinks: true as const,
+    focus,
     hourly,
     total,
     slugs,
@@ -160,6 +201,7 @@ function ClicksTile({ total }: { total: number }) {
 export default function Analytics({ loaderData }: Route.ComponentProps) {
   const {
     hasLinks,
+    focus,
     hourly,
     total,
     slugs,
@@ -213,13 +255,39 @@ export default function Analytics({ loaderData }: Route.ComponentProps) {
   return (
     <DashboardShell>
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
+            {focus ? (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-mono">{focus.shortUrl}</span>
+              </p>
+            ) : null}
+          </div>
+          {focus ? (
+            <Button asChild variant="outline" size="sm">
+              <a href={focus.destinationUrl} target="_blank" rel="noopener noreferrer">
+                Visit destination
+                <ExternalLink className="size-3" />
+              </a>
+            </Button>
+          ) : null}
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" disabled>
-            <SlidersHorizontal className="size-4" />
-            Filter
-          </Button>
+          {focus ? (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/analytics" aria-label="Clear link filter">
+                <X className="size-4" />
+                {focus.slug}
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" disabled>
+              <SlidersHorizontal className="size-4" />
+              Filter
+            </Button>
+          )}
           <Button variant="outline" size="sm" disabled>
             <CalendarRange className="size-4" />
             Last 7 days

@@ -134,7 +134,7 @@ export function LinkCard({
       </div>
 
       <Link
-        to={`/links/${link.id}/analytics`}
+        to={`/analytics?linkId=${link.id}`}
         className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         title="View analytics"
       >
@@ -157,7 +157,7 @@ export function LinkCard({
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link to={`/links/${link.id}/analytics`}>
+            <Link to={`/analytics?linkId=${link.id}`}>
               <BarChart3 className="size-4" />
               Analytics
             </Link>
