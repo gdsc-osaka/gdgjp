@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/react-router";
 import { clerkMiddleware, rootAuthLoader } from "@clerk/react-router/server";
 import { dark } from "@clerk/themes";
 import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import { i18n } from "~/lib/i18n/i18n.server";
@@ -11,7 +12,15 @@ import { ThemeProvider, themeInitScript, useTheme } from "~/lib/theme";
 import type { Route } from "./+types/root";
 import stylesheet from "./app.css?url";
 
-export const middleware: Route.MiddlewareFunction[] = [clerkMiddleware()];
+const clerkCloudflareMiddleware: Route.MiddlewareFunction = (args, next) => {
+  const env = args.context.cloudflare.env;
+  return clerkMiddleware({
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
+    secretKey: env.CLERK_SECRET_KEY,
+  })(args, next);
+};
+
+export const middleware: Route.MiddlewareFunction[] = [clerkCloudflareMiddleware];
 
 export const loader = (args: Route.LoaderArgs) =>
   rootAuthLoader(args, async ({ request }) => {
@@ -26,7 +35,7 @@ export const links: Route.LinksFunction = () => [
   { rel: "stylesheet", href: stylesheet },
 ];
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({ children }: { children: ReactNode }) {
   const lang = useRootLang();
   return (
     <html lang={lang} suppressHydrationWarning>
@@ -57,11 +66,10 @@ function ClerkAppearance({
   children,
 }: {
   loaderData: Route.ComponentProps["loaderData"];
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { resolvedTheme } = useTheme();
-  const { i18n: i18nClient } = useTranslation();
-  const localization = i18nClient.resolvedLanguage === "ja" ? jaJP : enUS;
+  const localization = loaderData.locale === "ja" ? jaJP : enUS;
   return (
     <ClerkProvider
       loaderData={loaderData}

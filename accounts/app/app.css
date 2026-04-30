@@ -20,7 +20,7 @@
 }
 
 @theme inline {
-  --font-sans: "Google Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Google Sans", -apple-system, "BlinkMacSystemFont", "Segoe UI", "Roboto", sans-serif;
 
   --color-gdg-blue: #4285f4;
   --color-gdg-red: #ea4335;

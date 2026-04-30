@@ -155,33 +155,60 @@ export async function requestMembership(
     .bind(userId)
     .first<{ user_id: string }>();
   if (existing) return { ok: false, reason: "already_has_membership" };
-  await db
-    .prepare(
-      "INSERT INTO memberships (user_id, chapter_id, role, status) VALUES (?, ?, 'member', 'pending')",
-    )
-    .bind(userId, chapterId)
-    .run();
+  try {
+    await db
+      .prepare(
+        "INSERT INTO memberships (user_id, chapter_id, role, status) VALUES (?, ?, 'member', 'pending')",
+      )
+      .bind(userId, chapterId)
+      .run();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const code = (err as { code?: string }).code ?? "";
+    if (msg.includes("UNIQUE") || msg.includes("CONSTRAINT") || code === "SQLITE_CONSTRAINT") {
+      return { ok: false, reason: "already_has_membership" };
+    }
+    throw err;
+  }
   return { ok: true };
 }
 
-export async function approveMembership(db: D1Database, userId: string): Promise<void> {
+export async function approveMembership(
+  db: D1Database,
+  userId: string,
+  chapterId: number,
+): Promise<void> {
   await db
     .prepare(
-      "UPDATE memberships SET status = 'active', approved_at = unixepoch() WHERE user_id = ? AND status = 'pending'",
+      "UPDATE memberships SET status = 'active', approved_at = unixepoch() WHERE user_id = ? AND chapter_id = ? AND status = 'pending'",
     )
-    .bind(userId)
+    .bind(userId, chapterId)
     .run();
 }
 
-export async function setRole(db: D1Database, userId: string, role: Role): Promise<void> {
+export async function setRole(
+  db: D1Database,
+  userId: string,
+  role: Role,
+  chapterId: number,
+): Promise<void> {
   await db
-    .prepare("UPDATE memberships SET role = ? WHERE user_id = ? AND status = 'active'")
-    .bind(role, userId)
+    .prepare(
+      "UPDATE memberships SET role = ? WHERE user_id = ? AND chapter_id = ? AND status = 'active'",
+    )
+    .bind(role, userId, chapterId)
     .run();
 }
 
-export async function removeMembership(db: D1Database, userId: string): Promise<void> {
-  await db.prepare("DELETE FROM memberships WHERE user_id = ?").bind(userId).run();
+export async function removeMembership(
+  db: D1Database,
+  userId: string,
+  chapterId: number,
+): Promise<void> {
+  await db
+    .prepare("DELETE FROM memberships WHERE user_id = ? AND chapter_id = ?")
+    .bind(userId, chapterId)
+    .run();
 }
 
 export async function listPendingForChapter(

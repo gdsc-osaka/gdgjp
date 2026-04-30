@@ -61,11 +61,15 @@ export async function loader(args: Route.LoaderArgs) {
     listPendingForChapter(env.DB, chapter.id),
     listMembersForChapter(env.DB, chapter.id),
   ]);
-  const ids = [...pending.map((m) => m.userId), ...members.map((m) => m.userId)];
-  const users = await getUsersByIds(ids, {
-    publishableKey: env.CLERK_PUBLISHABLE_KEY,
-    secretKey: env.CLERK_SECRET_KEY,
-  });
+  const idSet = new Set([...pending.map((m) => m.userId), ...members.map((m) => m.userId)]);
+  const ids = [...idSet];
+  const users =
+    ids.length > 0
+      ? await getUsersByIds(ids, {
+          publishableKey: env.CLERK_PUBLISHABLE_KEY,
+          secretKey: env.CLERK_SECRET_KEY,
+        })
+      : {};
   return {
     chapter,
     pending,
@@ -76,12 +80,17 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  const { env, chapter } = await ensureAccess(args);
+  const { env, chapter, user } = await ensureAccess(args);
   const t = await i18n.getFixedT(args.request);
   const form = await args.request.formData();
   const intent = form.get("intent");
   const targetUserId = String(form.get("userId") ?? "");
   if (!targetUserId) return { error: t("errors.missingUser") };
+
+  if (targetUserId === user.id) {
+    if (intent === "demote") return { error: t("errors.cannotSelfDemote") };
+    if (intent === "remove") return { error: t("errors.cannotSelfRemove") };
+  }
 
   const target = await getMembership(env.DB, targetUserId);
   if (!target || target.chapter.id !== chapter.id) {
@@ -90,16 +99,16 @@ export async function action(args: Route.ActionArgs) {
 
   switch (intent) {
     case "approve":
-      await approveMembership(env.DB, targetUserId);
+      await approveMembership(env.DB, targetUserId, chapter.id);
       return null;
     case "promote":
-      await setRole(env.DB, targetUserId, "organizer");
+      await setRole(env.DB, targetUserId, "organizer", chapter.id);
       return null;
     case "demote":
-      await setRole(env.DB, targetUserId, "member");
+      await setRole(env.DB, targetUserId, "member", chapter.id);
       return null;
     case "remove":
-      await removeMembership(env.DB, targetUserId);
+      await removeMembership(env.DB, targetUserId, chapter.id);
       return null;
     default:
       return { error: t("errors.unknownAction") };

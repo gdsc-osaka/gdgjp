@@ -14,16 +14,20 @@ import type { Route } from "./+types/dashboard";
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
   const t = await i18n.getFixedT(args.request);
+  let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    const user = await requireUser(args.request, {
+    user = await requireUser(args.request, {
       publishableKey: env.CLERK_PUBLISHABLE_KEY,
       secretKey: env.CLERK_SECRET_KEY,
     });
-    const membership = await getMembership(env.DB, user.id);
-    return { user, membership, title: t("meta.dashboard") };
-  } catch {
-    throw buildSignInRedirect(args.request);
+  } catch (err) {
+    if (err instanceof Response && err.status === 401) {
+      throw buildSignInRedirect(args.request);
+    }
+    throw err;
   }
+  const membership = await getMembership(env.DB, user.id);
+  return { user, membership, title: t("meta.dashboard") };
 }
 
 export function meta({ data }: Route.MetaArgs) {

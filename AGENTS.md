@@ -16,7 +16,7 @@ Run commands from the repository root unless a package-specific command is neede
 
 - `pnpm dev` starts all app dev servers through Turborepo.
 - `pnpm build` builds every app for production.
-- `pnpm typecheck` runs Worker type generation, React Router typegen, and `tsc --noEmit`.
+- `pnpm typecheck` performs Worker type generation, React Router typegen, and executes `tsc --noEmit`.
 - `pnpm test` runs Vitest unit tests across workspaces.
 - `pnpm test:e2e` runs Playwright end-to-end tests.
 - `pnpm lint`, `pnpm lint:fix`, and `pnpm format` run Biome checks and formatting.
