@@ -9,7 +9,7 @@ declare global {
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
-  import.meta.env.MODE,
+  import.meta.env?.MODE ?? "production",
 );
 
 export default {
