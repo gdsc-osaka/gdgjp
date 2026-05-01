@@ -5,7 +5,7 @@ main = "./workers/app.ts"
 
 [vars]
 APP_URL = "https://wiki.gdgs.jp"
-ACCOUNTS_URL = "https://accounts.gdgs.jp"
+ACCOUNTS_URL = "https://account.gdgs.jp"
 
 [assets]
 binding = "ASSETS"
