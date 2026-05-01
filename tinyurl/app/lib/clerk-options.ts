@@ -5,7 +5,7 @@ export function clerkAuthOptions(env: Env): AuthOptions {
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
     secretKey: env.CLERK_SECRET_KEY,
     isSatellite: true,
-    domain: new URL(env.APP_URL).host,
+    proxyUrl: env.CLERK_PROXY_URL,
     signInUrl: `${env.ACCOUNTS_URL}/signin`,
     authorizedParties: [env.APP_URL, env.ACCOUNTS_URL],
   };
