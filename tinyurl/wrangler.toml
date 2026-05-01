@@ -36,3 +36,8 @@ zone_name = "gdgs.jp"
 [[routes]]
 pattern = "gdgs.jp/*"
 zone_name = "gdgs.jp"
+
+[observability]
+[observability.logs]
+enabled = false
+invocation_logs = true
