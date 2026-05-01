@@ -1,4 +1,4 @@
-import { type UserSummary, getUserChapter, getUsersByIds, requireUser } from "@gdgjp/auth-lib";
+import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
 import {
   BarChart3,
   Check,
@@ -51,14 +51,16 @@ import {
 import { Textarea } from "~/components/ui/textarea";
 import { clicksByLinkId } from "~/lib/analytics-engine";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { clerkAuthOptions } from "~/lib/clerk-options";
+import { getAuth } from "~/lib/auth.server";
 import {
   type LinkPermission,
+  type UserSummary,
   addComment,
   addPermission,
   createTag,
   deleteComment,
   getLinkById,
+  getUsersByIds,
   listComments,
   listPermissionsForLink,
   listTagsForChapter,
@@ -78,21 +80,19 @@ import type { Route } from "./+types/links.$id";
 
 async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
   const env = args.context.cloudflare.env;
+  const auth = getAuth(env);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, clerkAuthOptions(env));
+    user = await requireUser(auth, args.request);
   } catch {
-    throw buildSignInRedirect(args.request, env);
+    throw buildSignInRedirect(args.request);
   }
   const id = String(args.params.id ?? "");
   if (!isLinkId(id)) throw new Response("Not found", { status: 404 });
   const link = await getLinkById(env.DB, id);
   if (!link) throw new Response("Not found", { status: 404 });
   const permissions = await listPermissionsForLink(env.DB, id);
-  const chapter = await getUserChapter(user.id, {
-    publishableKey: env.CLERK_PUBLISHABLE_KEY,
-    secretKey: env.CLERK_SECRET_KEY,
-  });
+  const chapter = await getUserChapter(auth, args.request);
   const ctx: ViewerContext = { user, chapterId: chapter?.chapterId ?? null };
   if (!canViewLink(ctx, link, permissions)) {
     throw new Response("Forbidden", { status: 403 });
@@ -110,12 +110,10 @@ export async function loader(args: Route.LoaderArgs) {
     listComments(env.DB, link.id),
     clicksByLinkId(env, [link.id]).catch(() => new Map<string, number>()),
   ]);
-  const users = await getUsersByIds([link.ownerUserId], {
-    publishableKey: env.CLERK_PUBLISHABLE_KEY,
-    secretKey: env.CLERK_SECRET_KEY,
-  });
+  const users = await getUsersByIds(env.DB, [link.ownerUserId]);
   const latestComment = comments.length > 0 ? comments[comments.length - 1] : null;
   return {
+    user: { email: user.email, name: user.name },
     link,
     permissions,
     tags,
@@ -500,7 +498,7 @@ export default function EditLink({ loaderData, actionData }: Route.ComponentProp
   }
 
   return (
-    <DashboardShell>
+    <DashboardShell user={loaderData.user}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 pb-24">
         {/* Top bar: breadcrumb + actions */}
         <div className="flex flex-wrap items-center justify-between gap-3">

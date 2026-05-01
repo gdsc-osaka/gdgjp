@@ -7,6 +7,8 @@ export default [
   route("links/:id", "routes/links.$id.tsx"),
   route("analytics", "routes/analytics.tsx"),
   route("tags", "routes/tags.tsx"),
+  route("signin", "routes/signin.tsx"),
+  route("api/auth/*", "routes/api.auth.$.ts"),
   route("notfound", "routes/notfound.tsx"),
   route(":slug", "routes/$slug.tsx"),
 ] satisfies RouteConfig;

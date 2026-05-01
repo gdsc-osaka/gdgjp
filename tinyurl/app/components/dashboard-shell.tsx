@@ -1,10 +1,10 @@
-import { UserButton } from "@clerk/react-router";
 import { BarChart3, LinkIcon, Menu, Tag as TagIcon, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { type ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { GdgMark } from "~/components/gdg-mark";
 import { ThemeToggle } from "~/components/theme-toggle";
+import { UserMenu, type UserMenuUser } from "~/components/user-menu";
 import { cn } from "~/lib/utils";
 
 type NavItem = {
@@ -59,7 +59,7 @@ function SidebarLink({
   );
 }
 
-function Sidebar() {
+function Sidebar({ user }: { user: UserMenuUser | null }) {
   const { pathname } = useLocation();
   return (
     <aside className="hidden w-60 shrink-0 border-r bg-muted/40 md:sticky md:top-0 md:flex md:h-dvh md:flex-col">
@@ -87,7 +87,7 @@ function Sidebar() {
         </div>
       </nav>
       <div className="flex items-center justify-between border-t px-3 py-2">
-        <UserButton />
+        <UserMenu user={user} />
         <ThemeToggle />
       </div>
     </aside>
@@ -156,7 +156,7 @@ function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
   );
 }
 
-function MobileBar() {
+function MobileBar({ user }: { user: UserMenuUser | null }) {
   const [navOpen, setNavOpen] = useState(false);
   return (
     <>
@@ -175,7 +175,7 @@ function MobileBar() {
           >
             <Menu className="size-5" />
           </button>
-          <UserButton />
+          <UserMenu user={user} />
         </div>
       </header>
       <MobileNav open={navOpen} onClose={() => setNavOpen(false)} />
@@ -184,17 +184,19 @@ function MobileBar() {
 }
 
 export function DashboardShell({
+  user,
   children,
   className,
 }: {
+  user: UserMenuUser | null;
   children: ReactNode;
   className?: string;
 }) {
   return (
     <div className="min-h-dvh bg-background text-foreground md:flex">
-      <Sidebar />
+      <Sidebar user={user} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileBar />
+        <MobileBar user={user} />
         <main className={cn("flex-1 px-4 py-6 md:px-8 md:py-8", className)}>{children}</main>
       </div>
     </div>

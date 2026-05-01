@@ -35,6 +35,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
+import { getAuth } from "~/lib/auth.server";
 import { type ChapterKind, createChapter, deleteChapter, listChapters } from "~/lib/db";
 import { i18n } from "~/lib/i18n/i18n.server";
 import { requireSuperAdmin } from "~/lib/permissions";
@@ -45,16 +46,13 @@ export async function loader(args: Route.LoaderArgs) {
   const t = await i18n.getFixedT(args.request);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, {
-      publishableKey: env.CLERK_PUBLISHABLE_KEY,
-      secretKey: env.CLERK_SECRET_KEY,
-    });
+    user = await requireUser(getAuth(env), args.request);
   } catch {
     throw buildSignInRedirect(args.request);
   }
   requireSuperAdmin(user);
   const chapters = await listChapters(env.DB);
-  return { chapters, title: t("meta.adminChapters") };
+  return { user, chapters, title: t("meta.adminChapters") };
 }
 
 export function meta({ data }: Route.MetaArgs) {
@@ -66,10 +64,7 @@ export async function action(args: Route.ActionArgs) {
   const t = await i18n.getFixedT(args.request);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, {
-      publishableKey: env.CLERK_PUBLISHABLE_KEY,
-      secretKey: env.CLERK_SECRET_KEY,
-    });
+    user = await requireUser(getAuth(env), args.request);
   } catch {
     throw buildSignInRedirect(args.request);
   }
@@ -106,7 +101,7 @@ export async function action(args: Route.ActionArgs) {
 export default function AdminChapters({ loaderData, actionData }: Route.ComponentProps) {
   const { t } = useTranslation();
   return (
-    <PageShell>
+    <PageShell user={loaderData.user}>
       <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2 text-muted-foreground">
         <Link to="/dashboard">
           <ArrowLeft className="size-4" /> {t("nav.backToDashboard")}
