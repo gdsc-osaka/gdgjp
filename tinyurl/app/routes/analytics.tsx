@@ -171,7 +171,7 @@ function ReferrerIcon({ row }: { row: TopRow }) {
 }
 
 function DeviceIcon({ row }: { row: TopRow }) {
-  const name = row.name.toLowerCase();
+  const name = (row.name ?? "").toLowerCase();
   if (name.includes("mobile") || name.includes("phone")) {
     return <Smartphone className="size-4 text-muted-foreground" />;
   }

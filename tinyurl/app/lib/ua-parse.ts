@@ -14,9 +14,12 @@ export function parseUA(ua: string | null | undefined): ParsedUA {
 }
 
 function detectBrowser(ua: string): string {
+  if (/EdgiOS\//.test(ua)) return "Edge";
   if (/Edg\//.test(ua)) return "Edge";
   if (/OPR\/|Opera/.test(ua)) return "Opera";
+  if (/CriOS\//.test(ua)) return "Chrome";
   if (/Chrome\//.test(ua) && !/Chromium/.test(ua)) return "Chrome";
+  if (/FxiOS\//.test(ua)) return "Firefox";
   if (/Firefox\//.test(ua)) return "Firefox";
   if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return "Safari";
   if (/MSIE |Trident\//.test(ua)) return "IE";
@@ -36,6 +39,7 @@ function detectOS(ua: string): string {
 function detectDevice(ua: string): string {
   if (/bot|crawl|spider|slurp/i.test(ua)) return "Bot";
   if (/iPad/.test(ua) || /Tablet/.test(ua)) return "Tablet";
-  if (/Mobi|iPhone|iPod|Android.*Mobile/.test(ua)) return "Mobile";
+  if (/Mobi|iPhone|iPod|Android.*Mobile/i.test(ua)) return "Mobile";
+  if (/Android/i.test(ua)) return "Tablet";
   return "Desktop";
 }

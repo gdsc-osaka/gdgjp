@@ -193,7 +193,7 @@ export async function revertApproveMembership(
 ): Promise<void> {
   await db
     .prepare(
-      "UPDATE memberships SET status = 'pending', approved_at = NULL WHERE user_id = ? AND chapter_id = ?",
+      "UPDATE memberships SET status = 'pending', approved_at = NULL WHERE user_id = ? AND chapter_id = ? AND status = 'active'",
     )
     .bind(userId, chapterId)
     .run();

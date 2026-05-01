@@ -52,6 +52,10 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
     if (!imageValidation.ok) return { error: `OG image ${imageValidation.reason}` };
   }
 
+  if (commentBody.length > 2000) {
+    return { error: `Comment must not exceed 2000 characters (received ${commentBody.length}).` };
+  }
+
   async function applyExtras(linkId: string) {
     const finalTagIds = new Set(tagIds);
     for (const name of newTagNames) {
@@ -68,7 +72,7 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
       }
     }
     if (finalTagIds.size > 0) await setLinkTags(env.DB, linkId, [...finalTagIds]);
-    if (commentBody && commentBody.length <= 2000) {
+    if (commentBody) {
       await addComment(env.DB, { linkId, authorUserId: user.id, body: commentBody });
     }
   }
