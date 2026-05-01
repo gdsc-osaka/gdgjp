@@ -7,7 +7,18 @@ import { ThemeProvider, themeInitScript, useTheme } from "~/lib/theme";
 import type { Route } from "./+types/root";
 import stylesheet from "./app.css?url";
 
-export const middleware: Route.MiddlewareFunction[] = [clerkMiddleware()];
+const clerkSatelliteMiddleware: Route.MiddlewareFunction = (args, next) => {
+  const env = args.context.cloudflare.env;
+  return clerkMiddleware({
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
+    secretKey: env.CLERK_SECRET_KEY,
+    isSatellite: true,
+    domain: env.CLERK_DOMAIN,
+    signInUrl: env.CLERK_SIGN_IN_URL,
+  })(args, next);
+};
+
+export const middleware: Route.MiddlewareFunction[] = [clerkSatelliteMiddleware];
 
 export const loader = (args: Route.LoaderArgs) => rootAuthLoader(args);
 
