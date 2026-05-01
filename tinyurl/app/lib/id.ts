@@ -1,6 +1,6 @@
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const LINK_PREFIX = "link_";
-const LINK_ID_RE = /^link_[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+const LINK_ID_RE = /^link_0[0-9A-HJKMNP-TV-Z]{25}$/;
 
 function uuidv7Bytes(): Uint8Array {
   const bytes = new Uint8Array(16);

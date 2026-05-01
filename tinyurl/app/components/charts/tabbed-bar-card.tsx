@@ -27,13 +27,17 @@ export function TabbedBarCard({
   return (
     <Card className="gap-0 py-0">
       <div className="flex items-center justify-between gap-3 border-b px-5 pt-4">
-        <div className="flex items-center gap-3 text-sm">
+        <div role="tablist" className="flex items-center gap-3 text-sm">
           {tabs.map((tab) => {
             const isActive = tab.key === current.key;
             return (
               <button
                 key={tab.key}
                 type="button"
+                role="tab"
+                id={`${tab.key}-tab`}
+                aria-selected={isActive}
+                aria-controls={`${tab.key}-panel`}
                 onClick={() => setActive(tab.key)}
                 className={cn(
                   "relative pb-3 font-medium transition-colors",
@@ -51,7 +55,7 @@ export function TabbedBarCard({
           {meta}
         </span>
       </div>
-      <div className="px-5 py-4">
+      <div id={`${current.key}-panel`} className="px-5 py-4">
         <BarList
           rows={current.rows}
           emptyLabel={current.emptyLabel}

@@ -85,7 +85,9 @@ export async function getUserChapter(
   if (!chapter || typeof chapter !== "object") return null;
   const c = chapter as { chapterId?: unknown; chapterSlug?: unknown; role?: unknown };
   if (
-    typeof c.chapterId !== "number" ||
+    !Number.isInteger(c.chapterId) ||
+    (c.chapterId as number) <= 0 ||
+    !Number.isFinite(c.chapterId as number) ||
     typeof c.chapterSlug !== "string" ||
     (c.role !== "organizer" && c.role !== "member")
   ) {
