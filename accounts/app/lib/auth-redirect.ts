@@ -10,7 +10,10 @@ export function safeReturnTo(value: string | null | undefined): string | null {
   // Allow absolute HTTPS URLs on trusted gdgs.jp origins (sibling apps)
   try {
     const url = new URL(value);
-    if (url.protocol === "https:" && (url.hostname === "gdgs.jp" || url.hostname.endsWith(".gdgs.jp"))) {
+    if (
+      url.protocol === "https:" &&
+      (url.hostname === "gdgs.jp" || url.hostname.endsWith(".gdgs.jp"))
+    ) {
       return value;
     }
   } catch {
