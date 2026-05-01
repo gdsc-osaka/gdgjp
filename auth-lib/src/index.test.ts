@@ -1,103 +1,50 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { getAuth, getUserChapter, isSuperAdmin, requireUser } from "./index";
 
-const authenticateRequest = vi.fn();
-const getUser = vi.fn();
-
-vi.mock("@clerk/backend", () => ({
-  createClerkClient: vi.fn(() => ({
-    authenticateRequest,
-    users: { getUser },
-  })),
-}));
-
-const { getAuth, requireUser, isSuperAdmin } = await import("./index");
-
-const options = { publishableKey: "pk_test", secretKey: "sk_test" } as const;
-
-beforeEach(() => {
-  authenticateRequest.mockReset();
-  getUser.mockReset();
-});
+function makeAuth(session: { user: Record<string, unknown> } | null) {
+  return {
+    api: {
+      getSession: async () => session,
+    },
+  };
+}
 
 describe("getAuth", () => {
-  it("returns null when the request is unauthenticated", async () => {
-    authenticateRequest.mockResolvedValue({
-      isAuthenticated: false,
-      toAuth: () => null,
-    });
-    const result = await getAuth(new Request("https://x.example/"), options);
+  it("returns null when there is no session", async () => {
+    const result = await getAuth(makeAuth(null), new Request("https://x.example/"));
     expect(result).toBeNull();
-    expect(getUser).not.toHaveBeenCalled();
   });
 
-  it("maps Clerk user to AuthUser when authenticated", async () => {
-    authenticateRequest.mockResolvedValue({
-      isAuthenticated: true,
-      toAuth: () => ({ userId: "user_123" }),
+  it("maps a session user to an AuthUser", async () => {
+    const auth = makeAuth({
+      user: {
+        id: "u_1",
+        email: "ada@example.com",
+        name: "Ada Lovelace",
+        isAdmin: false,
+      },
     });
-    getUser.mockResolvedValue({
-      id: "user_123",
-      firstName: "Ada",
-      lastName: "Lovelace",
-      username: "ada",
-      primaryEmailAddressId: "idn_1",
-      emailAddresses: [
-        { id: "idn_0", emailAddress: "other@example.com" },
-        { id: "idn_1", emailAddress: "ada@example.com" },
-      ],
-    });
-    const result = await getAuth(new Request("https://x.example/"), options);
+    const result = await getAuth(auth, new Request("https://x.example/"));
     expect(result).toEqual({
-      id: "user_123",
+      id: "u_1",
       email: "ada@example.com",
       name: "Ada Lovelace",
       isAdmin: false,
     });
   });
 
-  it("surfaces publicMetadata.isAdmin", async () => {
-    authenticateRequest.mockResolvedValue({
-      isAuthenticated: true,
-      toAuth: () => ({ userId: "user_admin" }),
+  it("treats isAdmin === 1 as admin (SQLite boolean)", async () => {
+    const auth = makeAuth({
+      user: { id: "u_2", email: "a@b.c", name: "A", isAdmin: 1 },
     });
-    getUser.mockResolvedValue({
-      id: "user_admin",
-      firstName: "Admin",
-      lastName: null,
-      username: null,
-      primaryEmailAddressId: "idn_a",
-      emailAddresses: [{ id: "idn_a", emailAddress: "admin@example.com" }],
-      publicMetadata: { isAdmin: true },
-    });
-    const result = await getAuth(new Request("https://x.example/"), options);
+    const result = await getAuth(auth, new Request("https://x.example/"));
     expect(result?.isAdmin).toBe(true);
-  });
-
-  it("falls back to username when no name is set", async () => {
-    authenticateRequest.mockResolvedValue({
-      isAuthenticated: true,
-      toAuth: () => ({ userId: "user_456" }),
-    });
-    getUser.mockResolvedValue({
-      id: "user_456",
-      firstName: null,
-      lastName: null,
-      username: "ada",
-      primaryEmailAddressId: "idn_1",
-      emailAddresses: [{ id: "idn_1", emailAddress: "ada@example.com" }],
-    });
-    const result = await getAuth(new Request("https://x.example/"), options);
-    expect(result?.name).toBe("ada");
   });
 });
 
 describe("requireUser", () => {
   it("throws a 401 Response when unauthenticated", async () => {
-    authenticateRequest.mockResolvedValue({
-      isAuthenticated: false,
-      toAuth: () => null,
-    });
-    const promise = requireUser(new Request("https://x.example/"), options);
+    const promise = requireUser(makeAuth(null), new Request("https://x.example/"));
     await expect(promise).rejects.toBeInstanceOf(Response);
     await promise.catch((res: Response) => {
       expect(res.status).toBe(401);
@@ -105,29 +52,43 @@ describe("requireUser", () => {
   });
 
   it("returns the AuthUser when authenticated", async () => {
-    authenticateRequest.mockResolvedValue({
-      isAuthenticated: true,
-      toAuth: () => ({ userId: "user_789" }),
+    const auth = makeAuth({
+      user: { id: "u_3", email: "g@h.i", name: "Grace", isAdmin: false },
     });
-    getUser.mockResolvedValue({
-      id: "user_789",
-      firstName: "Grace",
-      lastName: "Hopper",
-      username: null,
-      primaryEmailAddressId: "idn_g",
-      emailAddresses: [{ id: "idn_g", emailAddress: "grace@example.com" }],
+    const result = await requireUser(auth, new Request("https://x.example/"));
+    expect(result.email).toBe("g@h.i");
+  });
+});
+
+describe("getUserChapter", () => {
+  it("returns null when chapter fields are absent", async () => {
+    const auth = makeAuth({ user: { id: "u_4", email: "x@y.z", name: "X" } });
+    const result = await getUserChapter(auth, new Request("https://x.example/"));
+    expect(result).toBeNull();
+  });
+
+  it("returns chapter info when fields are present", async () => {
+    const auth = makeAuth({
+      user: {
+        id: "u_5",
+        email: "x@y.z",
+        name: "X",
+        chapterId: 7,
+        chapterSlug: "osaka",
+        chapterRole: "organizer",
+      },
     });
-    const result = await requireUser(new Request("https://x.example/"), options);
-    expect(result.email).toBe("grace@example.com");
+    const result = await getUserChapter(auth, new Request("https://x.example/"));
+    expect(result).toEqual({ chapterId: 7, chapterSlug: "osaka", role: "organizer" });
   });
 });
 
 describe("isSuperAdmin", () => {
-  it("returns true when isAdmin is set", () => {
+  it("returns true when isAdmin is true", () => {
     expect(isSuperAdmin({ id: "u", email: "e", name: "n", isAdmin: true })).toBe(true);
   });
 
-  it("returns false when isAdmin is unset", () => {
+  it("returns false when isAdmin is false", () => {
     expect(isSuperAdmin({ id: "u", email: "e", name: "n", isAdmin: false })).toBe(false);
   });
 });

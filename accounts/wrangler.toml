@@ -8,7 +8,11 @@ main = "./workers/app.ts"
 
 [vars]
 APP_URL = "https://account.gdgs.jp"
-CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuZ2Rncy5qcCQ"
+GOOGLE_CLIENT_ID = "144403252439-hnm3r310icb0l9o6v5hqrurf6h2faidi.apps.googleusercontent.com"
+TINYURL_CLIENT_ID = "tinyurl"
+TINYURL_REDIRECT_URLS = "https://url.gdgs.jp/api/auth/oauth2/callback/gdgjp"
+WIKI_CLIENT_ID = "wiki"
+WIKI_REDIRECT_URLS = "https://wiki.gdgs.jp/api/auth/oauth2/callback/gdgjp"
 
 [assets]
 binding = "ASSETS"
@@ -19,10 +23,6 @@ binding = "DB"
 database_name = "gdgjp-accounts"
 database_id = "c97d5ddc-231a-4b1a-af2a-fe753876811d"
 migrations_dir = "./migrations"
-
-# [[kv_namespaces]]
-# binding = "AUTH_KV"
-# id = "TODO"
 
 [observability]
 enabled = false

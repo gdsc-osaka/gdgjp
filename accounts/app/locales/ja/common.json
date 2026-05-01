@@ -104,6 +104,15 @@
     "gdg": "GDG",
     "gdgoc": "GDGoC"
   },
+  "auth": {
+    "signin": {
+      "title": "サインイン",
+      "subtitle": "Google アカウントで続行します。",
+      "continueWithGoogle": "Google で続行"
+    },
+    "userMenuAria": "アカウントメニュー",
+    "signOut": "サインアウト"
+  },
   "errors": {
     "selectChapter": "チャプターを選択してください。",
     "chapterNotFound": "チャプターが見つかりません。",

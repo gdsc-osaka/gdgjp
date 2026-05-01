@@ -48,7 +48,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { clerkAuthOptions } from "~/lib/clerk-options";
+import { getAuth } from "~/lib/auth.server";
 import {
   type TagWithCount,
   createTag,
@@ -127,16 +127,14 @@ const PAGE_SIZE = 10;
 
 async function requireAuthAndChapter(args: Route.LoaderArgs | Route.ActionArgs) {
   const env = args.context.cloudflare.env;
+  const auth = getAuth(env);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, clerkAuthOptions(env));
+    user = await requireUser(auth, args.request);
   } catch {
-    throw buildSignInRedirect(args.request, env);
+    throw buildSignInRedirect(args.request);
   }
-  const chapter = await getUserChapter(user.id, {
-    publishableKey: env.CLERK_PUBLISHABLE_KEY,
-    secretKey: env.CLERK_SECRET_KEY,
-  });
+  const chapter = await getUserChapter(auth, args.request);
   return { env, user, chapter };
 }
 
@@ -148,7 +146,7 @@ export async function loader(args: Route.LoaderArgs) {
       ? listTagsForChapterWithCounts(env.DB, chapter.chapterId)
       : Promise.resolve<TagWithCount[]>([]),
   ]);
-  return { userTags, chapterTags, chapter };
+  return { user: { email: user.email, name: user.name }, userTags, chapterTags, chapter };
 }
 
 type ActionData = { ok: true } | { error: string };
@@ -209,7 +207,7 @@ export async function action(args: Route.ActionArgs): Promise<ActionData | null>
 type TagRow = TagWithCount & { scope: "user" | "chapter" };
 
 export default function Tags({ loaderData }: Route.ComponentProps) {
-  const { userTags, chapterTags, chapter } = loaderData;
+  const { user, userTags, chapterTags, chapter } = loaderData;
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -253,7 +251,7 @@ export default function Tags({ loaderData }: Route.ComponentProps) {
   }, []);
 
   return (
-    <DashboardShell className="md:py-6">
+    <DashboardShell user={user} className="md:py-6">
       <div className="mx-auto w-full max-w-5xl">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-1.5">

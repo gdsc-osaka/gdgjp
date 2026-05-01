@@ -1,32 +1,17 @@
-import { enUS, jaJP } from "@clerk/localizations";
-import { ClerkProvider } from "@clerk/react-router";
-import { clerkMiddleware, rootAuthLoader } from "@clerk/react-router/server";
-import { dark } from "@clerk/themes";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import { i18n } from "~/lib/i18n/i18n.server";
 import { fallbackLng, isLocale } from "~/lib/i18n/resources";
-import { ThemeProvider, themeInitScript, useTheme } from "~/lib/theme";
+import { ThemeProvider, themeInitScript } from "~/lib/theme";
 import type { Route } from "./+types/root";
 import stylesheet from "./app.css?url";
 
-const clerkCloudflareMiddleware: Route.MiddlewareFunction = (args, next) => {
-  const env = args.context.cloudflare.env;
-  return clerkMiddleware({
-    publishableKey: env.CLERK_PUBLISHABLE_KEY,
-    secretKey: env.CLERK_SECRET_KEY,
-  })(args, next);
+export const loader = async (args: Route.LoaderArgs) => {
+  const locale = await i18n.getLocale(args.request);
+  return { locale };
 };
-
-export const middleware: Route.MiddlewareFunction[] = [clerkCloudflareMiddleware];
-
-export const loader = (args: Route.LoaderArgs) =>
-  rootAuthLoader(args, async ({ request }) => {
-    const locale = await i18n.getLocale(request);
-    return { locale };
-  });
 
 export const handle = { i18n: ["common"] };
 
@@ -61,32 +46,6 @@ function useRootLang() {
   return i18nClient.resolvedLanguage ?? i18nClient.language ?? fallbackLng;
 }
 
-function ClerkAppearance({
-  loaderData,
-  children,
-}: {
-  loaderData: Route.ComponentProps["loaderData"];
-  children: ReactNode;
-}) {
-  const { resolvedTheme } = useTheme();
-  const localization = loaderData.locale === "ja" ? jaJP : enUS;
-  return (
-    <ClerkProvider
-      loaderData={loaderData}
-      localization={localization}
-      appearance={{
-        baseTheme: resolvedTheme === "dark" ? dark : undefined,
-        variables: {
-          colorPrimary: "#4285F4",
-          fontFamily: '"Google Sans", sans-serif',
-        },
-      }}
-    >
-      {children}
-    </ClerkProvider>
-  );
-}
-
 export default function App({ loaderData }: Route.ComponentProps) {
   const { i18n: i18nClient } = useTranslation();
   const locale = isLocale(loaderData.locale) ? loaderData.locale : fallbackLng;
@@ -97,9 +56,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
   }, [locale, i18nClient]);
   return (
     <ThemeProvider>
-      <ClerkAppearance loaderData={loaderData}>
-        <Outlet />
-      </ClerkAppearance>
+      <Outlet />
     </ThemeProvider>
   );
 }

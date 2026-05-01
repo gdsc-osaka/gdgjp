@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
+import { getAuth } from "~/lib/auth.server";
 import { getMembership, listChapters, requestMembership } from "~/lib/db";
 import { i18n } from "~/lib/i18n/i18n.server";
 import { cn } from "~/lib/utils";
@@ -16,17 +17,14 @@ export async function loader(args: Route.LoaderArgs) {
   const t = await i18n.getFixedT(args.request);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, {
-      publishableKey: env.CLERK_PUBLISHABLE_KEY,
-      secretKey: env.CLERK_SECRET_KEY,
-    });
+    user = await requireUser(getAuth(env), args.request);
   } catch {
     throw buildSignInRedirect(args.request);
   }
   const membership = await getMembership(env.DB, user.id);
   if (membership) throw redirect("/dashboard");
   const chapters = await listChapters(env.DB);
-  return { chapters, title: t("meta.onboarding") };
+  return { user, chapters, title: t("meta.onboarding") };
 }
 
 export function meta({ data }: Route.MetaArgs) {
@@ -38,10 +36,7 @@ export async function action(args: Route.ActionArgs) {
   const t = await i18n.getFixedT(args.request);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, {
-      publishableKey: env.CLERK_PUBLISHABLE_KEY,
-      secretKey: env.CLERK_SECRET_KEY,
-    });
+    user = await requireUser(getAuth(env), args.request);
   } catch {
     throw buildSignInRedirect(args.request);
   }
@@ -65,7 +60,7 @@ export async function action(args: Route.ActionArgs) {
 export default function Onboarding({ loaderData, actionData }: Route.ComponentProps) {
   const { t } = useTranslation();
   return (
-    <PageShell size="sm">
+    <PageShell user={loaderData.user} size="sm">
       <div className="space-y-1">
         <h1 className="text-3xl font-medium tracking-tight">{t("onboarding.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("onboarding.subtitle")}</p>

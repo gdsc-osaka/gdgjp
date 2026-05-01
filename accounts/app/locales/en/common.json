@@ -104,6 +104,15 @@
     "gdg": "GDG",
     "gdgoc": "GDGoC"
   },
+  "auth": {
+    "signin": {
+      "title": "Sign in",
+      "subtitle": "Use your Google account to continue.",
+      "continueWithGoogle": "Continue with Google"
+    },
+    "userMenuAria": "Account menu",
+    "signOut": "Sign out"
+  },
   "errors": {
     "selectChapter": "Please select a chapter.",
     "chapterNotFound": "Chapter not found.",

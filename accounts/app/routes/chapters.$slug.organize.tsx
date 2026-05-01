@@ -1,4 +1,4 @@
-import { type UserSummary, getUsersByIds, requireUser } from "@gdgjp/auth-lib";
+import { requireUser } from "@gdgjp/auth-lib";
 import { ArrowLeft, Check, MoreHorizontal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Form, Link } from "react-router";
@@ -15,16 +15,16 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { syncMembershipMetadata } from "~/lib/clerk-metadata";
+import { getAuth } from "~/lib/auth.server";
 import {
+  type UserSummary,
   approveMembership,
   getChapterBySlug,
   getMembership,
+  getUsersByIds,
   listMembersForChapter,
   listPendingForChapter,
   removeMembership,
-  restoreMembership,
-  revertApproveMembership,
   setRole,
 } from "~/lib/db";
 import { i18n } from "~/lib/i18n/i18n.server";
@@ -39,10 +39,7 @@ async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
   const env = args.context.cloudflare.env;
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, {
-      publishableKey: env.CLERK_PUBLISHABLE_KEY,
-      secretKey: env.CLERK_SECRET_KEY,
-    });
+    user = await requireUser(getAuth(env), args.request);
   } catch {
     throw buildSignInRedirect(args.request);
   }
@@ -58,7 +55,7 @@ async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
 }
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env, chapter } = await ensureAccess(args);
+  const { env, user, chapter } = await ensureAccess(args);
   const t = await i18n.getFixedT(args.request);
   const [pending, members] = await Promise.all([
     listPendingForChapter(env.DB, chapter.id),
@@ -66,14 +63,9 @@ export async function loader(args: Route.LoaderArgs) {
   ]);
   const idSet = new Set([...pending.map((m) => m.userId), ...members.map((m) => m.userId)]);
   const ids = [...idSet];
-  const users =
-    ids.length > 0
-      ? await getUsersByIds(ids, {
-          publishableKey: env.CLERK_PUBLISHABLE_KEY,
-          secretKey: env.CLERK_SECRET_KEY,
-        })
-      : {};
+  const users = ids.length > 0 ? await getUsersByIds(env.DB, ids) : {};
   return {
+    user,
     chapter,
     pending,
     members,
@@ -103,39 +95,15 @@ export async function action(args: Route.ActionArgs) {
   switch (intent) {
     case "approve":
       await approveMembership(env.DB, targetUserId, chapter.id);
-      try {
-        await syncMembershipMetadata(targetUserId, env);
-      } catch (e) {
-        await revertApproveMembership(env.DB, targetUserId, chapter.id);
-        throw e;
-      }
       return null;
     case "promote":
       await setRole(env.DB, targetUserId, "organizer", chapter.id);
-      try {
-        await syncMembershipMetadata(targetUserId, env);
-      } catch (e) {
-        await setRole(env.DB, targetUserId, target.role, chapter.id);
-        throw e;
-      }
       return null;
     case "demote":
       await setRole(env.DB, targetUserId, "member", chapter.id);
-      try {
-        await syncMembershipMetadata(targetUserId, env);
-      } catch (e) {
-        await setRole(env.DB, targetUserId, target.role, chapter.id);
-        throw e;
-      }
       return null;
     case "remove":
       await removeMembership(env.DB, targetUserId, chapter.id);
-      try {
-        await syncMembershipMetadata(targetUserId, env);
-      } catch (e) {
-        await restoreMembership(env.DB, target);
-        throw e;
-      }
       return null;
     default:
       return { error: t("errors.unknownAction") };
@@ -150,9 +118,9 @@ function userLabel(users: Record<string, UserSummary>, id: string) {
 
 export default function OrganizeChapter({ loaderData, actionData }: Route.ComponentProps) {
   const { t } = useTranslation();
-  const { chapter, pending, members, users } = loaderData;
+  const { user, chapter, pending, members, users } = loaderData;
   return (
-    <PageShell>
+    <PageShell user={user}>
       <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2 text-muted-foreground">
         <Link to="/dashboard">
           <ArrowLeft className="size-4" /> {t("nav.backToDashboard")}

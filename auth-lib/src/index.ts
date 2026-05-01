@@ -1,5 +1,3 @@
-import { createClerkClient } from "@clerk/backend";
-
 export type AuthUser = {
   id: string;
   email: string;
@@ -7,117 +5,61 @@ export type AuthUser = {
   isAdmin: boolean;
 };
 
-export function isSuperAdmin(user: AuthUser): boolean {
-  return user.isAdmin;
-}
-
-export type AuthOptions = {
-  publishableKey: string;
-  secretKey: string;
-  signInUrl?: string;
-  isSatellite?: boolean;
-  domain?: string;
-  proxyUrl?: string;
-  authorizedParties?: string[];
-};
-
-export async function getAuth(request: Request, options: AuthOptions): Promise<AuthUser | null> {
-  const client = createClerkClient({
-    publishableKey: options.publishableKey,
-    secretKey: options.secretKey,
-  });
-  const requestState = await client.authenticateRequest(request, {
-    publishableKey: options.publishableKey,
-    secretKey: options.secretKey,
-    signInUrl: options.signInUrl,
-    isSatellite: options.isSatellite,
-    domain: options.domain,
-    proxyUrl: options.proxyUrl,
-    authorizedParties: options.authorizedParties,
-  });
-  if (!requestState.isAuthenticated) return null;
-  const auth = requestState.toAuth();
-  if (!auth?.userId) return null;
-  const user = await client.users.getUser(auth.userId);
-  const primaryEmail =
-    user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ?? "";
-  const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "";
-  const isAdmin = (user.publicMetadata as { isAdmin?: unknown } | null)?.isAdmin === true;
-  return { id: user.id, email: primaryEmail, name, isAdmin };
-}
-
-export async function requireUser(request: Request, options: AuthOptions): Promise<AuthUser> {
-  const user = await getAuth(request, options);
-  if (!user) throw new Response("Unauthorized", { status: 401 });
-  return user;
-}
-
-export type UserSummary = { id: string; email: string; name: string };
-
 export type UserChapter = {
   chapterId: number;
   chapterSlug: string;
   role: "organizer" | "member";
 };
 
-export async function setUserChapter(
-  userId: string,
-  chapter: UserChapter | null,
-  options: Pick<AuthOptions, "publishableKey" | "secretKey">,
-): Promise<void> {
-  const client = createClerkClient({
-    publishableKey: options.publishableKey,
-    secretKey: options.secretKey,
-  });
-  await client.users.updateUserMetadata(userId, {
-    publicMetadata: { chapter },
-  });
+export function isSuperAdmin(user: AuthUser): boolean {
+  return user.isAdmin;
+}
+
+type SessionApi = {
+  api: {
+    getSession: (args: { headers: Headers }) => Promise<{
+      user: Record<string, unknown>;
+    } | null>;
+  };
+};
+
+export async function getAuth(auth: SessionApi, request: Request): Promise<AuthUser | null> {
+  const result = await auth.api.getSession({ headers: request.headers });
+  if (!result?.user) return null;
+  return mapToAuthUser(result.user);
+}
+
+export async function requireUser(auth: SessionApi, request: Request): Promise<AuthUser> {
+  const user = await getAuth(auth, request);
+  if (!user) throw new Response("Unauthorized", { status: 401 });
+  return user;
 }
 
 export async function getUserChapter(
-  userId: string,
-  options: Pick<AuthOptions, "publishableKey" | "secretKey">,
+  auth: SessionApi,
+  request: Request,
 ): Promise<UserChapter | null> {
-  const client = createClerkClient({
-    publishableKey: options.publishableKey,
-    secretKey: options.secretKey,
-  });
-  const user = await client.users.getUser(userId);
-  const chapter = (user.publicMetadata as { chapter?: unknown } | null)?.chapter;
-  if (!chapter || typeof chapter !== "object") return null;
-  const c = chapter as { chapterId?: unknown; chapterSlug?: unknown; role?: unknown };
-  if (
-    !Number.isInteger(c.chapterId) ||
-    (c.chapterId as number) <= 0 ||
-    !Number.isFinite(c.chapterId as number) ||
-    typeof c.chapterSlug !== "string" ||
-    (c.role !== "organizer" && c.role !== "member")
-  ) {
-    return null;
-  }
+  const result = await auth.api.getSession({ headers: request.headers });
+  if (!result?.user) return null;
+  return mapToChapter(result.user);
+}
+
+function mapToAuthUser(user: Record<string, unknown>): AuthUser {
   return {
-    chapterId: c.chapterId as number,
-    chapterSlug: c.chapterSlug,
-    role: c.role as "organizer" | "member",
+    id: String(user.id ?? ""),
+    email: String(user.email ?? ""),
+    name: String(user.name ?? ""),
+    isAdmin: user.isAdmin === true || user.isAdmin === 1,
   };
 }
 
-export async function getUsersByIds(
-  ids: string[],
-  options: Pick<AuthOptions, "publishableKey" | "secretKey">,
-): Promise<Record<string, UserSummary>> {
-  if (ids.length === 0) return {};
-  const client = createClerkClient({
-    publishableKey: options.publishableKey,
-    secretKey: options.secretKey,
-  });
-  const { data } = await client.users.getUserList({ userId: ids, limit: ids.length });
-  const out: Record<string, UserSummary> = {};
-  for (const user of data) {
-    const primaryEmail =
-      user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ?? "";
-    const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "";
-    out[user.id] = { id: user.id, email: primaryEmail, name };
-  }
-  return out;
+function mapToChapter(user: Record<string, unknown>): UserChapter | null {
+  const chapterId = typeof user.chapterId === "number" ? user.chapterId : null;
+  const chapterSlug = typeof user.chapterSlug === "string" ? user.chapterSlug : null;
+  const role =
+    user.chapterRole === "organizer" || user.chapterRole === "member"
+      ? (user.chapterRole as "organizer" | "member")
+      : null;
+  if (chapterId === null || chapterSlug === null || role === null) return null;
+  return { chapterId, chapterSlug, role };
 }

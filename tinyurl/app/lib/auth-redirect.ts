@@ -6,8 +6,8 @@ export function safeReturnTo(value: string | null | undefined): string | null {
   return value;
 }
 
-export function buildSignInRedirect(request: Request, env: Env): Response {
+export function buildSignInRedirect(request: Request): Response {
   const url = new URL(request.url);
-  const target = `${env.APP_URL}${url.pathname}${url.search}`;
-  return redirect(`${env.ACCOUNTS_URL}/signin?return_to=${encodeURIComponent(target)}`);
+  const target = `${url.pathname}${url.search}`;
+  return redirect(`/signin?return_to=${encodeURIComponent(target)}`);
 }

@@ -1,7 +1,7 @@
 import { requireUser } from "@gdgjp/auth-lib";
 import { redirect } from "react-router";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { clerkAuthOptions } from "~/lib/clerk-options";
+import { getAuth } from "~/lib/auth.server";
 import { addComment, createLink, createTag, deleteLink, setLinkTags } from "~/lib/db";
 import { type OgpData, fetchOgp, validatePublicHttpUrl } from "~/lib/ogp";
 import { generateRandomSlug, validateSlug } from "~/lib/slug";
@@ -13,9 +13,9 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
   const env = args.context.cloudflare.env;
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, clerkAuthOptions(env));
+    user = await requireUser(getAuth(env), args.request);
   } catch {
-    throw buildSignInRedirect(args.request, env);
+    throw buildSignInRedirect(args.request);
   }
 
   const form = await args.request.formData();

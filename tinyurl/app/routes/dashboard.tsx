@@ -1,4 +1,4 @@
-import { type UserSummary, getUserChapter, getUsersByIds, requireUser } from "@gdgjp/auth-lib";
+import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
 import { ChevronsUpDown, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { CreateLinkDialog } from "~/components/create-link-dialog";
@@ -16,10 +16,12 @@ import {
 import { Input } from "~/components/ui/input";
 import { clicksByLinkId } from "~/lib/analytics-engine";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { clerkAuthOptions } from "~/lib/clerk-options";
+import { getAuth } from "~/lib/auth.server";
 import {
   type Link as DbLink,
   type Tag as DbTag,
+  type UserSummary,
+  getUsersByIds,
   listLinksAccessibleByEmail,
   listLinksForUser,
   listTagsForChapter,
@@ -33,16 +35,14 @@ export function meta() {
 
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
+  const auth = getAuth(env);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, clerkAuthOptions(env));
+    user = await requireUser(auth, args.request);
   } catch {
-    throw buildSignInRedirect(args.request, env);
+    throw buildSignInRedirect(args.request);
   }
-  const chapter = await getUserChapter(user.id, {
-    publishableKey: env.CLERK_PUBLISHABLE_KEY,
-    secretKey: env.CLERK_SECRET_KEY,
-  });
+  const chapter = await getUserChapter(auth, args.request);
   const [ownLinks, sharedLinks, userTags, chapterTags] = await Promise.all([
     listLinksForUser(env.DB, user.id),
     listLinksAccessibleByEmail(env.DB, user.email, chapter?.chapterId ?? null),
@@ -58,10 +58,7 @@ export async function loader(args: Route.LoaderArgs) {
   const [clickMap, owners] = await Promise.all([
     clicksByLinkId(env, linkIds).catch(() => new Map<string, number>()),
     ownerIds.length > 0
-      ? getUsersByIds(ownerIds, {
-          publishableKey: env.CLERK_PUBLISHABLE_KEY,
-          secretKey: env.CLERK_SECRET_KEY,
-        }).catch(() => ({}) as Record<string, UserSummary>)
+      ? getUsersByIds(env.DB, ownerIds).catch(() => ({}) as Record<string, UserSummary>)
       : Promise.resolve({} as Record<string, UserSummary>),
   ]);
   const clicks: Record<string, number> = {};
@@ -77,6 +74,10 @@ export async function loader(args: Route.LoaderArgs) {
     availableTags: [...userTags, ...chapterTags],
     shortUrlBase: env.SHORT_URL_BASE,
   };
+}
+
+function shellUser(loaderData: Route.ComponentProps["loaderData"]) {
+  return { email: loaderData.user.email, name: loaderData.user.name };
 }
 
 type Scope = "all" | "own" | "shared";
@@ -98,6 +99,7 @@ function shortHostOf(base: string): string {
 
 export default function Dashboard({ loaderData }: Route.ComponentProps) {
   const { ownLinks, sharedLinks, owners, clicks, availableTags, shortUrlBase } = loaderData;
+  const user = shellUser(loaderData);
   const shortHost = shortHostOf(shortUrlBase);
 
   const [query, setQuery] = useState("");
@@ -141,7 +143,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
   const totalCount = ownLinks.length + sharedLinks.length;
 
   return (
-    <DashboardShell>
+    <DashboardShell user={user}>
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <div className="flex items-center justify-between gap-4">
           <button

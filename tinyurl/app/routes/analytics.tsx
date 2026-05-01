@@ -18,7 +18,7 @@ import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { type TopRow, hourlyClicks, topByBlob, totalClicks } from "~/lib/analytics-engine";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { clerkAuthOptions } from "~/lib/clerk-options";
+import { getAuth } from "~/lib/auth.server";
 import {
   getLinkById,
   listLinksAccessibleByEmail,
@@ -38,16 +38,14 @@ export function meta({ data }: Route.MetaArgs) {
 
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
+  const auth = getAuth(env);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, clerkAuthOptions(env));
+    user = await requireUser(auth, args.request);
   } catch {
-    throw buildSignInRedirect(args.request, env);
+    throw buildSignInRedirect(args.request);
   }
-  const chapter = await getUserChapter(user.id, {
-    publishableKey: env.CLERK_PUBLISHABLE_KEY,
-    secretKey: env.CLERK_SECRET_KEY,
-  });
+  const chapter = await getUserChapter(auth, args.request);
 
   const url = new URL(args.request.url);
   const linkIdParam = url.searchParams.get("linkId");
@@ -81,8 +79,10 @@ export async function loader(args: Route.LoaderArgs) {
     ids = [...idSet];
   }
 
+  const shellUser = { email: user.email, name: user.name };
   if (ids.length === 0) {
     return {
+      user: shellUser,
       hasLinks: false as const,
       focus,
       hourly: [],
@@ -126,6 +126,7 @@ export async function loader(args: Route.LoaderArgs) {
   ]);
 
   return {
+    user: shellUser,
     hasLinks: true as const,
     focus,
     hourly,
@@ -195,6 +196,7 @@ function ClicksTile({ total }: { total: number }) {
 
 export default function Analytics({ loaderData }: Route.ComponentProps) {
   const {
+    user,
     hasLinks,
     focus,
     hourly,
@@ -248,7 +250,7 @@ export default function Analytics({ loaderData }: Route.ComponentProps) {
   ];
 
   return (
-    <DashboardShell>
+    <DashboardShell user={user}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="space-y-1">

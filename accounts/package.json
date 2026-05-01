@@ -15,10 +15,10 @@
     "migrate:remote": "wrangler d1 migrations apply gdgjp-accounts --remote"
   },
   "dependencies": {
-    "@clerk/localizations": "^4.5.6",
-    "@clerk/react-router": "^3.1.7",
-    "@clerk/themes": "^2.4.57",
     "@gdgjp/auth-lib": "workspace:*",
+    "better-auth": "^1.6.9",
+    "kysely": "^0.28.0",
+    "kysely-d1": "^0.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "i18next": "^26.0.8",

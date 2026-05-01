@@ -7,6 +7,7 @@ import { StatusBadge } from "~/components/status-badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
+import { getAuth } from "~/lib/auth.server";
 import { getMembership } from "~/lib/db";
 import { i18n } from "~/lib/i18n/i18n.server";
 import type { Route } from "./+types/dashboard";
@@ -16,10 +17,7 @@ export async function loader(args: Route.LoaderArgs) {
   const t = await i18n.getFixedT(args.request);
   let user: Awaited<ReturnType<typeof requireUser>>;
   try {
-    user = await requireUser(args.request, {
-      publishableKey: env.CLERK_PUBLISHABLE_KEY,
-      secretKey: env.CLERK_SECRET_KEY,
-    });
+    user = await requireUser(getAuth(env), args.request);
   } catch (err) {
     if (err instanceof Response && err.status === 401) {
       throw buildSignInRedirect(args.request);
@@ -101,7 +99,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
   const { t } = useTranslation();
   const { user, membership } = loaderData;
   return (
-    <PageShell>
+    <PageShell user={user}>
       <div className="space-y-1">
         <h1 className="text-3xl font-medium tracking-tight">{t("dashboard.title")}</h1>
         <p className="text-sm text-muted-foreground">
