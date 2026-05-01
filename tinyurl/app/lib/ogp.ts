@@ -94,7 +94,10 @@ async function resolveHostname(hostname: string, type: "A" | "AAAA"): Promise<st
     headers: { accept: "application/dns-json" },
     signal: AbortSignal.timeout(DNS_TIMEOUT_MS),
   });
-  if (!response.ok) return [];
+  if (!response.ok) {
+    console.error(`DoH lookup failed: ${response.status} ${response.statusText} (${query.toString()})`);
+    return [];
+  }
 
   const data = (await response.json()) as DnsJsonResponse;
   const expectedType = type === "A" ? 1 : 28;
