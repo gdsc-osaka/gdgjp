@@ -17,6 +17,7 @@ export type AuthOptions = {
   signInUrl?: string;
   isSatellite?: boolean;
   domain?: string;
+  proxyUrl?: string;
   authorizedParties?: string[];
 };
 
@@ -31,6 +32,7 @@ export async function getAuth(request: Request, options: AuthOptions): Promise<A
     signInUrl: options.signInUrl,
     isSatellite: options.isSatellite,
     domain: options.domain,
+    proxyUrl: options.proxyUrl,
     authorizedParties: options.authorizedParties,
   });
   if (!requestState.isAuthenticated) return null;

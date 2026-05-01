@@ -12,8 +12,8 @@ ACCOUNTS_URL = "https://account.gdgs.jp"
 SHORT_URL_BASE = "https://gdgs.jp"
 CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuZ2Rncy5qcCQ"
 CLERK_IS_SATELLITE = "true"
-CLERK_DOMAIN = "url.gdgs.jp"
 CLERK_SIGN_IN_URL = "https://account.gdgs.jp/signin"
+CLERK_PROXY_URL = "https://url.gdgs.jp/__clerk"
 
 [assets]
 binding = "ASSETS"

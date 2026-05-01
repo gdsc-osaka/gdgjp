@@ -13,7 +13,7 @@ const clerkSatelliteMiddleware: Route.MiddlewareFunction = (args, next) => {
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
     secretKey: env.CLERK_SECRET_KEY,
     isSatellite: true,
-    domain: env.CLERK_DOMAIN,
+    proxyUrl: env.CLERK_PROXY_URL,
     signInUrl: env.CLERK_SIGN_IN_URL,
   })(args, next);
 };
