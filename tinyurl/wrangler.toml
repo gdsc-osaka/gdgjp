@@ -3,6 +3,9 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 main = "./workers/app.ts"
 
+[alias]
+"virtual:react-router/server-build" = "./build/server/index.js"
+
 [vars]
 APP_URL = "https://url.gdgs.jp"
 ACCOUNTS_URL = "https://accounts.gdgs.jp"
