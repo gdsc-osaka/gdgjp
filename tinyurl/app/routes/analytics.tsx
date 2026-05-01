@@ -1,5 +1,4 @@
 import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
-import { getAuth } from "~/lib/auth.server";
 import {
   CalendarRange,
   ExternalLink,
@@ -19,6 +18,7 @@ import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { type TopRow, hourlyClicks, topByBlob, totalClicks } from "~/lib/analytics-engine";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
+import { getAuth } from "~/lib/auth.server";
 import {
   getLinkById,
   listLinksAccessibleByEmail,

@@ -1,5 +1,4 @@
 import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
-import { getAuth } from "~/lib/auth.server";
 import {
   Globe,
   HelpCircle,
@@ -49,6 +48,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
+import { getAuth } from "~/lib/auth.server";
 import {
   type TagWithCount,
   createTag,
