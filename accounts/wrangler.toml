@@ -23,3 +23,8 @@ migrations_dir = "./migrations"
 # [[kv_namespaces]]
 # binding = "AUTH_KV"
 # id = "TODO"
+
+[observability]
+[observability.logs]
+enabled = false
+invocation_logs = true
