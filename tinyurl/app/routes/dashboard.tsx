@@ -265,7 +265,9 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 
         {totalCount > 0 ? (
           <p className="text-center text-xs text-muted-foreground">
-            Viewing 1–{items.length} of {totalCount} links
+            {items.length > 0
+              ? `Viewing 1–${items.length} of ${totalCount} links`
+              : `Viewing 0 of ${totalCount} links`}
           </p>
         ) : null}
       </div>

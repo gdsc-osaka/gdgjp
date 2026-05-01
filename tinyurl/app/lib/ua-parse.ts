@@ -34,8 +34,8 @@ function detectOS(ua: string): string {
 }
 
 function detectDevice(ua: string): string {
+  if (/bot|crawl|spider|slurp/i.test(ua)) return "Bot";
   if (/iPad/.test(ua) || /Tablet/.test(ua)) return "Tablet";
   if (/Mobi|iPhone|iPod|Android.*Mobile/.test(ua)) return "Mobile";
-  if (/bot|crawl|spider|slurp/i.test(ua)) return "Bot";
   return "Desktop";
 }
