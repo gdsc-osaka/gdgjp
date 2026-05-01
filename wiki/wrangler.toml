@@ -5,8 +5,8 @@ main = "./workers/app.ts"
 
 [vars]
 APP_URL = "https://wiki.gdgs.jp"
-ACCOUNTS_URL = "https://account.gdgs.jp"
-IDP_URL = "https://account.gdgs.jp"
+ACCOUNTS_URL = "https://accounts.gdgs.jp"
+IDP_URL = "https://accounts.gdgs.jp"
 IDP_CLIENT_ID = "wiki"
 
 [assets]

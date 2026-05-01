@@ -7,7 +7,7 @@ main = "./workers/app.ts"
 "virtual:react-router/server-build" = "./build/server/index.js"
 
 [vars]
-APP_URL = "https://account.gdgs.jp"
+APP_URL = "https://accounts.gdgs.jp"
 GOOGLE_CLIENT_ID = "144403252439-hnm3r310icb0l9o6v5hqrurf6h2faidi.apps.googleusercontent.com"
 TINYURL_CLIENT_ID = "tinyurl"
 TINYURL_REDIRECT_URLS = "https://url.gdgs.jp/api/auth/oauth2/callback/gdgjp"
