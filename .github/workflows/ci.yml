@@ -27,8 +27,11 @@ jobs:
       - run: pnpm lint
 
   typecheck:
-    name: Typecheck
+    name: Typecheck (${{ matrix.app }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [accounts, tinyurl, wiki, auth-lib]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -37,11 +40,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
+      - run: pnpm --filter @gdgjp/${{ matrix.app }} typecheck
 
   test:
-    name: Unit tests (Vitest)
+    name: Unit tests (${{ matrix.app }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [accounts, tinyurl, wiki, auth-lib]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -50,11 +56,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      - run: pnpm --filter @gdgjp/${{ matrix.app }} test
 
   build:
-    name: Build
+    name: Build (${{ matrix.app }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [accounts, tinyurl, wiki]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -63,12 +72,15 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - run: pnpm --filter @gdgjp/${{ matrix.app }} build
 
   e2e:
-    name: E2E (Playwright)
+    name: E2E (${{ matrix.app }})
     runs-on: ubuntu-latest
     environment: Development
+    strategy:
+      matrix:
+        app: [accounts, tinyurl, wiki]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -83,14 +95,22 @@ jobs:
           CLERK_PUBLISHABLE_KEY=${{ vars.CLERK_PUBLISHABLE_KEY }}
           CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
           EOF
+
+          cat > tinyurl/.dev.vars <<EOF
+          CLERK_PUBLISHABLE_KEY=${{ vars.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+          APP_URL=http://localhost:5174
+          ACCOUNTS_URL=http://localhost:5173
+          SHORT_URL_BASE=http://localhost:5174
+          EOF
       - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm --filter @gdgjp/${{ matrix.app }} exec playwright install --with-deps chromium
       - name: Run E2E testing
-        run: pnpm test:e2e
+        run: pnpm --filter @gdgjp/${{ matrix.app }} test:e2e
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: "**/playwright-report/"
+          name: playwright-report-${{ matrix.app }}
+          path: "${{ matrix.app }}/playwright-report/"
           retention-days: 7

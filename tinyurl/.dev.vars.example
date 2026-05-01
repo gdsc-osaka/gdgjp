@@ -1,1 +1,9 @@
-SESSION_SECRET=""
+CLERK_PUBLISHABLE_KEY=""
+CLERK_SECRET_KEY=""
+CF_ACCOUNT_ID=""
+CF_AE_API_TOKEN=""
+# Override prod URLs from wrangler.toml so dev points at the local accounts app
+# and serves short links from the same host as the dev server.
+APP_URL=http://localhost:5174
+ACCOUNTS_URL=http://localhost:5173
+SHORT_URL_BASE=http://localhost:5174

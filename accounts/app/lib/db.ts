@@ -186,6 +186,28 @@ export async function approveMembership(
     .run();
 }
 
+export async function revertApproveMembership(
+  db: D1Database,
+  userId: string,
+  chapterId: number,
+): Promise<void> {
+  await db
+    .prepare(
+      "UPDATE memberships SET status = 'pending', approved_at = NULL WHERE user_id = ? AND chapter_id = ? AND status = 'active'",
+    )
+    .bind(userId, chapterId)
+    .run();
+}
+
+export async function restoreMembership(db: D1Database, m: Membership): Promise<void> {
+  await db
+    .prepare(
+      "INSERT INTO memberships (user_id, chapter_id, role, status, created_at, approved_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(m.userId, m.chapterId, m.role, m.status, m.createdAt, m.approvedAt)
+    .run();
+}
+
 export async function setRole(
   db: D1Database,
   userId: string,
