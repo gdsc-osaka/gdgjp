@@ -22,7 +22,7 @@ directory = "./build/client"
 [[d1_databases]]
 binding = "DB"
 database_name = "gdgjp-tinyurl"
-database_id = "TODO_RUN_WRANGLER_D1_CREATE"
+database_id = "bf0cefab-83d5-48c8-a2a7-7842e9890c46"
 migrations_dir = "./migrations"
 
 [[analytics_engine_datasets]]
