@@ -11,7 +11,7 @@ declare global {
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
-  import.meta.env.MODE,
+  import.meta.env?.MODE ?? "production",
 );
 
 function isApexRedirect(request: Request, env: Env): { slug: string } | null {
