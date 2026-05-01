@@ -1,6 +1,6 @@
 import { LogOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { GdgMark } from "~/components/gdg-mark";
 import { LocaleSwitcher } from "~/components/locale-switcher";
 import { ThemeToggle } from "~/components/theme-toggle";
@@ -14,7 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { authClient } from "~/lib/auth-client";
 
 export type TopBarUser = {
   email: string;
@@ -42,7 +41,6 @@ export function TopBar({ user }: { user: TopBarUser | null }) {
 
 function UserMenu({ user }: { user: TopBarUser | null }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   if (!user) return null;
   const initials = (user.name || user.email)
     .split(/\s+|@/)
@@ -51,9 +49,8 @@ function UserMenu({ user }: { user: TopBarUser | null }) {
     .map((s) => s[0]?.toUpperCase())
     .join("");
 
-  async function signOut() {
-    await authClient.signOut();
-    navigate("/signin");
+  function signOut() {
+    window.location.assign("/auth/signout");
   }
 
   return (
