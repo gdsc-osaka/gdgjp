@@ -131,15 +131,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(lightningcss@1.32.0)
 
-  clerk-proxy:
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: ^4.20250101.0
-        version: 4.20260426.1
-      wrangler:
-        specifier: ^3.99.0
-        version: 3.114.17(@cloudflare/workers-types@4.20260426.1)
-
   tinyurl:
     dependencies:
       '@clerk/react-router':
