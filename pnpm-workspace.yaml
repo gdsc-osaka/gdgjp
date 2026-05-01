@@ -3,3 +3,4 @@ packages:
   - "tinyurl"
   - "wiki"
   - "auth-lib"
+  - "clerk-proxy"

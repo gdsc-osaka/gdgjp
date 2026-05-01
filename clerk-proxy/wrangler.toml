@@ -1,0 +1,7 @@
+name = "gdgjp-clerk-proxy"
+compatibility_date = "2025-01-01"
+main = "./workers/proxy.ts"
+
+routes = [
+  { pattern = "clerk.gdgs.jp/*", zone_name = "gdgs.jp" }
+]
