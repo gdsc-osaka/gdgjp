@@ -43,8 +43,12 @@ export type AeEnv = {
 
 export async function aeQuery(env: AeEnv, sql: string): Promise<AeRow[]> {
   const now = Date.now();
-  const cached = cache.get(sql);
-  if (cached && now - cached.at < CACHE_TTL_MS) return cached.rows;
+  const cacheKey = `${env.CF_ACCOUNT_ID}:${sql}`;
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    if (now - cached.at < CACHE_TTL_MS) return cached.rows;
+    cache.delete(cacheKey);
+  }
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`;
   const response = await fetch(url, {
@@ -60,7 +64,7 @@ export async function aeQuery(env: AeEnv, sql: string): Promise<AeRow[]> {
     throw new Error(`Analytics Engine query failed (${response.status}): ${text}`);
   }
   const json = (await response.json()) as AeResponse;
-  cache.set(sql, { at: now, rows: json.data ?? [] });
+  cache.set(cacheKey, { at: now, rows: json.data ?? [] });
   return json.data ?? [];
 }
 

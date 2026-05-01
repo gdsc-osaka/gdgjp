@@ -169,6 +169,10 @@ export async function softDeleteLink(db: D1Database, id: string): Promise<void> 
     .run();
 }
 
+export async function deleteLink(db: D1Database, id: string): Promise<void> {
+  await db.prepare("DELETE FROM links WHERE id = ?").bind(id).run();
+}
+
 // ---------- Tags ----------
 
 export type Tag = {
@@ -535,14 +539,27 @@ export async function addPermission(
   }
 }
 
-export async function removePermission(db: D1Database, id: number): Promise<void> {
-  await db.prepare("DELETE FROM link_permissions WHERE id = ?").bind(id).run();
+export async function removePermission(
+  db: D1Database,
+  linkId: string,
+  id: number,
+): Promise<boolean> {
+  const result = await db
+    .prepare("DELETE FROM link_permissions WHERE id = ? AND link_id = ?")
+    .bind(id, linkId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
 }
 
 export async function updatePermissionRole(
   db: D1Database,
+  linkId: string,
   id: number,
   role: LinkRole,
-): Promise<void> {
-  await db.prepare("UPDATE link_permissions SET role = ? WHERE id = ?").bind(role, id).run();
+): Promise<boolean> {
+  const result = await db
+    .prepare("UPDATE link_permissions SET role = ? WHERE id = ? AND link_id = ?")
+    .bind(role, id, linkId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
 }

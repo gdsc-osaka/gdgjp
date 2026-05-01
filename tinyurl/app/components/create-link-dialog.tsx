@@ -85,13 +85,16 @@ function CreateLinkForm({
   const [newTagNames, setNewTagNames] = useState<string[]>([]);
   const [comment, setComment] = useState("");
 
+  const lastOgpRef = useRef<unknown>(null);
   useEffect(() => {
     const data = ogpFetcher.data;
     if (!data || !("ogp" in data) || !data.ogp) return;
+    if (data === lastOgpRef.current) return;
+    lastOgpRef.current = data;
     const { title: t, description: d, image } = data.ogp;
-    if (t) setTitle((cur) => (cur ? cur : t));
-    if (d) setDescription((cur) => (cur ? cur : d));
-    if (image) setOgImageUrl((cur) => (cur ? cur : image));
+    if (t) setTitle(t);
+    if (d) setDescription(d);
+    if (image) setOgImageUrl(image);
   }, [ogpFetcher.data]);
 
   const lastCreateRef = useRef<unknown>(null);

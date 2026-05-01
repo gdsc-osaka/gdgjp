@@ -23,6 +23,8 @@ import {
   listMembersForChapter,
   listPendingForChapter,
   removeMembership,
+  restoreMembership,
+  revertApproveMembership,
   setRole,
 } from "~/lib/db";
 import { i18n } from "~/lib/i18n/i18n.server";
@@ -101,19 +103,39 @@ export async function action(args: Route.ActionArgs) {
   switch (intent) {
     case "approve":
       await approveMembership(env.DB, targetUserId, chapter.id);
-      await syncMembershipMetadata(targetUserId, env);
+      try {
+        await syncMembershipMetadata(targetUserId, env);
+      } catch (e) {
+        await revertApproveMembership(env.DB, targetUserId, chapter.id);
+        throw e;
+      }
       return null;
     case "promote":
       await setRole(env.DB, targetUserId, "organizer", chapter.id);
-      await syncMembershipMetadata(targetUserId, env);
+      try {
+        await syncMembershipMetadata(targetUserId, env);
+      } catch (e) {
+        await setRole(env.DB, targetUserId, target.role, chapter.id);
+        throw e;
+      }
       return null;
     case "demote":
       await setRole(env.DB, targetUserId, "member", chapter.id);
-      await syncMembershipMetadata(targetUserId, env);
+      try {
+        await syncMembershipMetadata(targetUserId, env);
+      } catch (e) {
+        await setRole(env.DB, targetUserId, target.role, chapter.id);
+        throw e;
+      }
       return null;
     case "remove":
       await removeMembership(env.DB, targetUserId, chapter.id);
-      await syncMembershipMetadata(targetUserId, env);
+      try {
+        await syncMembershipMetadata(targetUserId, env);
+      } catch (e) {
+        await restoreMembership(env.DB, target);
+        throw e;
+      }
       return null;
     default:
       return { error: t("errors.unknownAction") };

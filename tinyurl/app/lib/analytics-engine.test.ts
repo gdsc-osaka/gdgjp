@@ -68,6 +68,7 @@ describe("aeQuery", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("posts to the SQL endpoint with bearer auth", async () => {
@@ -108,6 +109,28 @@ describe("aeQuery", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("isolates cached queries by account id", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ meta: [], data: [{ clicks: 1 }], rows: 1 }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ meta: [], data: [{ clicks: 2 }], rows: 1 }), {
+          status: 200,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(aeQuery(env, "SELECT 1")).resolves.toEqual([{ clicks: 1 }]);
+    await expect(aeQuery({ ...env, CF_ACCOUNT_ID: "acc_456" }, "SELECT 1")).resolves.toEqual([
+      { clicks: 2 },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("throws on non-2xx", async () => {
     vi.stubGlobal(
       "fetch",
@@ -119,7 +142,10 @@ describe("aeQuery", () => {
 
 describe("typed helpers normalize rows", () => {
   beforeEach(() => clearAeCache());
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it("hourlyClicks coerces to {hour, clicks}", async () => {
     vi.stubGlobal(

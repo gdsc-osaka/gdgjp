@@ -1,6 +1,7 @@
 import { ClerkProvider } from "@clerk/react-router";
 import { clerkMiddleware, rootAuthLoader } from "@clerk/react-router/server";
 import { dark } from "@clerk/themes";
+import type { ReactNode } from "react";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import { ThemeProvider, themeInitScript, useTheme } from "~/lib/theme";
 import type { Route } from "./+types/root";
@@ -15,7 +16,7 @@ export const links: Route.LinksFunction = () => [
   { rel: "stylesheet", href: stylesheet },
 ];
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({ children }: { children: ReactNode }) {
   return (
     <html lang="ja" suppressHydrationWarning>
       <head>
@@ -40,7 +41,7 @@ function ClerkAppearance({
   children,
 }: {
   loaderData: Route.ComponentProps["loaderData"];
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { resolvedTheme } = useTheme();
   return (

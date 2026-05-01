@@ -2,8 +2,8 @@ import { requireUser } from "@gdgjp/auth-lib";
 import { redirect } from "react-router";
 import { buildSignInRedirect } from "~/lib/auth-redirect";
 import { clerkAuthOptions } from "~/lib/clerk-options";
-import { addComment, createLink, createTag, setLinkTags } from "~/lib/db";
-import { type OgpData, fetchOgp } from "~/lib/ogp";
+import { addComment, createLink, createTag, deleteLink, setLinkTags } from "~/lib/db";
+import { type OgpData, fetchOgp, validatePublicHttpUrl } from "~/lib/ogp";
 import { generateRandomSlug, validateSlug } from "~/lib/slug";
 import type { Route } from "./+types/api.links";
 
@@ -23,12 +23,9 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
 
   if (intent === "fetchOgp") {
     const url = String(form.get("destinationUrl") ?? "").trim();
-    try {
-      new URL(url);
-    } catch {
-      return { ogp: null };
-    }
-    return { ogp: await fetchOgp(url) };
+    const validation = await validatePublicHttpUrl(url);
+    if (!validation.ok) return { error: `Destination ${validation.reason}` };
+    return { ogp: await fetchOgp(validation.url.toString()) };
   }
 
   const rawSlug = String(form.get("slug") ?? "").trim();
@@ -47,10 +44,12 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
   const commentBody = String(form.get("comment") ?? "").trim();
 
   if (!destinationUrl) return { error: "Destination URL is required." };
-  try {
-    new URL(destinationUrl);
-  } catch {
-    return { error: "Destination URL is not a valid URL." };
+  const destinationValidation = await validatePublicHttpUrl(destinationUrl);
+  if (!destinationValidation.ok) return { error: `Destination ${destinationValidation.reason}` };
+
+  if (ogImageUrl) {
+    const imageValidation = await validatePublicHttpUrl(ogImageUrl);
+    if (!imageValidation.ok) return { error: `OG image ${imageValidation.reason}` };
   }
 
   async function applyExtras(linkId: string) {
@@ -74,11 +73,23 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
     }
   }
 
+  async function createLinkWithExtras(input: Parameters<typeof createLink>[1]) {
+    const result = await createLink(env.DB, input);
+    if (!result.ok) return result;
+    try {
+      await applyExtras(result.link.id);
+    } catch (err) {
+      await deleteLink(env.DB, result.link.id);
+      throw err;
+    }
+    return result;
+  }
+
   let slug = rawSlug;
   if (!slug) {
     for (let attempt = 0; attempt < 5; attempt++) {
       slug = generateRandomSlug(8);
-      const result = await createLink(env.DB, {
+      const result = await createLinkWithExtras({
         slug,
         destinationUrl,
         title,
@@ -87,7 +98,6 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
         ownerUserId: user.id,
       });
       if (result.ok) {
-        await applyExtras(result.link.id);
         throw redirect(`/links/${result.link.id}`);
       }
     }
@@ -104,7 +114,7 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
     };
   }
 
-  const result = await createLink(env.DB, {
+  const result = await createLinkWithExtras({
     slug,
     destinationUrl,
     title,
@@ -113,6 +123,5 @@ export async function action(args: Route.ActionArgs): Promise<ApiLinksActionData
     ownerUserId: user.id,
   });
   if (!result.ok) return { error: `The slug "${slug}" is already taken.` };
-  await applyExtras(result.link.id);
   throw redirect(`/links/${result.link.id}`);
 }

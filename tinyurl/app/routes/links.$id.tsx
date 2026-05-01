@@ -151,10 +151,14 @@ export async function action(args: Route.ActionArgs) {
     if (form.has("destinationUrl")) {
       const destinationUrl = String(form.get("destinationUrl") ?? "").trim();
       if (!destinationUrl) return { error: "Destination URL is required." };
+      let parsedUrl: URL;
       try {
-        new URL(destinationUrl);
+        parsedUrl = new URL(destinationUrl);
       } catch {
         return { error: "Destination URL is not a valid URL." };
+      }
+      if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+        return { error: "Destination URL must use http or https." };
       }
       update.destinationUrl = destinationUrl;
     }
@@ -204,7 +208,7 @@ export async function action(args: Route.ActionArgs) {
         .map((v) => String(v).trim())
         .filter((n) => n.length > 0 && n.length <= 32);
 
-      const finalIds = new Set(existingIds);
+      const finalIds = new Set(await listAllowedTagIds(env.DB, user.id, existingIds));
       for (const name of newNames) {
         const result = await createTag(env.DB, { name, color: null, ownerUserId: user.id });
         if (result.ok) {
@@ -235,7 +239,8 @@ export async function action(args: Route.ActionArgs) {
   }
 
   if (intent === "fetchOgp") {
-    const ogp = await fetchOgp(link.destinationUrl);
+    const destinationUrl = String(form.get("destinationUrl") ?? link.destinationUrl).trim();
+    const ogp = await fetchOgp(destinationUrl || link.destinationUrl);
     if (!ogp) return { error: "Could not fetch OGP data for that URL." };
     await updateLink(env.DB, id, {
       title: ogp.title ?? link.title,
@@ -273,7 +278,8 @@ export async function action(args: Route.ActionArgs) {
   if (intent === "removePermission") {
     const permId = Number(form.get("permissionId"));
     if (!Number.isInteger(permId) || permId <= 0) return { error: "Invalid permission id." };
-    await removePermission(env.DB, permId);
+    const removed = await removePermission(env.DB, id, permId);
+    if (!removed) return { error: "Permission not found for this link." };
     return null;
   }
 
@@ -282,7 +288,8 @@ export async function action(args: Route.ActionArgs) {
     const role = String(form.get("role") ?? "");
     if (!Number.isInteger(permId) || permId <= 0) return { error: "Invalid permission id." };
     if (role !== "editor" && role !== "viewer") return { error: "Invalid role." };
-    await updatePermissionRole(env.DB, permId, role);
+    const updated = await updatePermissionRole(env.DB, id, permId, role);
+    if (!updated) return { error: "Permission not found for this link." };
     return null;
   }
 
@@ -326,6 +333,25 @@ function faviconUrl(url: string): string | null {
   const host = hostnameOf(url);
   if (!host) return null;
   return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+}
+
+async function listAllowedTagIds(
+  db: D1Database,
+  userId: string,
+  tagIds: number[],
+): Promise<number[]> {
+  const ids = [...new Set(tagIds)];
+  if (ids.length === 0) return [];
+  const placeholders = ids.map(() => "?").join(", ");
+  const { results } = await db
+    .prepare(
+      `SELECT id FROM tags
+       WHERE id IN (${placeholders})
+         AND (owner_user_id = ? OR owner_user_id IS NULL)`,
+    )
+    .bind(...ids, userId)
+    .all<{ id: number }>();
+  return results.map((row) => row.id);
 }
 
 function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
@@ -428,9 +454,7 @@ function draftEqual(a: Draft, b: Draft): boolean {
 }
 
 export default function EditLink({ loaderData, actionData }: Route.ComponentProps) {
-  const { link, availableTags, permissions, users, editable, appUrl, shortUrlBase, clicks } =
-    loaderData;
-  const shortUrl = `${appUrl}/${link.slug}`;
+  const { link, availableTags, permissions, users, editable, shortUrlBase, clicks } = loaderData;
   const apexShortUrl = `${shortUrlBase}/${link.slug}`;
   const shortHost = shortHostOf(shortUrlBase);
   const favicon = faviconUrl(link.destinationUrl);
@@ -528,7 +552,7 @@ export default function EditLink({ loaderData, actionData }: Route.ComponentProp
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <a href={shortUrl} target="_blank" rel="noopener noreferrer">
+                  <a href={apexShortUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="size-4" />
                     Visit short URL
                   </a>
@@ -781,6 +805,7 @@ export default function EditLink({ loaderData, actionData }: Route.ComponentProp
                 {editable ? (
                   <Form method="post">
                     <input type="hidden" name="intent" value="fetchOgp" />
+                    <input type="hidden" name="destinationUrl" value={draft.destinationUrl} />
                     <Button type="submit" variant="ghost" size="xs">
                       <RefreshCw className="size-3" />
                       Fetch

@@ -160,18 +160,13 @@ function ReferrerIcon({ row }: { row: TopRow }) {
   }
   try {
     const host = new URL(row.name).hostname || row.name;
-    const src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`;
-    return (
-      <img
-        src={src}
-        alt=""
-        className="size-4 rounded-sm"
-        loading="lazy"
-        referrerPolicy="no-referrer"
-      />
+    return host ? (
+      <Globe className="size-4 text-muted-foreground" />
+    ) : (
+      <LinkIcon className="size-4 text-muted-foreground" />
     );
   } catch {
-    return <Globe className="size-4 text-muted-foreground" />;
+    return <LinkIcon className="size-4 text-muted-foreground" />;
   }
 }
 

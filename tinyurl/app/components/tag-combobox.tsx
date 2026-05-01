@@ -17,11 +17,16 @@ export function TagCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const listboxId = "tag-combobox-listbox";
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setActiveIndex(-1);
+      return;
+    }
     function onDown(e: MouseEvent) {
       if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
     }
@@ -77,15 +82,32 @@ export function TagCombobox({
     );
   }
 
+  const showCreateOption = showCreate && !exactMatchExists;
+  const totalOptions = filteredAvailable.length + (showCreateOption ? 1 : 0);
+
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
-      const match = availableTags.find(
-        (t) => !selectedIds.includes(t.id) && t.name.toLowerCase() === lowerQuery,
-      );
-      if (match) addExisting(match);
-      else if (filteredAvailable.length > 0 && !showCreate) addExisting(filteredAvailable[0]);
-      else if (showCreate) addNew(trimmed);
+      setOpen(true);
+      setActiveIndex((i) => (totalOptions === 0 ? -1 : (i + 1) % totalOptions));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setOpen(true);
+      setActiveIndex((i) => (totalOptions === 0 ? -1 : i <= 0 ? totalOptions - 1 : i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (activeIndex >= 0 && activeIndex < filteredAvailable.length) {
+        addExisting(filteredAvailable[activeIndex]);
+      } else if (activeIndex === filteredAvailable.length && showCreateOption) {
+        addNew(trimmed);
+      } else {
+        const match = availableTags.find(
+          (t) => !selectedIds.includes(t.id) && t.name.toLowerCase() === lowerQuery,
+        );
+        if (match) addExisting(match);
+        else if (filteredAvailable.length > 0 && !showCreate) addExisting(filteredAvailable[0]);
+        else if (showCreate) addNew(trimmed);
+      }
     } else if (e.key === "Backspace" && query === "") {
       if (newTagNames.length > 0) {
         removeNewName(newTagNames[newTagNames.length - 1]);
@@ -117,9 +139,22 @@ export function TagCombobox({
         <input
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-haspopup="listbox"
+          aria-autocomplete="list"
+          aria-activedescendant={
+            activeIndex >= 0
+              ? activeIndex < filteredAvailable.length
+                ? `tag-option-${filteredAvailable[activeIndex].id}`
+                : "tag-option-create"
+              : undefined
+          }
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
+            setActiveIndex(-1);
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
@@ -132,25 +167,36 @@ export function TagCombobox({
         />
       </div>
       {open && !disabled ? (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-md border bg-popover p-1 text-sm shadow-md">
-          {filteredAvailable.length === 0 && !showCreate ? (
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-label="Available tags"
+          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-md border bg-popover p-1 text-sm shadow-md"
+        >
+          {filteredAvailable.length === 0 && !showCreateOption ? (
             <p className="px-2 py-1.5 text-muted-foreground">No tags found.</p>
           ) : null}
-          {filteredAvailable.map((tag) => (
+          {filteredAvailable.map((tag, idx) => (
             <button
               type="button"
+              role="option"
+              aria-selected={idx === activeIndex}
+              id={`tag-option-${tag.id}`}
               key={tag.id}
               onClick={() => addExisting(tag)}
-              className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left hover:bg-accent"
+              className={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left hover:bg-accent${idx === activeIndex ? " bg-accent" : ""}`}
             >
               <span>{tag.name}</span>
             </button>
           ))}
-          {showCreate && !exactMatchExists ? (
+          {showCreateOption ? (
             <button
               type="button"
+              role="option"
+              aria-selected={activeIndex === filteredAvailable.length}
+              id="tag-option-create"
               onClick={() => addNew(trimmed)}
-              className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-left hover:bg-accent"
+              className={`flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-left hover:bg-accent${activeIndex === filteredAvailable.length ? " bg-accent" : ""}`}
             >
               <Plus className="size-3.5 text-muted-foreground" />
               <span>
