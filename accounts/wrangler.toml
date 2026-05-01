@@ -8,7 +8,7 @@ main = "./workers/app.ts"
 
 [vars]
 APP_URL = "https://accounts.gdgs.jp"
-CLERK_PUBLISHABLE_KEY = "pk_test_ZWFzeS1ncmFja2xlLTkyLmNsZXJrLmFjY291bnRzLmRldiQ"
+CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuZ2Rncy5qcCQ"
 
 [assets]
 binding = "ASSETS"
