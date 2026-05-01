@@ -7,7 +7,7 @@ main = "./workers/app.ts"
 "virtual:react-router/server-build" = "./build/server/index.js"
 
 [vars]
-APP_URL = "https://accounts.gdgs.jp"
+APP_URL = "https://account.gdgs.jp"
 CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuZ2Rncy5qcCQ"
 
 [assets]

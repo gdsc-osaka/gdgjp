@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Apps and the shared lib sit at the repo root:
 
-- `accounts/` — auth app (`@gdgjp/accounts`, accounts.gdgs.jp)
+- `accounts/` — auth app (`@gdgjp/accounts`, account.gdgs.jp)
 - `tinyurl/` — URL shortener (url.gdgs.jp)
 - `wiki/` — community wiki (wiki.gdgs.jp)
 - `auth-lib/` — `@gdgjp/auth-lib` shared package, consumed via `workspace:*`
