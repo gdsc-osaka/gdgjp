@@ -79,11 +79,7 @@ function Sidebar() {
               ) : null}
               <div className="space-y-0.5">
                 {group.items.map((item) => (
-                  <SidebarLink
-                    key={item.to}
-                    item={item}
-                    active={isItemActive(item, pathname)}
-                  />
+                  <SidebarLink key={item.to} item={item} active={isItemActive(item, pathname)} />
                 ))}
               </div>
             </div>

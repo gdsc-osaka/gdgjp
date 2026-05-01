@@ -171,6 +171,7 @@ export function TagCombobox({
           id={listboxId}
           role="listbox"
           aria-label="Available tags"
+          tabIndex={-1}
           className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-md border bg-popover p-1 text-sm shadow-md"
         >
           {filteredAvailable.length === 0 && !showCreateOption ? (

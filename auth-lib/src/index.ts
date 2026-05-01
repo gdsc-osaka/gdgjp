@@ -93,7 +93,11 @@ export async function getUserChapter(
   ) {
     return null;
   }
-  return { chapterId: c.chapterId, chapterSlug: c.chapterSlug, role: c.role };
+  return {
+    chapterId: c.chapterId as number,
+    chapterSlug: c.chapterSlug,
+    role: c.role as "organizer" | "member",
+  };
 }
 
 export async function getUsersByIds(
