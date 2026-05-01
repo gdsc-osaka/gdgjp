@@ -229,7 +229,8 @@ export async function action(args: Route.ActionArgs) {
       const body = String(form.get("comment") ?? "").trim();
       if (body.length > 2000) return { error: "Comment is too long (max 2000 chars)." };
       const existing = await listComments(env.DB, id);
-      for (const c of existing.filter((c) => c.authorUserId === user.id)) await deleteComment(env.DB, c.id);
+      for (const c of existing.filter((c) => c.authorUserId === user.id))
+        await deleteComment(env.DB, c.id);
       if (body) {
         await addComment(env.DB, { linkId: id, authorUserId: user.id, body });
       }

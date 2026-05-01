@@ -95,7 +95,9 @@ async function resolveHostname(hostname: string, type: "A" | "AAAA"): Promise<st
     signal: AbortSignal.timeout(DNS_TIMEOUT_MS),
   });
   if (!response.ok) {
-    console.error(`DoH lookup failed: ${response.status} ${response.statusText} (${query.toString()})`);
+    console.error(
+      `DoH lookup failed: ${response.status} ${response.statusText} (${query.toString()})`,
+    );
     return [];
   }
 
