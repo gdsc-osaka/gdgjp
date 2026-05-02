@@ -42,6 +42,12 @@ export type AeEnv = {
 };
 
 export async function aeQuery(env: AeEnv, sql: string): Promise<AeRow[]> {
+  if (!env.CF_ACCOUNT_ID || !env.CF_AE_API_TOKEN) {
+    throw new Error(
+      "Analytics Engine query requires CF_ACCOUNT_ID and CF_AE_API_TOKEN secrets to be set on the worker",
+    );
+  }
+
   const now = Date.now();
   const cacheKey = `${env.CF_ACCOUNT_ID}:${sql}`;
   const cached = cache.get(cacheKey);

@@ -1,5 +1,8 @@
 CLERK_PUBLISHABLE_KEY=""
 CLERK_SECRET_KEY=""
+# Required for the /analytics and /dashboard pages to read Analytics Engine via the SQL API.
+# Set as production secrets too: `wrangler secret put CF_ACCOUNT_ID` and `wrangler secret put CF_AE_API_TOKEN`.
+# The token needs Account → Account Analytics: Read for the dataset's account.
 CF_ACCOUNT_ID=""
 CF_AE_API_TOKEN=""
 # Override prod URLs from wrangler.toml so dev points at the local accounts app
