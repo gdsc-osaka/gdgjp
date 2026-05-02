@@ -11,10 +11,29 @@ function collectSetCookies(headers: Headers): string[] {
   return out;
 }
 
+function frameAncestorsCsp(idpUrl: string | undefined, requestUrl: string): string {
+  if (!idpUrl) {
+    console.warn("auth.signout-iframe: IDP_URL is not set; emitting CSP without external origin", {
+      url: requestUrl,
+    });
+    return "frame-ancestors 'self'";
+  }
+  try {
+    return `frame-ancestors 'self' ${new URL(idpUrl).origin}`;
+  } catch {
+    console.warn("auth.signout-iframe: IDP_URL is not a valid URL; emitting CSP without external origin", {
+      url: requestUrl,
+      idpUrl,
+    });
+    return "frame-ancestors 'self'";
+  }
+}
+
 export async function loader({ request, context }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
   const auth = getAuth(env);
   let cookies: string[];
+  const csp = frameAncestorsCsp(env.IDP_URL, request.url);
   try {
     const res = await auth.api.signOut({ headers: request.headers, asResponse: true });
     cookies = collectSetCookies(res.headers);
@@ -28,7 +47,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store",
-        "Content-Security-Policy": `frame-ancestors 'self' ${env.IDP_URL}`,
+        "Content-Security-Policy": csp,
         "Referrer-Policy": "no-referrer",
       },
     });
@@ -37,7 +56,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const headers = new Headers({
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "no-store",
-    "Content-Security-Policy": `frame-ancestors 'self' ${env.IDP_URL}`,
+    "Content-Security-Policy": csp,
     "Referrer-Policy": "no-referrer",
   });
   for (const c of cookies) headers.append("set-cookie", c);
