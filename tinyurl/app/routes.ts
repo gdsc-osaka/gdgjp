@@ -9,6 +9,8 @@ export default [
   route("tags", "routes/tags.tsx"),
   route("signin", "routes/signin.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),
+  route("auth/signout", "routes/auth.signout.ts"),
+  route("auth/signout-iframe", "routes/auth.signout-iframe.ts"),
   route("notfound", "routes/notfound.tsx"),
   route(":slug", "routes/$slug.tsx"),
 ] satisfies RouteConfig;
