@@ -95,7 +95,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   try {
     const res = await auth.api.signOut({ headers: request.headers, asResponse: true });
     cookies = collectSetCookies(res.headers);
-  } catch {}
+  } catch (err) {
+    console.error("auth.signout: auth.api.signOut failed at IdP", {
+      url: request.url,
+      err,
+    });
+  }
 
   const iframeUrls = rps.map((origin) => `${origin}/auth/signout-iframe`);
   const headers = new Headers({

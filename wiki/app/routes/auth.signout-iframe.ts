@@ -14,11 +14,25 @@ function collectSetCookies(headers: Headers): string[] {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
   const auth = getAuth(env);
-  let cookies: string[] = [];
+  let cookies: string[];
   try {
     const res = await auth.api.signOut({ headers: request.headers, asResponse: true });
     cookies = collectSetCookies(res.headers);
-  } catch {}
+  } catch (err) {
+    console.error("auth.signout-iframe: auth.api.signOut failed", {
+      url: request.url,
+      err,
+    });
+    return new Response("sign-out failed", {
+      status: 500,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Content-Security-Policy": `frame-ancestors 'self' ${env.IDP_URL}`,
+        "Referrer-Policy": "no-referrer",
+      },
+    });
+  }
 
   const headers = new Headers({
     "Content-Type": "text/html; charset=utf-8",
