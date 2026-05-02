@@ -1,4 +1,3 @@
-import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
 import {
   CalendarRange,
   ExternalLink,
@@ -17,8 +16,7 @@ import { DashboardShell } from "~/components/dashboard-shell";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { type TopRow, hourlyClicks, topByBlob, totalClicks } from "~/lib/analytics-engine";
-import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { getAuth } from "~/lib/auth.server";
+import { requireUserWithChapter } from "~/lib/auth-redirect";
 import {
   getLinkById,
   listLinksAccessibleByEmail,
@@ -38,14 +36,7 @@ export function meta({ data }: Route.MetaArgs) {
 
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
-  const auth = getAuth(env);
-  let user: Awaited<ReturnType<typeof requireUser>>;
-  try {
-    user = await requireUser(auth, args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
-  }
-  const chapter = await getUserChapter(auth, args.request);
+  const { user, chapter } = await requireUserWithChapter(env, args.request);
 
   const url = new URL(args.request.url);
   const linkIdParam = url.searchParams.get("linkId");
@@ -59,7 +50,7 @@ export async function loader(args: Route.LoaderArgs) {
     const link = await getLinkById(env.DB, linkIdParam);
     if (!link) throw new Response("Not found", { status: 404 });
     const permissions = await listPermissionsForLink(env.DB, linkIdParam);
-    const ctx: ViewerContext = { user, chapterId: chapter?.chapterId ?? null };
+    const ctx: ViewerContext = { user, chapterId: chapter.chapterId };
     if (!canViewLink(ctx, link, permissions)) {
       throw new Response("Forbidden", { status: 403 });
     }
@@ -73,7 +64,7 @@ export async function loader(args: Route.LoaderArgs) {
   } else {
     const [own, shared] = await Promise.all([
       listLinksForUser(env.DB, user.id),
-      listLinksAccessibleByEmail(env.DB, user.email, chapter?.chapterId ?? null),
+      listLinksAccessibleByEmail(env.DB, user.email, chapter.chapterId),
     ]);
     const idSet = new Set<string>([...own.map((l) => l.id), ...shared.map((l) => l.id)]);
     ids = [...idSet];
@@ -99,6 +90,12 @@ export async function loader(args: Route.LoaderArgs) {
     };
   }
 
+  function aeFallback<T>(label: string, fallback: T): (err: unknown) => T {
+    return (err) => {
+      console.error(`Analytics Engine query failed (${label}):`, err);
+      return fallback;
+    };
+  }
   const [
     hourly,
     total,
@@ -112,17 +109,17 @@ export async function loader(args: Route.LoaderArgs) {
     oses,
     devices,
   ] = await Promise.all([
-    hourlyClicks(env, ids).catch(() => []),
-    totalClicks(env, ids).catch(() => 0),
-    topByBlob(env, "slug", ids).catch(() => []),
-    topByBlob(env, "referer", ids).catch(() => []),
-    topByBlob(env, "country", ids).catch(() => []),
-    topByBlob(env, "region", ids).catch(() => []),
-    topByBlob(env, "city", ids).catch(() => []),
-    topByBlob(env, "continent", ids).catch(() => []),
-    topByBlob(env, "browser", ids).catch(() => []),
-    topByBlob(env, "os", ids).catch(() => []),
-    topByBlob(env, "device", ids).catch(() => []),
+    hourlyClicks(env, ids).catch(aeFallback("hourly", [])),
+    totalClicks(env, ids).catch(aeFallback("total", 0)),
+    topByBlob(env, "slug", ids).catch(aeFallback("slug", [])),
+    topByBlob(env, "referer", ids).catch(aeFallback("referer", [])),
+    topByBlob(env, "country", ids).catch(aeFallback("country", [])),
+    topByBlob(env, "region", ids).catch(aeFallback("region", [])),
+    topByBlob(env, "city", ids).catch(aeFallback("city", [])),
+    topByBlob(env, "continent", ids).catch(aeFallback("continent", [])),
+    topByBlob(env, "browser", ids).catch(aeFallback("browser", [])),
+    topByBlob(env, "os", ids).catch(aeFallback("os", [])),
+    topByBlob(env, "device", ids).catch(aeFallback("device", [])),
   ]);
 
   return {

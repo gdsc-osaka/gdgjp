@@ -1,4 +1,3 @@
-import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
 import {
   BarChart3,
   Check,
@@ -50,8 +49,7 @@ import {
 } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { clicksByLinkId } from "~/lib/analytics-engine";
-import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { getAuth } from "~/lib/auth.server";
+import { requireUserWithChapter } from "~/lib/auth-redirect";
 import {
   type LinkPermission,
   type UserSummary,
@@ -80,20 +78,13 @@ import type { Route } from "./+types/links.$id";
 
 async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
   const env = args.context.cloudflare.env;
-  const auth = getAuth(env);
-  let user: Awaited<ReturnType<typeof requireUser>>;
-  try {
-    user = await requireUser(auth, args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
-  }
+  const { user, chapter } = await requireUserWithChapter(env, args.request);
   const id = String(args.params.id ?? "");
   if (!isLinkId(id)) throw new Response("Not found", { status: 404 });
   const link = await getLinkById(env.DB, id);
   if (!link) throw new Response("Not found", { status: 404 });
   const permissions = await listPermissionsForLink(env.DB, id);
-  const chapter = await getUserChapter(auth, args.request);
-  const ctx: ViewerContext = { user, chapterId: chapter?.chapterId ?? null };
+  const ctx: ViewerContext = { user, chapterId: chapter.chapterId };
   if (!canViewLink(ctx, link, permissions)) {
     throw new Response("Forbidden", { status: 403 });
   }
@@ -106,7 +97,7 @@ export async function loader(args: Route.LoaderArgs) {
   const [tags, userTags, chapterTags, comments, clickMap] = await Promise.all([
     listTagsForLink(env.DB, link.id),
     listTagsForUser(env.DB, user.id),
-    chapter ? listTagsForChapter(env.DB, chapter.chapterId) : Promise.resolve([]),
+    listTagsForChapter(env.DB, chapter.chapterId),
     listComments(env.DB, link.id),
     clicksByLinkId(env, [link.id]).catch(() => new Map<string, number>()),
   ]);

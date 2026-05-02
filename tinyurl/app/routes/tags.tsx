@@ -1,4 +1,3 @@
-import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
 import {
   Globe,
   HelpCircle,
@@ -47,8 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { getAuth } from "~/lib/auth.server";
+import { requireUserWithChapter } from "~/lib/auth-redirect";
 import {
   type TagWithCount,
   createTag,
@@ -127,14 +125,7 @@ const PAGE_SIZE = 10;
 
 async function requireAuthAndChapter(args: Route.LoaderArgs | Route.ActionArgs) {
   const env = args.context.cloudflare.env;
-  const auth = getAuth(env);
-  let user: Awaited<ReturnType<typeof requireUser>>;
-  try {
-    user = await requireUser(auth, args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
-  }
-  const chapter = await getUserChapter(auth, args.request);
+  const { user, chapter } = await requireUserWithChapter(env, args.request);
   return { env, user, chapter };
 }
 
@@ -142,9 +133,7 @@ export async function loader(args: Route.LoaderArgs) {
   const { env, user, chapter } = await requireAuthAndChapter(args);
   const [userTags, chapterTags] = await Promise.all([
     listTagsForUserWithCounts(env.DB, user.id),
-    chapter
-      ? listTagsForChapterWithCounts(env.DB, chapter.chapterId)
-      : Promise.resolve<TagWithCount[]>([]),
+    listTagsForChapterWithCounts(env.DB, chapter.chapterId),
   ]);
   return { user: { email: user.email, name: user.name }, userTags, chapterTags, chapter };
 }
@@ -171,7 +160,6 @@ export async function action(args: Route.ActionArgs): Promise<ActionData | null>
     if (name.length > 32) return { error: "Name must be 32 characters or less." };
 
     if (scope === "chapter") {
-      if (!chapter) return { error: "You are not in a chapter." };
       const result = await createTag(env.DB, {
         name,
         color,
