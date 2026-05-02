@@ -21,10 +21,13 @@ function frameAncestorsCsp(idpUrl: string | undefined, requestUrl: string): stri
   try {
     return `frame-ancestors 'self' ${new URL(idpUrl).origin}`;
   } catch {
-    console.warn("auth.signout-iframe: IDP_URL is not a valid URL; emitting CSP without external origin", {
-      url: requestUrl,
-      idpUrl,
-    });
+    console.warn(
+      "auth.signout-iframe: IDP_URL is not a valid URL; emitting CSP without external origin",
+      {
+        url: requestUrl,
+        idpUrl,
+      },
+    );
     return "frame-ancestors 'self'";
   }
 }
