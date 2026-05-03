@@ -4,6 +4,7 @@ import { GdgMark } from "~/components/gdg-mark";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { getAuth } from "~/lib/auth.server";
+import { fetchChapterForUser } from "~/lib/chapter.server";
 import type { Route } from "./+types/no-chapter";
 
 export function meta() {
@@ -14,6 +15,8 @@ export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
   const session = await getAuthFromSession(getAuth(env), args.request);
   if (!session) throw redirect("/signin?return_to=%2Fno-chapter");
+  const chapter = await fetchChapterForUser(env, session.id);
+  if (chapter) throw redirect("/dashboard");
   return { accountsUrl: env.ACCOUNTS_URL };
 }
 
