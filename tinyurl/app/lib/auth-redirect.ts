@@ -1,4 +1,4 @@
-import type { AuthUser } from "@gdgjp/auth-lib/server";
+import type { AuthUser } from "@gdgjp/gdg-lib";
 import { redirect } from "react-router";
 import { getAuth } from "~/lib/auth.server";
 import { type UserChapter, fetchChapterForUser } from "~/lib/chapter.server";

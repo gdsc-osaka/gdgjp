@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: [accounts, tinyurl, wiki, auth-lib]
+        app: [accounts, tinyurl, wiki, gdg-lib]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: [accounts, tinyurl, wiki, auth-lib]
+        app: [accounts, tinyurl, wiki, gdg-lib]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

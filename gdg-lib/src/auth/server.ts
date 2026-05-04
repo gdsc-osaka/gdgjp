@@ -11,8 +11,6 @@ import {
   requireUser as requireUserFromApi,
 } from "./index";
 
-export type { AuthUser } from "./index";
-
 // ─── RP factory ────────────────────────────────────────────────────────────────
 
 export interface AuthConfig {

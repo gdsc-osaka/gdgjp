@@ -1,5 +1,5 @@
-import type { AuthUser } from "@gdgjp/auth-lib";
-import { isSuperAdmin } from "@gdgjp/auth-lib";
+import type { AuthUser } from "@gdgjp/gdg-lib";
+import { isSuperAdmin } from "@gdgjp/gdg-lib";
 import type { Membership, MembershipWithChapter } from "./db";
 
 export function canManageChapters(user: AuthUser): boolean {

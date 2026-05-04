@@ -1,4 +1,4 @@
-import type { AuthUser } from "@gdgjp/auth-lib";
+import type { AuthUser } from "@gdgjp/gdg-lib";
 import { describe, expect, it } from "vitest";
 import type { Link, LinkPermission } from "./db";
 import { canEditLink, canViewLink } from "./permissions";
