@@ -9,9 +9,7 @@ import {
   type SessionApi,
   getSessionUser as getSessionUserFromApi,
   requireUser as requireUserFromApi,
-} from "./core";
-
-export type { AuthUser } from "./core";
+} from "./index";
 
 // ─── RP factory ────────────────────────────────────────────────────────────────
 
