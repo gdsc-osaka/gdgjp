@@ -18,11 +18,9 @@ function buildAuth(env: Env) {
     baseURL: env.APP_URL,
     secret: env.BETTER_AUTH_SECRET,
     database: { db, type: "sqlite" },
+    advanced: { cookiePrefix: "gdgjp-tinyurl" },
     user: {
       additionalFields: {
-        chapterId: { type: "number", required: false, input: false },
-        chapterSlug: { type: "string", required: false, input: false },
-        chapterRole: { type: "string", required: false, input: false },
         isAdmin: { type: "boolean", required: false, input: false },
       },
     },
@@ -41,12 +39,6 @@ function buildAuth(env: Env) {
               name: profile.name ?? profile.email,
               image: profile.picture ?? null,
               emailVerified: profile.email_verified === true,
-              chapterId: typeof profile.chapterId === "number" ? profile.chapterId : null,
-              chapterSlug: typeof profile.chapterSlug === "string" ? profile.chapterSlug : null,
-              chapterRole:
-                profile.chapterRole === "organizer" || profile.chapterRole === "member"
-                  ? profile.chapterRole
-                  : null,
               isAdmin: profile.isAdmin === true,
             }),
           },

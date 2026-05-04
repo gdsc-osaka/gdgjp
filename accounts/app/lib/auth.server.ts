@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { oidcProvider } from "better-auth/plugins";
 import { Kysely } from "kysely";
 import { D1Dialect } from "kysely-d1";
+import { getChapterByUserId } from "./db";
 
 let cache: { auth: ReturnType<typeof buildAuth>; db: D1Database; baseURL: string } | null = null;
 
@@ -18,6 +19,7 @@ function buildAuth(env: Env) {
     baseURL: env.APP_URL,
     secret: env.BETTER_AUTH_SECRET,
     database: { db, type: "sqlite" },
+    advanced: { cookiePrefix: "gdgjp-accounts" },
     user: {
       additionalFields: {
         isAdmin: { type: "boolean", required: false, input: false },
@@ -88,15 +90,11 @@ function trustedClientsFromEnv(env: Env) {
 }
 
 async function getChapterClaim(db: D1Database, userId: string) {
-  const row = await db
-    .prepare(
-      `SELECT m.chapter_id AS chapterId, c.slug AS chapterSlug, m.role AS chapterRole
-       FROM memberships m
-       JOIN chapters c ON c.id = m.chapter_id
-       WHERE m.user_id = ? AND m.status = 'active'`,
-    )
-    .bind(userId)
-    .first<{ chapterId: number; chapterSlug: string; chapterRole: "organizer" | "member" }>();
-  if (!row) return { chapterId: null, chapterSlug: null, chapterRole: null };
-  return row;
+  const chapter = await getChapterByUserId(db, userId);
+  if (!chapter) return { chapterId: null, chapterSlug: null, chapterRole: null };
+  return {
+    chapterId: chapter.chapterId,
+    chapterSlug: chapter.chapterSlug,
+    chapterRole: chapter.role,
+  };
 }

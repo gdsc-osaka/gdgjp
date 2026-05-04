@@ -1,4 +1,3 @@
-import { getUserChapter, requireUser } from "@gdgjp/auth-lib";
 import { ChevronsUpDown, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { CreateLinkDialog } from "~/components/create-link-dialog";
@@ -15,8 +14,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import { clicksByLinkId } from "~/lib/analytics-engine";
-import { buildSignInRedirect } from "~/lib/auth-redirect";
-import { getAuth } from "~/lib/auth.server";
+import { requireUserWithChapter } from "~/lib/auth-redirect";
 import {
   type Link as DbLink,
   type Tag as DbTag,
@@ -35,19 +33,12 @@ export function meta() {
 
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
-  const auth = getAuth(env);
-  let user: Awaited<ReturnType<typeof requireUser>>;
-  try {
-    user = await requireUser(auth, args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
-  }
-  const chapter = await getUserChapter(auth, args.request);
+  const { user, chapter } = await requireUserWithChapter(env, args.request);
   const [ownLinks, sharedLinks, userTags, chapterTags] = await Promise.all([
     listLinksForUser(env.DB, user.id),
-    listLinksAccessibleByEmail(env.DB, user.email, chapter?.chapterId ?? null),
+    listLinksAccessibleByEmail(env.DB, user.email, chapter.chapterId),
     listTagsForUser(env.DB, user.id),
-    chapter ? listTagsForChapter(env.DB, chapter.chapterId) : Promise.resolve([] as DbTag[]),
+    listTagsForChapter(env.DB, chapter.chapterId),
   ]);
   const ownIds = new Set(ownLinks.map((l) => l.id));
   const sharedFiltered = sharedLinks.filter((l) => !ownIds.has(l.id));
@@ -56,7 +47,10 @@ export async function loader(args: Route.LoaderArgs) {
   const linkIds = allLinks.map((l) => l.id);
 
   const [clickMap, owners] = await Promise.all([
-    clicksByLinkId(env, linkIds).catch(() => new Map<string, number>()),
+    clicksByLinkId(env, linkIds).catch((err) => {
+      console.error("Analytics Engine query failed (clicksByLinkId):", err);
+      return new Map<string, number>();
+    }),
     ownerIds.length > 0
       ? getUsersByIds(env.DB, ownerIds).catch(() => ({}) as Record<string, UserSummary>)
       : Promise.resolve({} as Record<string, UserSummary>),

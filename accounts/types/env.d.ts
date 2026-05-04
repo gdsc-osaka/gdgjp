@@ -4,6 +4,7 @@ declare global {
     GOOGLE_CLIENT_SECRET: string;
     TINYURL_CLIENT_SECRET: string;
     WIKI_CLIENT_SECRET: string;
+    INTERNAL_API_SECRET: string;
   }
 }
 

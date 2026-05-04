@@ -8,6 +8,7 @@ export default [
   route("analytics", "routes/analytics.tsx"),
   route("tags", "routes/tags.tsx"),
   route("signin", "routes/signin.tsx"),
+  route("no-chapter", "routes/no-chapter.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("auth/signout", "routes/auth.signout.ts"),
   route("auth/signout-iframe", "routes/auth.signout-iframe.ts"),
