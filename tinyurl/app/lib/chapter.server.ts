@@ -17,7 +17,10 @@ export async function fetchChapterForUser(
 
   const now = Date.now();
   const cached = cache.get(accountId);
-  if (cached && cached.expiresAt > now) return cached.value;
+  if (cached) {
+    if (cached.expiresAt > now) return cached.value;
+    cache.delete(accountId);
+  }
 
   if (!env.INTERNAL_API_SECRET) {
     throw new Error("missing INTERNAL_API_SECRET");
