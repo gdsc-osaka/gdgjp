@@ -1,4 +1,4 @@
-import { requireUser } from "@gdgjp/auth-lib";
+import type { AuthUser } from "@gdgjp/auth-lib";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -15,9 +15,9 @@ import type { Route } from "./+types/dashboard";
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
   const t = await i18n.getFixedT(args.request);
-  let user: Awaited<ReturnType<typeof requireUser>>;
+  let user: AuthUser;
   try {
-    user = await requireUser(getAuth(env), args.request);
+    user = await getAuth(env).requireUser(args.request);
   } catch (err) {
     if (err instanceof Response && err.status === 401) {
       throw buildSignInRedirect(args.request);

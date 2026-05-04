@@ -1,5 +1,6 @@
-import { type AuthUser, requireUser } from "@gdgjp/auth-lib/server";
+import type { AuthUser } from "@gdgjp/auth-lib/server";
 import { redirect } from "react-router";
+import { getAuth } from "~/lib/auth.server";
 import { type UserChapter, fetchChapterForUser } from "~/lib/chapter.server";
 
 export function safeReturnTo(value: string | null | undefined): string | null {
@@ -20,7 +21,7 @@ export async function requireUserWithChapter(
 ): Promise<{ user: AuthUser; chapter: UserChapter }> {
   let user: AuthUser;
   try {
-    user = await requireUser(env, request);
+    user = await getAuth(env).requireUser(request);
   } catch {
     throw buildSignInRedirect(request);
   }

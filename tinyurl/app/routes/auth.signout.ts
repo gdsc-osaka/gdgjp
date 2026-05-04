@@ -1,8 +1,6 @@
-import { redirect } from "react-router";
+import { getAuth } from "~/lib/auth.server";
 import type { Route } from "./+types/auth.signout";
 
-export function loader({ context }: Route.LoaderArgs) {
-  const env = context.cloudflare.env;
-  const returnTo = `${env.APP_URL}/signin`;
-  return redirect(`${env.IDP_URL}/auth/signout?return_to=${encodeURIComponent(returnTo)}`);
+export function loader({ request, context }: Route.LoaderArgs) {
+  return getAuth(context.cloudflare.env).handleSignOutRedirect(request);
 }

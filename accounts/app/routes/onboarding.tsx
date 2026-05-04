@@ -1,4 +1,4 @@
-import { requireUser } from "@gdgjp/auth-lib";
+import type { AuthUser } from "@gdgjp/auth-lib";
 import { useTranslation } from "react-i18next";
 import { Form, redirect } from "react-router";
 import { PageShell } from "~/components/page-shell";
@@ -15,9 +15,9 @@ import type { Route } from "./+types/onboarding";
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
   const t = await i18n.getFixedT(args.request);
-  let user: Awaited<ReturnType<typeof requireUser>>;
+  let user: AuthUser;
   try {
-    user = await requireUser(getAuth(env), args.request);
+    user = await getAuth(env).requireUser(args.request);
   } catch {
     throw buildSignInRedirect(args.request);
   }
@@ -34,9 +34,9 @@ export function meta({ data }: Route.MetaArgs) {
 export async function action(args: Route.ActionArgs) {
   const env = args.context.cloudflare.env;
   const t = await i18n.getFixedT(args.request);
-  let user: Awaited<ReturnType<typeof requireUser>>;
+  let user: AuthUser;
   try {
-    user = await requireUser(getAuth(env), args.request);
+    user = await getAuth(env).requireUser(args.request);
   } catch {
     throw buildSignInRedirect(args.request);
   }
