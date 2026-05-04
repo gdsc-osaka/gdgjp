@@ -1,4 +1,4 @@
-import { getAuth } from "~/lib/auth.server";
+import { signOut } from "@gdgjp/auth-lib/server";
 import type { Route } from "./+types/auth.signout-iframe";
 
 function collectSetCookies(headers: Headers): string[] {
@@ -34,14 +34,13 @@ function frameAncestorsCsp(idpUrl: string | undefined, requestUrl: string): stri
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
-  const auth = getAuth(env);
   let cookies: string[];
   const csp = frameAncestorsCsp(env.IDP_URL, request.url);
   try {
-    const res = await auth.api.signOut({ headers: request.headers, asResponse: true });
+    const res = await signOut(env, request);
     cookies = collectSetCookies(res.headers);
   } catch (err) {
-    console.error("auth.signout-iframe: auth.api.signOut failed", {
+    console.error("auth.signout-iframe: signOut failed", {
       url: request.url,
       err,
     });

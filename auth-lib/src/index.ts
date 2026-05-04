@@ -5,11 +5,13 @@ export type AuthUser = {
   isAdmin: boolean;
 };
 
+export const SSO_PROVIDER_ID = "gdgjp";
+
 export function isSuperAdmin(user: AuthUser): boolean {
   return user.isAdmin;
 }
 
-type SessionApi = {
+export type SessionApi = {
   api: {
     getSession: (args: { headers: Headers }) => Promise<{
       user: Record<string, unknown>;
@@ -17,14 +19,14 @@ type SessionApi = {
   };
 };
 
-export async function getAuth(auth: SessionApi, request: Request): Promise<AuthUser | null> {
+export async function getSessionUser(auth: SessionApi, request: Request): Promise<AuthUser | null> {
   const result = await auth.api.getSession({ headers: request.headers });
   if (!result?.user) return null;
   return mapToAuthUser(result.user);
 }
 
 export async function requireUser(auth: SessionApi, request: Request): Promise<AuthUser> {
-  const user = await getAuth(auth, request);
+  const user = await getSessionUser(auth, request);
   if (!user) throw new Response("Unauthorized", { status: 401 });
   return user;
 }
