@@ -47,8 +47,11 @@ export async function loader(args: Route.LoaderArgs) {
   let user: AuthUser;
   try {
     user = await getAuth(env).requireUser(args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
+  } catch (err) {
+    if (err instanceof Response && err.status === 401) {
+      throw buildSignInRedirect(args.request);
+    }
+    throw err;
   }
   requireSuperAdmin(user);
   const chapters = await listChapters(env.DB);
@@ -65,8 +68,11 @@ export async function action(args: Route.ActionArgs) {
   let user: AuthUser;
   try {
     user = await getAuth(env).requireUser(args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
+  } catch (err) {
+    if (err instanceof Response && err.status === 401) {
+      throw buildSignInRedirect(args.request);
+    }
+    throw err;
   }
   requireSuperAdmin(user);
   const form = await args.request.formData();

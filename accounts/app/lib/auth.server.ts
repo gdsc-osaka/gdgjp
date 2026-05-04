@@ -1,11 +1,10 @@
 import { type IdpAuthInstance, type IdpClient, initializeIdpAuth } from "@gdgjp/auth-lib/server";
 import { getChapterByUserId } from "./db";
 
-let cached: { instance: IdpAuthInstance; key: string } | null = null;
+let cached: { instance: IdpAuthInstance; env: Env } | null = null;
 
 export function getAuth(env: Env): IdpAuthInstance {
-  const key = env.APP_URL;
-  if (cached?.key === key) return cached.instance;
+  if (cached?.env === env) return cached.instance;
   const instance = initializeIdpAuth({
     db: env.DB,
     appUrl: env.APP_URL,
@@ -22,7 +21,7 @@ export function getAuth(env: Env): IdpAuthInstance {
       return getChapterClaim(env.DB, user.id);
     },
   });
-  cached = { instance, key };
+  cached = { instance, env };
   return instance;
 }
 

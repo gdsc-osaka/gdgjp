@@ -1,10 +1,9 @@
 import { type AuthInstance, initializeAuth } from "@gdgjp/auth-lib/server";
 
-let cached: { instance: AuthInstance; key: string } | null = null;
+let cached: { instance: AuthInstance; env: Env } | null = null;
 
 export function getAuth(env: Env): AuthInstance {
-  const key = `${env.APP_URL}|${env.IDP_URL}`;
-  if (cached?.key === key) return cached.instance;
+  if (cached?.env === env) return cached.instance;
   const instance = initializeAuth({
     db: env.DB,
     appUrl: env.APP_URL,
@@ -16,6 +15,6 @@ export function getAuth(env: Env): AuthInstance {
       clientSecret: env.IDP_CLIENT_SECRET,
     },
   });
-  cached = { instance, key };
+  cached = { instance, env };
   return instance;
 }

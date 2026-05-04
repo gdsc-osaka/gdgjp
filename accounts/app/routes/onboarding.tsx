@@ -18,8 +18,11 @@ export async function loader(args: Route.LoaderArgs) {
   let user: AuthUser;
   try {
     user = await getAuth(env).requireUser(args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
+  } catch (err) {
+    if (err instanceof Response && err.status === 401) {
+      throw buildSignInRedirect(args.request);
+    }
+    throw err;
   }
   const membership = await getMembership(env.DB, user.id);
   if (membership) throw redirect("/dashboard");
@@ -37,8 +40,11 @@ export async function action(args: Route.ActionArgs) {
   let user: AuthUser;
   try {
     user = await getAuth(env).requireUser(args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
+  } catch (err) {
+    if (err instanceof Response && err.status === 401) {
+      throw buildSignInRedirect(args.request);
+    }
+    throw err;
   }
   const form = await args.request.formData();
   const chapterId = Number(form.get("chapterId"));

@@ -40,8 +40,11 @@ async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
   let user: AuthUser;
   try {
     user = await getAuth(env).requireUser(args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
+  } catch (err) {
+    if (err instanceof Response && err.status === 401) {
+      throw buildSignInRedirect(args.request);
+    }
+    throw err;
   }
   const slug = args.params.slug;
   if (!slug) throw new Response("Not found", { status: 404 });
