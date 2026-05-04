@@ -21,6 +21,7 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "better-auth": "^1.6.9",
     "kysely": "^0.28.0",
     "kysely-d1": "^0.4.0"
