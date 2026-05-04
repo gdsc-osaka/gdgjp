@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSessionUser, isSuperAdmin, requireUser } from "./index";
+import { getSessionUser, isSuperAdmin, requireUser } from "./core";
 
 function makeAuth(session: { user: Record<string, unknown> } | null) {
   return {
