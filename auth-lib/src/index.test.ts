@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAuth, getUserChapter, isSuperAdmin, requireUser } from "./index";
+import { getSessionUser, getUserChapter, isSuperAdmin, requireUser } from "./index";
 
 function makeAuth(session: { user: Record<string, unknown> } | null) {
   return {
@@ -9,9 +9,9 @@ function makeAuth(session: { user: Record<string, unknown> } | null) {
   };
 }
 
-describe("getAuth", () => {
+describe("getSessionUser", () => {
   it("returns null when there is no session", async () => {
-    const result = await getAuth(makeAuth(null), new Request("https://x.example/"));
+    const result = await getSessionUser(makeAuth(null), new Request("https://x.example/"));
     expect(result).toBeNull();
   });
 
@@ -24,7 +24,7 @@ describe("getAuth", () => {
         isAdmin: false,
       },
     });
-    const result = await getAuth(auth, new Request("https://x.example/"));
+    const result = await getSessionUser(auth, new Request("https://x.example/"));
     expect(result).toEqual({
       id: "u_1",
       email: "ada@example.com",
@@ -37,7 +37,7 @@ describe("getAuth", () => {
     const auth = makeAuth({
       user: { id: "u_2", email: "a@b.c", name: "A", isAdmin: 1 },
     });
-    const result = await getAuth(auth, new Request("https://x.example/"));
+    const result = await getSessionUser(auth, new Request("https://x.example/"));
     expect(result?.isAdmin).toBe(true);
   });
 });

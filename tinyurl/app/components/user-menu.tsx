@@ -1,3 +1,4 @@
+import { authClient } from "@gdgjp/auth-lib/client";
 import { LogOut } from "lucide-react";
 import { useNavigate } from "react-router";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
@@ -10,7 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { authClient } from "~/lib/auth-client";
 
 export type UserMenuUser = {
   email: string;

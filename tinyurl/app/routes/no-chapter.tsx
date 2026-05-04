@@ -1,9 +1,8 @@
-import { getAuth as getAuthFromSession } from "@gdgjp/auth-lib";
+import { getSessionUser } from "@gdgjp/auth-lib/server";
 import { redirect } from "react-router";
 import { GdgMark } from "~/components/gdg-mark";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
-import { getAuth } from "~/lib/auth.server";
 import type { Route } from "./+types/no-chapter";
 
 export function meta() {
@@ -12,8 +11,8 @@ export function meta() {
 
 export async function loader(args: Route.LoaderArgs) {
   const env = args.context.cloudflare.env;
-  const session = await getAuthFromSession(getAuth(env), args.request);
-  if (!session) throw redirect("/signin?return_to=%2Fno-chapter");
+  const user = await getSessionUser(env, args.request);
+  if (!user) throw redirect("/signin?return_to=%2Fno-chapter");
   return { accountsUrl: env.ACCOUNTS_URL };
 }
 

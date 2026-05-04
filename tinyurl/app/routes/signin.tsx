@@ -1,6 +1,6 @@
+import { SSO_PROVIDER_ID, authClient } from "@gdgjp/auth-lib/client";
 import { useEffect } from "react";
 import { useSearchParams } from "react-router";
-import { authClient } from "~/lib/auth-client";
 
 export function meta() {
   return [{ title: "Sign in — GDG Japan Links" }];
@@ -11,7 +11,7 @@ export default function SignInPage() {
   const returnTo = safeReturnTo(params.get("return_to")) ?? "/links";
 
   useEffect(() => {
-    void authClient.signIn.oauth2({ providerId: "gdgjp", callbackURL: returnTo });
+    void authClient.signIn.oauth2({ providerId: SSO_PROVIDER_ID, callbackURL: returnTo });
   }, [returnTo]);
 
   return (
