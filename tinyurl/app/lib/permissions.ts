@@ -1,5 +1,5 @@
-import type { AuthUser } from "@gdgjp/auth-lib";
-import { isSuperAdmin } from "@gdgjp/auth-lib";
+import type { AuthUser } from "@gdgjp/gdg-lib";
+import { isSuperAdmin } from "@gdgjp/gdg-lib";
 import type { Link, LinkPermission, LinkRole } from "./db";
 
 export function requireSuperAdmin(user: AuthUser): void {

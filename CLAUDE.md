@@ -9,7 +9,7 @@ Apps and the shared lib sit at the repo root:
 - `accounts/` — auth app (`@gdgjp/accounts`, accounts.gdgs.jp)
 - `tinyurl/` — URL shortener (url.gdgs.jp)
 - `wiki/` — community wiki (wiki.gdgs.jp)
-- `auth-lib/` — `@gdgjp/auth-lib` shared package, consumed via `workspace:*`
+- `gdg-lib/` — `@gdgjp/gdg-lib` shared package, consumed via `workspace:*`
 
 `pnpm-workspace.yaml` lists these four directories explicitly. When adding a new app, add it there and run `pnpm install`.
 
@@ -46,5 +46,5 @@ After editing `wrangler.toml` bindings, run `pnpm --filter @gdgjp/<app> cf-typeg
 
 - Biome enforces double quotes, semicolons, trailing commas, 2-space indent, 100-col lines, and `useImportType: error` — use `import type { ... }` for type-only imports.
 - TypeScript uses `verbatimModuleSyntax` and `isolatedModules` (inherited from `tsconfig.base.json`); type-only imports/exports must be marked explicitly.
-- The shared lib `@gdgjp/auth-lib` exports source TS directly (`"main": "./src/index.ts"`) — there is no build step for it; consumers compile it through their own bundler.
+- The shared lib `@gdgjp/gdg-lib` exports source TS directly (`"main": "./src/index.ts"`) — there is no build step for it; consumers compile it through their own bundler.
 - CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests, build, and Playwright as separate jobs on Node 20 + pnpm. Keep all five green.

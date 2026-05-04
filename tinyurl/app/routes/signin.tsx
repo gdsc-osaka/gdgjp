@@ -1,4 +1,4 @@
-import { SSO_PROVIDER_ID, authClient } from "@gdgjp/auth-lib/client";
+import { SSO_PROVIDER_ID, authClient } from "@gdgjp/gdg-lib/client";
 import { useEffect } from "react";
 import { useSearchParams } from "react-router";
 

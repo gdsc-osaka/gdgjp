@@ -15,7 +15,7 @@
     "migrate:remote": "wrangler d1 migrations apply gdgjp-tinyurl --remote"
   },
   "dependencies": {
-    "@gdgjp/auth-lib": "workspace:*",
+    "@gdgjp/gdg-lib": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "isbot": "^5.1.17",

@@ -1,4 +1,4 @@
-import { type AuthInstance, initializeAuth } from "@gdgjp/auth-lib/server";
+import { type AuthInstance, initializeAuth } from "@gdgjp/gdg-lib/server";
 
 let cached: { instance: AuthInstance; env: Env } | null = null;
 

@@ -23,9 +23,9 @@ importers:
 
   accounts:
     dependencies:
-      '@gdgjp/auth-lib':
+      '@gdgjp/gdg-lib':
         specifier: workspace:*
-        version: link:../auth-lib
+        version: link:../gdg-lib
       better-auth:
         specifier: ^1.6.9
         version: 1.6.9(@cloudflare/workers-types@4.20260426.1)(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vitest@2.1.9(lightningcss@1.32.0))
@@ -118,7 +118,7 @@ importers:
         specifier: ^3.99.0
         version: 3.114.17(@cloudflare/workers-types@4.20260426.1)
 
-  auth-lib:
+  gdg-lib:
     dependencies:
       '@opentelemetry/api':
         specifier: ^1.9.1
@@ -145,9 +145,9 @@ importers:
 
   tinyurl:
     dependencies:
-      '@gdgjp/auth-lib':
+      '@gdgjp/gdg-lib':
         specifier: workspace:*
-        version: link:../auth-lib
+        version: link:../gdg-lib
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -230,9 +230,9 @@ importers:
 
   wiki:
     dependencies:
-      '@gdgjp/auth-lib':
+      '@gdgjp/gdg-lib':
         specifier: workspace:*
-        version: link:../auth-lib
+        version: link:../gdg-lib
       better-auth:
         specifier: ^1.6.9
         version: 1.6.9(@cloudflare/workers-types@4.20260426.1)(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vitest@2.1.9(lightningcss@1.32.0))

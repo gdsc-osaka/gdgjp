@@ -1,4 +1,4 @@
-import type { AuthUser } from "@gdgjp/auth-lib";
+import type { AuthUser } from "@gdgjp/gdg-lib";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Form, Link } from "react-router";

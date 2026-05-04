@@ -1,4 +1,4 @@
-import { type IdpAuthInstance, type IdpClient, initializeIdpAuth } from "@gdgjp/auth-lib/server";
+import { type IdpAuthInstance, type IdpClient, initializeIdpAuth } from "@gdgjp/gdg-lib/server";
 import { getChapterByUserId } from "./db";
 
 let cached: { instance: IdpAuthInstance; env: Env } | null = null;

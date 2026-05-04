@@ -2,4 +2,4 @@ packages:
   - "accounts"
   - "tinyurl"
   - "wiki"
-  - "auth-lib"
+  - "gdg-lib"

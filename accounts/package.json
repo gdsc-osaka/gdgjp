@@ -15,7 +15,7 @@
     "migrate:remote": "wrangler d1 migrations apply gdgjp-accounts --remote"
   },
   "dependencies": {
-    "@gdgjp/auth-lib": "workspace:*",
+    "@gdgjp/gdg-lib": "workspace:*",
     "better-auth": "^1.6.9",
     "kysely": "^0.28.0",
     "kysely-d1": "^0.4.0",

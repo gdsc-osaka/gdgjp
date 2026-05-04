@@ -1,4 +1,4 @@
-import type { AuthUser } from "@gdgjp/auth-lib";
+import type { AuthUser } from "@gdgjp/gdg-lib";
 import { useTranslation } from "react-i18next";
 import { Form, redirect } from "react-router";
 import { PageShell } from "~/components/page-shell";

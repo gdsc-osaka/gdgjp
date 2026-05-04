@@ -7,8 +7,8 @@ This is a pnpm/Turborepo workspace with four root-level packages listed in
 deployed to Cloudflare Workers. Each app keeps routes in `app/routes/`, route registration in
 `app/routes.ts`, shared app helpers in `app/lib/`, UI components in `app/components/` where present,
 Worker entrypoints in `workers/`, and Playwright specs in `e2e/`. Static assets live in
-`public/`; D1 migrations live in `migrations/`. `auth-lib/` is the shared TypeScript package
-exported as `@gdgjp/auth-lib` from `auth-lib/src/`.
+`public/`; D1 migrations live in `migrations/`. `gdg-lib/` is the shared TypeScript package
+exported as `@gdgjp/gdg-lib` from `gdg-lib/src/`.
 
 ## Build, Test, and Development Commands
 
@@ -29,7 +29,7 @@ Scope work with filters, for example `pnpm --filter @gdgjp/accounts test` or
 Use TypeScript and ESM. Biome enforces 2-space indentation, double quotes, semicolons, trailing
 commas, and 100-character lines. Use `import type` for type-only imports. React routes follow
 React Router file naming in `app/routes/`, including dotted paths such as `chapters.$slug.organize.tsx`.
-Keep package-local code inside its app unless it is genuinely shared, then move it to `auth-lib/`.
+Keep package-local code inside its app unless it is genuinely shared, then move it to `gdg-lib/`.
 
 ## Testing Guidelines
 
