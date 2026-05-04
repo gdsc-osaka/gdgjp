@@ -1,10 +1,6 @@
-import {
-  type AuthUser,
-  type UserChapter,
-  getUserChapter,
-  requireUser,
-} from "@gdgjp/auth-lib/server";
+import { type AuthUser, requireUser } from "@gdgjp/auth-lib/server";
 import { redirect } from "react-router";
+import { type UserChapter, fetchChapterForUser } from "~/lib/chapter.server";
 
 export function safeReturnTo(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -28,7 +24,7 @@ export async function requireUserWithChapter(
   } catch {
     throw buildSignInRedirect(request);
   }
-  const chapter = await getUserChapter(env, request);
+  const chapter = await fetchChapterForUser(env, user.id);
   if (!chapter) throw redirect("/no-chapter");
   return { user, chapter };
 }

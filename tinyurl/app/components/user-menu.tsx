@@ -1,6 +1,5 @@
 import { authClient } from "@gdgjp/auth-lib/client";
 import { LogOut } from "lucide-react";
-import { useNavigate } from "react-router";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import {
@@ -18,7 +17,6 @@ export type UserMenuUser = {
 };
 
 export function UserMenu({ user }: { user: UserMenuUser | null }) {
-  const navigate = useNavigate();
   if (!user) return null;
   const initials = (user.name || user.email)
     .split(/\s+|@/)
@@ -27,9 +25,8 @@ export function UserMenu({ user }: { user: UserMenuUser | null }) {
     .map((s) => s[0]?.toUpperCase())
     .join("");
 
-  async function signOut() {
-    await authClient.signOut();
-    navigate("/signin");
+  function signOut() {
+    window.location.assign("/auth/signout");
   }
 
   return (

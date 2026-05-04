@@ -7,9 +7,7 @@ import {
   type AuthUser,
   SSO_PROVIDER_ID,
   type SessionApi,
-  type UserChapter,
   getSessionUser as getSessionUserFromApi,
-  getUserChapter as getUserChapterFromApi,
   requireUser as requireUserFromApi,
 } from "./index";
 
@@ -43,11 +41,9 @@ function buildAuth(env: AuthServerEnv) {
     baseURL: env.APP_URL,
     secret: env.BETTER_AUTH_SECRET,
     database: { db, type: "sqlite" },
+    advanced: { cookiePrefix: "gdgjp-tinyurl" },
     user: {
       additionalFields: {
-        chapterId: { type: "number", required: false, input: false },
-        chapterSlug: { type: "string", required: false, input: false },
-        chapterRole: { type: "string", required: false, input: false },
         isAdmin: { type: "boolean", required: false, input: false },
       },
     },
@@ -66,12 +62,6 @@ function buildAuth(env: AuthServerEnv) {
               name: profile.name ?? profile.email,
               image: profile.picture ?? null,
               emailVerified: profile.email_verified === true,
-              chapterId: typeof profile.chapterId === "number" ? profile.chapterId : null,
-              chapterSlug: typeof profile.chapterSlug === "string" ? profile.chapterSlug : null,
-              chapterRole:
-                profile.chapterRole === "organizer" || profile.chapterRole === "member"
-                  ? profile.chapterRole
-                  : null,
               isAdmin: profile.isAdmin === true,
             }),
           },
@@ -93,8 +83,8 @@ export function requireUser(env: AuthServerEnv, request: Request): Promise<AuthU
   return requireUserFromApi(getAuthInstance(env) as SessionApi, request);
 }
 
-export function getUserChapter(env: AuthServerEnv, request: Request): Promise<UserChapter | null> {
-  return getUserChapterFromApi(getAuthInstance(env) as SessionApi, request);
+export function signOut(env: AuthServerEnv, request: Request): Promise<Response> {
+  return getAuthInstance(env).api.signOut({ headers: request.headers, asResponse: true });
 }
 
-export type { AuthUser, UserChapter } from "./index";
+export type { AuthUser } from "./index";

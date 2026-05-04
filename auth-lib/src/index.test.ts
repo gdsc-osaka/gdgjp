@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSessionUser, getUserChapter, isSuperAdmin, requireUser } from "./index";
+import { getSessionUser, isSuperAdmin, requireUser } from "./index";
 
 function makeAuth(session: { user: Record<string, unknown> } | null) {
   return {
@@ -57,29 +57,6 @@ describe("requireUser", () => {
     });
     const result = await requireUser(auth, new Request("https://x.example/"));
     expect(result.email).toBe("g@h.i");
-  });
-});
-
-describe("getUserChapter", () => {
-  it("returns null when chapter fields are absent", async () => {
-    const auth = makeAuth({ user: { id: "u_4", email: "x@y.z", name: "X" } });
-    const result = await getUserChapter(auth, new Request("https://x.example/"));
-    expect(result).toBeNull();
-  });
-
-  it("returns chapter info when fields are present", async () => {
-    const auth = makeAuth({
-      user: {
-        id: "u_5",
-        email: "x@y.z",
-        name: "X",
-        chapterId: 7,
-        chapterSlug: "osaka",
-        chapterRole: "organizer",
-      },
-    });
-    const result = await getUserChapter(auth, new Request("https://x.example/"));
-    expect(result).toEqual({ chapterId: 7, chapterSlug: "osaka", role: "organizer" });
   });
 });
 

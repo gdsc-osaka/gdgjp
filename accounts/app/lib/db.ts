@@ -2,6 +2,28 @@ export type ChapterKind = "gdg" | "gdgoc";
 export type Role = "organizer" | "member";
 export type MembershipStatus = "pending" | "active";
 
+export type UserChapter = {
+  chapterId: number;
+  chapterSlug: string;
+  role: Role;
+};
+
+export async function getChapterByUserId(
+  db: D1Database,
+  userId: string,
+): Promise<UserChapter | null> {
+  const row = await db
+    .prepare(
+      `SELECT m.chapter_id AS chapterId, c.slug AS chapterSlug, m.role AS role
+       FROM memberships m
+       JOIN chapters c ON c.id = m.chapter_id
+       WHERE m.user_id = ? AND m.status = 'active'`,
+    )
+    .bind(userId)
+    .first<UserChapter>();
+  return row ?? null;
+}
+
 export type Chapter = {
   id: number;
   slug: string;
