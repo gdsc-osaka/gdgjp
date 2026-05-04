@@ -1,63 +1,32 @@
-import { betterAuth } from "better-auth";
-import { oidcProvider } from "better-auth/plugins";
-import { Kysely } from "kysely";
-import { D1Dialect } from "kysely-d1";
+import { type IdpAuthInstance, type IdpClient, initializeIdpAuth } from "@gdgjp/auth-lib/server";
 import { getChapterByUserId } from "./db";
 
-let cache: { auth: ReturnType<typeof buildAuth>; db: D1Database; baseURL: string } | null = null;
+let cached: { instance: IdpAuthInstance; env: Env } | null = null;
 
-export function getAuth(env: Env): ReturnType<typeof buildAuth> {
-  if (cache && cache.db === env.DB && cache.baseURL === env.APP_URL) return cache.auth;
-  const auth = buildAuth(env);
-  cache = { auth, db: env.DB, baseURL: env.APP_URL };
-  return auth;
-}
-
-function buildAuth(env: Env) {
-  const db = new Kysely<Record<string, unknown>>({ dialect: new D1Dialect({ database: env.DB }) });
-  return betterAuth({
-    baseURL: env.APP_URL,
+export function getAuth(env: Env): IdpAuthInstance {
+  if (cached?.env === env) return cached.instance;
+  const instance = initializeIdpAuth({
+    db: env.DB,
+    appUrl: env.APP_URL,
+    cookiePrefix: "gdgjp-accounts",
     secret: env.BETTER_AUTH_SECRET,
-    database: { db, type: "sqlite" },
-    advanced: { cookiePrefix: "gdgjp-accounts" },
-    user: {
-      additionalFields: {
-        isAdmin: { type: "boolean", required: false, input: false },
-      },
+    google: {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      prompt: "select_account",
     },
-    socialProviders: {
-      google: {
-        clientId: env.GOOGLE_CLIENT_ID,
-        clientSecret: env.GOOGLE_CLIENT_SECRET,
-        prompt: "select_account",
-      },
+    trustedClients: trustedClientsFromEnv(env),
+    getAdditionalUserInfoClaim: async (user, scopes) => {
+      if (!scopes.includes("profile")) return {};
+      return getChapterClaim(env.DB, user.id);
     },
-    plugins: [
-      oidcProvider({
-        loginPage: "/signin",
-        requirePKCE: true,
-        storeClientSecret: "plain",
-        trustedClients: trustedClientsFromEnv(env),
-        getAdditionalUserInfoClaim: async (user, scopes) => {
-          if (!scopes.includes("profile")) return {};
-          return getChapterClaim(env.DB, user.id);
-        },
-      }),
-    ],
   });
+  cached = { instance, env };
+  return instance;
 }
 
-function trustedClientsFromEnv(env: Env) {
-  const clients: Array<{
-    clientId: string;
-    clientSecret?: string;
-    type: "web";
-    name: string;
-    redirectUrls: string[];
-    metadata: Record<string, unknown> | null;
-    disabled: boolean;
-    skipConsent: boolean;
-  }> = [];
+function trustedClientsFromEnv(env: Env): IdpClient[] {
+  const clients: IdpClient[] = [];
   if (env.TINYURL_CLIENT_ID && env.TINYURL_CLIENT_SECRET) {
     clients.push({
       clientId: env.TINYURL_CLIENT_ID,

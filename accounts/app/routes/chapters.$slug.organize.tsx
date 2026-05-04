@@ -1,4 +1,4 @@
-import { requireUser } from "@gdgjp/auth-lib";
+import type { AuthUser } from "@gdgjp/auth-lib";
 import { ArrowLeft, Check, MoreHorizontal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Form, Link } from "react-router";
@@ -37,11 +37,14 @@ export function meta({ data }: Route.MetaArgs) {
 
 async function ensureAccess(args: Route.LoaderArgs | Route.ActionArgs) {
   const env = args.context.cloudflare.env;
-  let user: Awaited<ReturnType<typeof requireUser>>;
+  let user: AuthUser;
   try {
-    user = await requireUser(getAuth(env), args.request);
-  } catch {
-    throw buildSignInRedirect(args.request);
+    user = await getAuth(env).requireUser(args.request);
+  } catch (err) {
+    if (err instanceof Response && err.status === 401) {
+      throw buildSignInRedirect(args.request);
+    }
+    throw err;
   }
   const slug = args.params.slug;
   if (!slug) throw new Response("Not found", { status: 404 });

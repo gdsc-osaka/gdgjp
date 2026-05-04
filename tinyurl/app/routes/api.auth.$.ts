@@ -1,10 +1,10 @@
-import { handleAuthRequest } from "@gdgjp/auth-lib/server";
+import { getAuth } from "~/lib/auth.server";
 import type { Route } from "./+types/api.auth.$";
 
 export async function loader(args: Route.LoaderArgs) {
-  return handleAuthRequest(args.context.cloudflare.env, args.request);
+  return getAuth(args.context.cloudflare.env).handleAuthRequest(args.request);
 }
 
 export async function action(args: Route.ActionArgs) {
-  return handleAuthRequest(args.context.cloudflare.env, args.request);
+  return getAuth(args.context.cloudflare.env).handleAuthRequest(args.request);
 }

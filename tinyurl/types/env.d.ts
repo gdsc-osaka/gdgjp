@@ -1,7 +1,9 @@
-import type { AuthServerEnv } from "@gdgjp/auth-lib/server";
-
 declare global {
-  interface Env extends AuthServerEnv {
+  interface Env {
+    BETTER_AUTH_SECRET: string;
+    IDP_CLIENT_SECRET: string;
     INTERNAL_API_SECRET: string;
   }
 }
+
+export {};
