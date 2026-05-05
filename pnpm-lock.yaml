@@ -182,6 +182,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20250101.0
         version: 4.20260426.1
+      '@playwright/test':
+        specifier: ^1.49.1
+        version: 1.59.1
       '@react-router/dev':
         specifier: ^7.1.1
         version: 7.14.2(jiti@2.6.1)(lightningcss@1.32.0)(react-router@7.14.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(typescript@5.9.3)(vite@6.4.2(jiti@2.6.1)(lightningcss@1.32.0))(wrangler@3.114.17(@cloudflare/workers-types@4.20260426.1))

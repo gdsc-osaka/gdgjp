@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: [accounts, tinyurl, wiki, gdg-lib]
+        app: [accounts, tinyurl, wiki, img, gdg-lib]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: [accounts, tinyurl, wiki, gdg-lib]
+        app: [accounts, tinyurl, wiki, img, gdg-lib]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: [accounts, tinyurl, wiki]
+        app: [accounts, tinyurl, wiki, img]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -80,7 +80,7 @@ jobs:
     environment: Development
     strategy:
       matrix:
-        app: [accounts, tinyurl, wiki]
+        app: [accounts, tinyurl, wiki, img]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -102,6 +102,15 @@ jobs:
           APP_URL=http://localhost:5174
           ACCOUNTS_URL=http://localhost:5173
           SHORT_URL_BASE=http://localhost:5174
+          EOF
+
+          cat > img/.dev.vars <<EOF
+          BETTER_AUTH_SECRET=ci-better-auth-secret
+          IDP_CLIENT_SECRET=ci-idp-client-secret
+          INTERNAL_API_SECRET=ci-internal-api-secret
+          APP_URL=http://localhost:5175
+          ACCOUNTS_URL=http://localhost:5173
+          IDP_URL=http://localhost:5173
           EOF
       - name: Install Playwright browsers
         run: pnpm --filter @gdgjp/${{ matrix.app }} exec playwright install --with-deps chromium

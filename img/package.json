@@ -9,6 +9,7 @@
     "typecheck": "wrangler types && react-router typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "cf-typegen": "wrangler types",
     "migrate:local": "wrangler d1 migrations apply gdgjp-img --local",
     "migrate:remote": "wrangler d1 migrations apply gdgjp-img --remote"
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
+    "@playwright/test": "^1.49.1",
     "@react-router/dev": "^7.1.1",
     "@tailwindcss/vite": "^4.2.4",
     "@types/react": "^19.0.1",
