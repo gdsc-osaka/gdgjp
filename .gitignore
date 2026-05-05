@@ -10,6 +10,7 @@ dist/
 .wrangler/
 .dev.vars
 .dev.vars*
+!.dev.vars.example
 
 # Env
 .env

@@ -13,6 +13,8 @@ TINYURL_CLIENT_ID = "tinyurl"
 TINYURL_REDIRECT_URLS = "https://url.gdgs.jp/api/auth/oauth2/callback/gdgjp"
 WIKI_CLIENT_ID = "wiki"
 WIKI_REDIRECT_URLS = "https://wiki.gdgs.jp/api/auth/oauth2/callback/gdgjp"
+IMG_CLIENT_ID = "img"
+IMG_REDIRECT_URLS = "https://img.gdgs.jp/api/auth/oauth2/callback/gdgjp"
 
 [assets]
 binding = "ASSETS"

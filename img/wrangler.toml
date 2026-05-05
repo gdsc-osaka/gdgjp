@@ -1,0 +1,49 @@
+name = "gdgjp-img"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+main = "./workers/app.ts"
+
+[alias]
+"virtual:react-router/server-build" = "./build/server/index.js"
+
+[vars]
+APP_URL = "https://img.gdgs.jp"
+ACCOUNTS_URL = "https://accounts.gdgs.jp"
+IDP_URL = "https://accounts.gdgs.jp"
+IDP_CLIENT_ID = "img"
+
+[assets]
+binding = "ASSETS"
+directory = "./build/client"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gdgjp-img"
+database_id = "gdgjp-img-db"
+migrations_dir = "./migrations"
+
+[[r2_buckets]]
+binding = "ORIGINALS"
+bucket_name = "gdgjp-img-originals"
+
+[images]
+binding = "IMAGES"
+
+# [[routes]]
+# pattern = "img.gdgs.jp/*"
+# zone_name = "gdgs.jp"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
