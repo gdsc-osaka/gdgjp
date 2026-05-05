@@ -38,6 +38,7 @@ function rpOrigins(env: Env): string[] {
   const set = new Set<string>();
   for (const o of originsFromCsv(env.TINYURL_REDIRECT_URLS, "TINYURL_REDIRECT_URLS")) set.add(o);
   for (const o of originsFromCsv(env.WIKI_REDIRECT_URLS, "WIKI_REDIRECT_URLS")) set.add(o);
+  for (const o of originsFromCsv(env.IMG_REDIRECT_URLS, "IMG_REDIRECT_URLS")) set.add(o);
   return [...set];
 }
 

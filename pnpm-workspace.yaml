@@ -2,4 +2,5 @@ packages:
   - "accounts"
   - "tinyurl"
   - "wiki"
+  - "img"
   - "gdg-lib"

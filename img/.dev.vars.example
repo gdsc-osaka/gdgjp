@@ -1,0 +1,15 @@
+# Secrets — set as production secrets with `wrangler secret put <NAME>`.
+BETTER_AUTH_SECRET=""
+IDP_CLIENT_SECRET=""
+INTERNAL_API_SECRET=""
+# Cloudflare Images API token (scope: Account → Cloudflare Images → Edit).
+CF_IMAGES_API_TOKEN=""
+
+# Override prod URLs from wrangler.toml so dev points at the local accounts IdP.
+APP_URL=http://localhost:5175
+ACCOUNTS_URL=http://localhost:5173
+IDP_URL=http://localhost:5173
+
+# Cloudflare Images account identifiers (visible in the CF dashboard → Images).
+CF_ACCOUNT_ID=""
+CF_IMAGES_ACCOUNT_HASH=""

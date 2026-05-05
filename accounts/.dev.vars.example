@@ -1,0 +1,17 @@
+# Secrets — set as production secrets with `wrangler secret put <NAME>`.
+BETTER_AUTH_SECRET=""
+GOOGLE_CLIENT_SECRET=""
+INTERNAL_API_SECRET=""
+
+# Per-RP client secrets (one per app registered as a trusted OIDC client in auth.server.ts).
+TINYURL_CLIENT_SECRET=""
+WIKI_CLIENT_SECRET=""
+IMG_CLIENT_SECRET=""
+
+# Override prod URLs from wrangler.toml so dev runs the IdP at localhost.
+APP_URL=http://localhost:5173
+
+# Override RP redirect URLs so OIDC callbacks resolve to the local dev servers.
+TINYURL_REDIRECT_URLS=http://localhost:5174/api/auth/oauth2/callback/gdgjp
+WIKI_REDIRECT_URLS=http://localhost:5176/api/auth/oauth2/callback/gdgjp
+IMG_REDIRECT_URLS=http://localhost:5175/api/auth/oauth2/callback/gdgjp

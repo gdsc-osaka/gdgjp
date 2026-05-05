@@ -55,6 +55,20 @@ function trustedClientsFromEnv(env: Env): IdpClient[] {
       skipConsent: true,
     });
   }
+  if (env.IMG_CLIENT_ID && env.IMG_CLIENT_SECRET) {
+    clients.push({
+      clientId: env.IMG_CLIENT_ID,
+      clientSecret: env.IMG_CLIENT_SECRET,
+      type: "web",
+      name: "GDG Japan Image",
+      redirectUrls: env.IMG_REDIRECT_URLS.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      metadata: null,
+      disabled: false,
+      skipConsent: true,
+    });
+  }
   return clients;
 }
 

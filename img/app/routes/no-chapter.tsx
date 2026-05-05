@@ -1,0 +1,41 @@
+import { redirect } from "react-router";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { getAuth } from "~/lib/auth.server";
+import { fetchChapterForUser } from "~/lib/chapter.server";
+import type { Route } from "./+types/no-chapter";
+
+export function meta() {
+  return [{ title: "Join a GDG — GDG Japan Image" }];
+}
+
+export async function loader(args: Route.LoaderArgs) {
+  const env = args.context.cloudflare.env;
+  const user = await getAuth(env).getSessionUser(args.request);
+  if (!user) throw redirect("/signin?return_to=%2Fno-chapter");
+  const chapter = await fetchChapterForUser(env, user.id);
+  if (chapter) throw redirect("/");
+  return { accountsUrl: env.ACCOUNTS_URL };
+}
+
+export default function NoChapter({ loaderData }: Route.ComponentProps) {
+  const { accountsUrl } = loaderData;
+  return (
+    <div className="grid min-h-dvh place-items-center bg-background px-4 py-10">
+      <Card className="w-full max-w-md">
+        <CardHeader className="items-center text-center">
+          <CardTitle className="text-xl">Join a GDG to continue</CardTitle>
+          <CardDescription>
+            GDG Japan Image is available to members of a GDG or GDG on Campus chapter. Anyone with
+            the link can still view existing images.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center">
+          <Button asChild>
+            <a href={`${accountsUrl}/onboarding`}>Join a chapter</a>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
