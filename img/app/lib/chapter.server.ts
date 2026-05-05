@@ -65,7 +65,9 @@ export async function fetchChapterForUser(
 
 export async function getLinkedAccountId(db: D1Database, userId: string): Promise<string | null> {
   const row = await db
-    .prepare(`SELECT accountId FROM account WHERE userId = ? AND providerId = 'gdgjp' LIMIT 1`)
+    .prepare(
+      `SELECT accountId FROM account WHERE userId = ? AND providerId = 'gdgjp' ORDER BY createdAt DESC LIMIT 1`,
+    )
     .bind(userId)
     .first<{ accountId: string }>();
   return row?.accountId ?? null;

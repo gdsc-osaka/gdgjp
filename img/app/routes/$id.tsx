@@ -16,7 +16,7 @@ export async function loader(args: Route.LoaderArgs) {
 
   const url = new URL(args.request.url);
   const etag = `"${id}-${image.updatedAt}"`;
-  if (args.request.headers.get("if-none-match") === etag) {
+  if (matchesEtag(args.request.headers.get("if-none-match"), etag)) {
     return new Response(null, { status: 304, headers: { ETag: etag, ...CACHE_HEADERS } });
   }
 
@@ -52,6 +52,17 @@ export async function loader(args: Route.LoaderArgs) {
   for (const [k, v] of Object.entries(CACHE_HEADERS)) headers.set(k, v);
   if (!opts.f) headers.set("Vary", "Accept");
   return new Response(res.body, { status: res.status, headers });
+}
+
+function matchesEtag(header: string | null, etag: string): boolean {
+  if (!header) return false;
+  for (const raw of header.split(",")) {
+    let token = raw.trim();
+    if (token === "*") return true;
+    if (token.startsWith("W/")) token = token.slice(2);
+    if (token === etag) return true;
+  }
+  return false;
 }
 
 function formatFor(explicit: string | undefined, accept: string): ImageOutputOptions["format"] {
