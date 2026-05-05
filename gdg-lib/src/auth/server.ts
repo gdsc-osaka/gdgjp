@@ -134,10 +134,7 @@ function buildRpAuth(config: AuthConfig) {
 
 export class ClaimsUnavailableError extends Error {
   constructor(
-    public readonly reason:
-      | "no_linked_account"
-      | "refresh_failed"
-      | "userinfo_failed",
+    public readonly reason: "no_linked_account" | "refresh_failed" | "userinfo_failed",
     cause?: unknown,
   ) {
     super(`claims unavailable: ${reason}`);
