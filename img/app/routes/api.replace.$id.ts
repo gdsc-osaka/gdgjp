@@ -1,5 +1,4 @@
 import { requireUserWithChapter } from "~/lib/auth-redirect";
-import { deleteFromCfImages, uploadToCfImages } from "~/lib/cf-images";
 import { isValidImageId } from "~/lib/id";
 import { getImage, updateImageBytes } from "~/lib/images";
 import { canMutateImage } from "~/lib/permissions";
@@ -16,7 +15,7 @@ export async function action(args: Route.ActionArgs) {
   if (!isValidImageId(id)) return new Response("Not found", { status: 404 });
 
   const env = args.context.cloudflare.env;
-  const { user, chapter, accountId } = await requireUserWithChapter(env, args.request);
+  const { user } = await requireUserWithChapter(env, args.request);
   const image = await getImage(env.DB, id);
   if (!image) return new Response("Not found", { status: 404 });
   if (!canMutateImage(user, image)) return new Response("Forbidden", { status: 403 });
@@ -28,34 +27,19 @@ export async function action(args: Route.ActionArgs) {
   if (file.size > MAX_BYTES) return new Response("file too large", { status: 413 });
 
   const bytes = await file.arrayBuffer();
-  const cf = await uploadToCfImages(env, new Blob([bytes], { type: file.type }), {
-    appUserId: user.id,
-    accountId,
-    chapterId: String(chapter.chapterId),
-    imageId: id,
+  await putOriginal(env, image.r2Key, bytes, {
+    contentType: file.type,
+    userId: image.userId,
+    chapterId: image.chapterId,
+    filename: file.name || image.filename,
+  });
+  await updateImageBytes(env.DB, id, {
+    contentType: file.type,
+    byteSize: file.size,
+    width: null,
+    height: null,
+    filename: file.name || image.filename,
   });
 
-  const oldCfImageId = image.cfImageId;
-  try {
-    await putOriginal(env, image.r2Key, bytes, {
-      contentType: file.type,
-      userId: image.userId,
-      chapterId: image.chapterId,
-      filename: file.name || image.filename,
-    });
-    await updateImageBytes(env.DB, id, {
-      cfImageId: cf.cfImageId,
-      contentType: file.type,
-      byteSize: file.size,
-      width: cf.width,
-      height: cf.height,
-      filename: file.name || image.filename,
-    });
-  } catch (err) {
-    args.context.cloudflare.ctx.waitUntil(deleteFromCfImages(env, cf.cfImageId));
-    throw err;
-  }
-
-  args.context.cloudflare.ctx.waitUntil(deleteFromCfImages(env, oldCfImageId));
   return Response.json({ id });
 }

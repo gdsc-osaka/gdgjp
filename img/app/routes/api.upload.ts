@@ -1,8 +1,7 @@
 import { requireUserWithChapter } from "~/lib/auth-redirect";
-import { deleteFromCfImages, uploadToCfImages } from "~/lib/cf-images";
 import { generateUniqueImageId } from "~/lib/id";
 import { createImage } from "~/lib/images";
-import { putOriginal } from "~/lib/r2";
+import { deleteOriginal, putOriginal } from "~/lib/r2";
 import type { Route } from "./+types/api.upload";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -29,35 +28,28 @@ export async function action(args: Route.ActionArgs) {
   const id = await generateUniqueImageId(env.DB);
   const bytes = await file.arrayBuffer();
 
-  const cf = await uploadToCfImages(env, new Blob([bytes], { type: file.type }), {
-    appUserId: user.id,
-    accountId,
-    chapterId: String(chapter.chapterId),
-    imageId: id,
+  await putOriginal(env, id, bytes, {
+    contentType: file.type,
+    userId: user.id,
+    chapterId: chapter.chapterId,
+    filename: file.name || null,
   });
 
   try {
-    await putOriginal(env, id, bytes, {
-      contentType: file.type,
-      userId: user.id,
-      chapterId: chapter.chapterId,
-      filename: file.name || null,
-    });
     await createImage(env.DB, {
       id,
       userId: user.id,
       accountId,
       chapterId: chapter.chapterId,
-      cfImageId: cf.cfImageId,
       r2Key: id,
       contentType: file.type,
       byteSize: file.size,
-      width: cf.width,
-      height: cf.height,
+      width: null,
+      height: null,
       filename: file.name || null,
     });
   } catch (err) {
-    args.context.cloudflare.ctx.waitUntil(deleteFromCfImages(env, cf.cfImageId));
+    args.context.cloudflare.ctx.waitUntil(deleteOriginal(env, id));
     throw err;
   }
 

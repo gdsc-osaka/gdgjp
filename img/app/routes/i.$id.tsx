@@ -7,9 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { requireUserWithChapter } from "~/lib/auth-redirect";
-import { deliveryUrl } from "~/lib/cf-images";
 import { isValidImageId } from "~/lib/id";
 import { getImage } from "~/lib/images";
+import { deliveryUrl } from "~/lib/img-url";
 import { canMutateImage } from "~/lib/permissions";
 import type { Route } from "./+types/i.$id";
 
@@ -31,7 +31,7 @@ export async function loader(args: Route.LoaderArgs) {
     user: { email: user.email, name: user.name },
     image: {
       id: image.id,
-      url: deliveryUrl(env, image.cfImageId),
+      url: deliveryUrl(image.id, { w: 1600 }),
       filename: image.filename,
       contentType: image.contentType,
       byteSize: image.byteSize,
@@ -96,7 +96,7 @@ export default function ImageDetail({ loaderData }: Route.ComponentProps) {
             <div className="overflow-hidden rounded-md border bg-muted/30">
               <img
                 key={refreshKey}
-                src={`${image.url}?v=${image.updatedAt}-${refreshKey}`}
+                src={`${image.url}&v=${image.updatedAt}-${refreshKey}`}
                 alt={image.filename ?? image.id}
                 className="mx-auto max-h-[60vh] object-contain"
               />

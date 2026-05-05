@@ -1,5 +1,4 @@
 import { requireUserWithChapter } from "~/lib/auth-redirect";
-import { deleteFromCfImages } from "~/lib/cf-images";
 import { isValidImageId } from "~/lib/id";
 import { deleteImage, getImage } from "~/lib/images";
 import { canMutateImage } from "~/lib/permissions";
@@ -21,7 +20,6 @@ export async function action(args: Route.ActionArgs) {
 
   await deleteImage(env.DB, id);
   args.context.cloudflare.ctx.waitUntil(deleteOriginal(env, image.r2Key));
-  args.context.cloudflare.ctx.waitUntil(deleteFromCfImages(env, image.cfImageId));
 
   return Response.json({ ok: true });
 }

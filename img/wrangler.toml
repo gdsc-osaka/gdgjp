@@ -11,9 +11,6 @@ APP_URL = "https://img.gdgs.jp"
 ACCOUNTS_URL = "https://accounts.gdgs.jp"
 IDP_URL = "https://accounts.gdgs.jp"
 IDP_CLIENT_ID = "img"
-CF_IMAGES_ACCOUNT_HASH = "TODO_CF_IMAGES_HASH"
-CF_IMAGES_VARIANT = "public"
-CF_ACCOUNT_ID = "TODO_CF_ACCOUNT_ID"
 
 [assets]
 binding = "ASSETS"
@@ -22,12 +19,15 @@ directory = "./build/client"
 [[d1_databases]]
 binding = "DB"
 database_name = "gdgjp-img"
-database_id = "TODO_RUN_WRANGLER_D1_CREATE"
+database_id = "gdgjp-img-db"
 migrations_dir = "./migrations"
 
 [[r2_buckets]]
 binding = "ORIGINALS"
 bucket_name = "gdgjp-img-originals"
+
+[images]
+binding = "IMAGES"
 
 # [[routes]]
 # pattern = "img.gdgs.jp/*"

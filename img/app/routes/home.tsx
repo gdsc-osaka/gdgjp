@@ -2,8 +2,8 @@ import { GalleryGrid, type GalleryItem } from "~/components/gallery-grid";
 import { PageShell } from "~/components/page-shell";
 import { UploadForm } from "~/components/upload-form";
 import { requireUserWithChapter } from "~/lib/auth-redirect";
-import { deliveryUrl } from "~/lib/cf-images";
 import { listImagesByUser } from "~/lib/images";
+import { deliveryUrl } from "~/lib/img-url";
 import type { Route } from "./+types/home";
 
 export function meta() {
@@ -16,7 +16,7 @@ export async function loader(args: Route.LoaderArgs) {
   const rows = await listImagesByUser(env.DB, user.id);
   const items: GalleryItem[] = rows.map((r) => ({
     id: r.id,
-    thumbUrl: deliveryUrl(env, r.cfImageId),
+    thumbUrl: `${deliveryUrl(r.id, { w: 400, fit: "cover" })}&v=${r.updatedAt}`,
     filename: r.filename,
   }));
   return { user: { email: user.email, name: user.name }, items };
