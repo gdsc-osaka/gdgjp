@@ -50,6 +50,7 @@ export async function loader(args: Route.LoaderArgs) {
   const headers = new Headers(res.headers);
   headers.set("ETag", etag);
   for (const [k, v] of Object.entries(CACHE_HEADERS)) headers.set(k, v);
+  if (!opts.f) headers.set("Vary", "Accept");
   return new Response(res.body, { status: res.status, headers });
 }
 

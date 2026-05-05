@@ -6,6 +6,7 @@ export type UserChapter = {
 
 const CACHE_TTL_MS = 30_000;
 const FETCH_TIMEOUT_MS = 5_000;
+const MAX_CACHE_SIZE = 1000;
 const cache = new Map<string, { value: UserChapter; expiresAt: number }>();
 
 export async function fetchChapterForUser(
@@ -52,7 +53,13 @@ export async function fetchChapterForUser(
   }
   const data = (await res.json()) as { chapter: UserChapter | null };
   const value = data.chapter ?? null;
-  if (value) cache.set(accountId, { value, expiresAt: now + CACHE_TTL_MS });
+  if (value) {
+    if (cache.size >= MAX_CACHE_SIZE) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey !== undefined) cache.delete(oldestKey);
+    }
+    cache.set(accountId, { value, expiresAt: now + CACHE_TTL_MS });
+  }
   return value;
 }
 

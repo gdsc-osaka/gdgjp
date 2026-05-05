@@ -3,11 +3,7 @@ import { redirect } from "react-router";
 import { getAuth } from "~/lib/auth.server";
 import { type UserChapter, fetchChapterForUser, getLinkedAccountId } from "~/lib/chapter.server";
 
-export function safeReturnTo(value: string | null | undefined): string | null {
-  if (!value) return null;
-  if (!value.startsWith("/") || value.startsWith("//")) return null;
-  return value;
-}
+export { safeReturnTo } from "~/lib/return-to";
 
 export function buildSignInRedirect(request: Request): Response {
   const url = new URL(request.url);
@@ -22,8 +18,9 @@ export async function requireUserWithChapter(
   let user: AuthUser;
   try {
     user = await getAuth(env).requireUser(request);
-  } catch {
-    throw buildSignInRedirect(request);
+  } catch (e) {
+    if (e instanceof Response && e.status === 401) throw buildSignInRedirect(request);
+    throw e;
   }
   const chapter = await fetchChapterForUser(env, user.id);
   if (!chapter) throw redirect("/no-chapter");
