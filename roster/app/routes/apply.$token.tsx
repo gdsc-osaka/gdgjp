@@ -76,6 +76,12 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const signInHref = `/signin?return_to=${encodeURIComponent(`${url.pathname}${url.search}`)}`;
 
+  // Auto-claim happens on every signed-in view, deliberately not gated on
+  // canApplyNow: claiming only attaches the viewer's identity to an existing
+  // proxy row (ADR-008), it never lets them create or edit anything past
+  // closed — the action below still blocks that. Linking the identity as
+  // soon as they're seen is strictly more useful to the owner than making
+  // them re-open the page while registration happens to be open again.
   let own: ApplyFormOwn | null = null;
   if (viewer) {
     const resolved = await resolveOwnApplication(db, event.id, {

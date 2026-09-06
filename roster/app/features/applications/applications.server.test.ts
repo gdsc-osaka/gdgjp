@@ -148,6 +148,51 @@ describe("createApplication dedup (real SQLite, migrated schema)", () => {
     expect(second).toEqual({ ok: false, reason: "duplicate_user" });
   });
 
+  /**
+   * Found during review: neither `accounts.gdgs.jp` nor an owner typing a
+   * proxy-add address guarantees stable email casing, and the
+   * `(event_id, email)` UNIQUE index has no `COLLATE NOCASE` — without
+   * normalizing, "Person@Example.com" and "person@example.com" would
+   * silently create two rows for the same person on the same event.
+   */
+  it("treats emails as case-insensitive for dedup", async () => {
+    const first = await createApplication(db, EVENT_ID, {
+      userId: "user_1",
+      email: "Person@Example.com",
+      name: "First",
+      contact: null,
+      party: "undecided",
+      note: null,
+      updatedBy: "self",
+    });
+    expect(first.ok).toBe(true);
+
+    const second = await createApplication(db, EVENT_ID, {
+      userId: null,
+      email: "person@example.com",
+      name: "Second",
+      contact: null,
+      party: "undecided",
+      note: null,
+      updatedBy: "owner",
+    });
+    expect(second).toEqual({ ok: false, reason: "duplicate_email" });
+  });
+
+  it("stores email normalized to lowercase regardless of input casing", async () => {
+    const created = await createApplication(db, EVENT_ID, {
+      userId: "user_1",
+      email: "  Mixed.Case@Example.COM  ",
+      name: "First",
+      contact: null,
+      party: "undecided",
+      note: null,
+      updatedBy: "self",
+    });
+    if (!created.ok) throw new Error("setup failed");
+    expect(created.application.email).toBe("mixed.case@example.com");
+  });
+
   it("allows any number of proxy registrations (user_id NULL) as long as emails differ", async () => {
     const first = await createApplication(db, EVENT_ID, {
       userId: null,
@@ -280,6 +325,35 @@ describe("resolveOwnApplication", () => {
       email: "a@example.com",
     });
     expect(result).toEqual({ kind: "own", application: created.application });
+  });
+
+  /**
+   * Found during review: the IdP-returned email case for a real sign-in
+   * won't always match whatever case a proxy-add row was created with, so
+   * the claim match must be case-insensitive too — not just dedup at write
+   * time.
+   */
+  it("auto-claims a proxy registration even when the viewer's email differs only in case", async () => {
+    const created = await createApplication(db, EVENT_ID, {
+      userId: null,
+      email: "proxy@example.com",
+      name: "Proxy",
+      contact: null,
+      party: "undecided",
+      note: null,
+      updatedBy: "owner",
+    });
+    if (!created.ok) throw new Error("setup failed");
+
+    const result = await resolveOwnApplication(db, EVENT_ID, {
+      userId: "user_5",
+      email: "Proxy@Example.com",
+    });
+    expect(result.kind).toBe("own");
+    if (result.kind === "own") {
+      expect(result.application.id).toBe(created.application.id);
+      expect(result.application.userId).toBe("user_5");
+    }
   });
 });
 

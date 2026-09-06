@@ -27,6 +27,11 @@ import type { Route } from "./+types/e.$id.staff";
  * share and the "代理登録" dialog. The staff list / supply-demand view is
  * Stage 05's job (docs/roster/index.md §6 screen table).
  */
+// Deliberately loose — a sanity check against typos, not RFC 5322
+// validation. Don't tighten this without checking real-world addresses it'd
+// reject; accounts.gdgs.jp is the actual source of truth for whether an
+// address is real (this route only decides whether it looks well-formed
+// enough to store).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function requireStaffAccess(env: Env, request: Request, id: string | undefined) {

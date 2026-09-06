@@ -37,6 +37,14 @@ export type PermissionApplication = Pick<ApplicationRecord, "userId">;
  * chapter member, per `canManageEvent` — proxy-add, overwrite, reflecting a
  * withdrawal), or the application is the viewer's own. `viewer` is `null`
  * for an unauthenticated visitor, who can never edit anything here.
+ *
+ * Not called from this stage's own routes: `/apply/:token`'s action never
+ * has more than one application in scope (it resolves the viewer's own row
+ * server-side via `resolveOwnApplication`, so there's nothing else to check
+ * permission against), and `/e/:id/staff`'s proxy-add is gated by
+ * `canManageEvent` alone. This exists now because Stage 05's per-row staff
+ * list (edit/withdraw any application from a table) is exactly the
+ * "which of several rows can this viewer touch" check this function answers.
  */
 export function canEditApplication(
   viewer: { userId: string } | null,

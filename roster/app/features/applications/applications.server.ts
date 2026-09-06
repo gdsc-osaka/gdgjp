@@ -62,6 +62,19 @@ function isUniqueViolation(err: unknown, column: "email" | "user_id"): boolean {
   );
 }
 
+/**
+ * `applications.email` is a dedup/claim identity key (ADR-008), and neither
+ * `accounts.gdgs.jp` nor an owner typing a proxy-add address guarantees
+ * stable casing — the `(event_id, email)` UNIQUE index and `claim.ts`'s
+ * equality check are both plain string comparisons with no `COLLATE
+ * NOCASE`. Every email that reaches D1 or a claim decision goes through
+ * this first, so "Person@Example.com" and "person@example.com" are always
+ * the same row instead of silently becoming two.
+ */
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 export async function getApplicationById(
   db: D1Database,
   eventId: string,
@@ -81,7 +94,7 @@ export async function getApplicationByEventAndEmail(
 ): Promise<ApplicationRecord | null> {
   const row = await db
     .prepare(`SELECT ${APPLICATION_COLS} FROM applications WHERE event_id = ? AND email = ?`)
-    .bind(eventId, email)
+    .bind(eventId, normalizeEmail(email))
     .first<ApplicationRow>();
   return row ? toApplication(row) : null;
 }
@@ -115,7 +128,7 @@ async function findApplicationCandidates(
     .prepare(
       "SELECT id, user_id, email FROM applications WHERE event_id = ? AND (user_id = ? OR email = ?)",
     )
-    .bind(eventId, viewer.userId, viewer.email)
+    .bind(eventId, viewer.userId, normalizeEmail(viewer.email))
     .all<CandidateRow>();
   return (results ?? []).map((r) => ({ id: r.id, userId: r.user_id, email: r.email }));
 }
@@ -150,9 +163,16 @@ export async function resolveOwnApplication(
   eventId: string,
   viewer: { userId: string; email: string },
 ): Promise<ResolvedApplication> {
+  // Normalize once and reuse everywhere below: findApplicationCandidates
+  // already normalizes its own query, but claim.ts#resolveApplication does a
+  // plain `===` against the candidates' (already-normalized, since every
+  // write goes through normalizeEmail too) email — passing the raw-case
+  // viewer through would silently fail that comparison.
+  const normalizedViewer = { userId: viewer.userId, email: normalizeEmail(viewer.email) };
+
   const resolution = resolveApplication(
-    await findApplicationCandidates(db, eventId, viewer),
-    viewer,
+    await findApplicationCandidates(db, eventId, normalizedViewer),
+    normalizedViewer,
   );
 
   if (resolution.kind === "new") return { kind: "new" };
@@ -164,12 +184,12 @@ export async function resolveOwnApplication(
 
   // kind === "claimable": claim, but fall back to a fresh resolve if someone
   // else's concurrent claim raced ours between the read above and this write.
-  const claimed = await claimApplication(db, resolution.id, viewer.userId);
+  const claimed = await claimApplication(db, resolution.id, normalizedViewer.userId);
   if (claimed) return { kind: "own", application: claimed };
 
   const reResolved = resolveApplication(
-    await findApplicationCandidates(db, eventId, viewer),
-    viewer,
+    await findApplicationCandidates(db, eventId, normalizedViewer),
+    normalizedViewer,
   );
   if (reResolved.kind !== "own") return { kind: "new" };
   const application = await getApplicationById(db, eventId, reResolved.id);
@@ -208,7 +228,7 @@ export async function createApplication(
         crypto.randomUUID(),
         eventId,
         input.userId,
-        input.email,
+        normalizeEmail(input.email),
         input.name,
         input.contact,
         input.party,
