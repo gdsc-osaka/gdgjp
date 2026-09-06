@@ -8,8 +8,11 @@
 - Full plan and stage breakdown: `docs/roster/index.md`; design decisions: `docs/roster/adr.md`.
 - Stage 01 was auth + chapter gate only. Stage 02 added the domain schema: events, the time-slot
   grid (phases/time_slots), tracks, and the seeded role master (event_roles).
-- **Stage 03 (this PR)** adds demand input: the `demands` table (min/ideal/leadMin/newMax per
+- **Stage 03** added demand input: the `demands` table (min/ideal/leadMin/newMax per
   time_slot x track x role) and the `/e/:id/design` demand matrix.
+- **Stage 04 (this PR)** adds staff registration: `applications`/`application_skills`/
+  `availabilities`, the public `/apply/:applyToken` form, and `/e/:id/staff`'s proxy-add entry
+  point (ADR-008).
 
 ## Code map
 
@@ -22,7 +25,8 @@
 | Events (`events` table CRUD, status lifecycle) | `app/features/events/` |
 | Schedule (phases, the time-slot grid + its regenerate/reconcile logic, tracks, roles, event_roles) | `app/features/schedule/` |
 | Demand (`demands` table: min/ideal/leadMin/newMax per time_slot x track x role; matrix row/column assembly; the `/e/:id/design` demand card) | `app/features/demand/` |
-| Domain schema not yet built (applications, assignments, revisions) | Stage 04 onward, see `docs/roster/index.md` §4 |
+| Staff registration (applications, application_skills, availabilities; proxy-registration claim; apply-form validation) | `app/features/applications/` (README) |
+| Domain schema not yet built (assignments, revisions) | Stage 07/08 onward, see `docs/roster/index.md` §4 |
 
 ## Route surface
 
@@ -33,6 +37,8 @@ app/routes/
   home.tsx          "/" — event list (auth + chapter required)
   events.new.tsx      "/events/new" — create an event
   e.$id.design.tsx    "/e/:id/design" — event settings, phases/time slots, tracks, roles, demand
+  e.$id.staff.tsx     "/e/:id/staff" — public apply URL + proxy-add entry point (auth + chapter)
+  apply.$token.tsx    "/apply/:token" — public staff registration (sign-in only, no Chapter)
   signin.tsx         "/signin" — redirects into the gdg-lib auth flow
   no-chapter.tsx      "/no-chapter"
   api.auth.$.ts       "/api/auth/*" — gdg-lib RP plumbing

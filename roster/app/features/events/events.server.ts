@@ -166,6 +166,25 @@ export async function getEvent(db: D1Database, id: string): Promise<EventRecord 
   return row ? toEvent(row) : null;
 }
 
+/**
+ * Looks an event up by its public `apply_token` (docs/roster/04-
+ * applications.md "Design" §5): `/apply/:applyToken` never sees an event id,
+ * so this is the only way that route resolves an event. Added here rather
+ * than in `~/features/applications/` because event lookups are this
+ * feature's responsibility regardless of which route calls them — mirrors
+ * `getEvent`'s shape exactly, including the `deleted_at IS NULL` filter.
+ */
+export async function getEventByApplyToken(
+  db: D1Database,
+  applyToken: string,
+): Promise<EventRecord | null> {
+  const row = await db
+    .prepare(`SELECT ${EVENT_COLS} FROM events WHERE apply_token = ? AND deleted_at IS NULL`)
+    .bind(applyToken)
+    .first<EventRow>();
+  return row ? toEvent(row) : null;
+}
+
 /** Chapter's events, newest event date first (docs/roster/02-domain-schema.md screen `/`). */
 export async function listEventsForChapters(
   db: D1Database,
