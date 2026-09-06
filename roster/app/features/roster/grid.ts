@@ -1,0 +1,179 @@
+import type {
+  Assignments,
+  Demand,
+  Report,
+  SolverSlot,
+  ViolationKind,
+} from "~/features/solver/types";
+import { demandKey, parseAssignmentKey, parseDemandKey } from "~/features/solver/types";
+
+/**
+ * Pure grid-assembly logic shared by the 3 views on `/e/:id/roster`
+ * (docs/roster/07-roster-manual-edit.md "Design" §3). No D1, no React — the
+ * route loader hands this file plain `SolverInput`/`Assignments`/`Report`
+ * data (already fetched/computed), and every component ( `StaffGrid` /
+ * `RoleGrid` / `DemandCoverageGrid`) builds its rows/columns/merges through
+ * these functions rather than re-deriving grouping logic inline, so the 3
+ * views can never silently disagree about who is assigned where.
+ */
+
+export type GridColumn = { trackId: string; roleId: string };
+
+export function gridColumnKey(trackId: string, roleId: string): string {
+  return `${trackId}:${roleId}`;
+}
+
+type SortableTrack = { id: string; sortOrder: number };
+type SortableRole = { id: string; sortOrder: number };
+
+/** Every (track, role) pair with at least one `ideal > 0` demand cell,
+ * ordered by track then role sort order — shared by `RoleGrid` and
+ * `DemandCoverageGrid` (docs/roster/07-roster-manual-edit.md Design §3b/c). */
+export function buildGridColumns(
+  demands: ReadonlyMap<string, Demand>,
+  tracks: readonly SortableTrack[],
+  roles: readonly SortableRole[],
+): GridColumn[] {
+  const trackOrder = new Map(tracks.map((t) => [t.id, t.sortOrder]));
+  const roleOrder = new Map(roles.map((r) => [r.id, r.sortOrder]));
+
+  const seen = new Map<string, GridColumn>();
+  for (const key of demands.keys()) {
+    const { trackId, roleId } = parseDemandKey(key);
+    const colKey = gridColumnKey(trackId, roleId);
+    if (!seen.has(colKey)) seen.set(colKey, { trackId, roleId });
+  }
+
+  return [...seen.values()].sort((a, b) => {
+    const trackDiff =
+      (trackOrder.get(a.trackId) ?? Number.POSITIVE_INFINITY) -
+      (trackOrder.get(b.trackId) ?? Number.POSITIVE_INFINITY);
+    if (trackDiff !== 0) return trackDiff;
+    return (
+      (roleOrder.get(a.roleId) ?? Number.POSITIVE_INFINITY) -
+      (roleOrder.get(b.roleId) ?? Number.POSITIVE_INFINITY)
+    );
+  });
+}
+
+/** demandKey -> sorted applicationIds currently assigned there. Sorted (not
+ * insertion order) so two callers building the same cell always see the
+ * same member order, and so `sameMembers` below can compare by simple array
+ * equality. */
+export function groupAssignmentsByCell(assignments: Assignments): Map<string, string[]> {
+  const byCell = new Map<string, string[]>();
+  for (const [key, value] of assignments) {
+    const { applicationId, slotId } = parseAssignmentKey(key);
+    const cellKey = demandKey(slotId, value.trackId, value.roleId);
+    const list = byCell.get(cellKey);
+    if (list) list.push(applicationId);
+    else byCell.set(cellKey, [applicationId]);
+  }
+  for (const list of byCell.values()) list.sort();
+  return byCell;
+}
+
+/** applicationId -> (slotId -> that person's assignment) — what `StaffGrid` reads one column at a time. */
+export function groupAssignmentsByApplication(
+  assignments: Assignments,
+): Map<string, Map<string, { trackId: string; roleId: string }>> {
+  const byApp = new Map<string, Map<string, { trackId: string; roleId: string }>>();
+  for (const [key, value] of assignments) {
+    const { applicationId, slotId } = parseAssignmentKey(key);
+    const bySlot = byApp.get(applicationId) ?? new Map();
+    bySlot.set(slotId, { trackId: value.trackId, roleId: value.roleId });
+    byApp.set(applicationId, bySlot);
+  }
+  return byApp;
+}
+
+function sameMembers(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((id, i) => id === b[i]);
+}
+
+function sameDemand(a: Demand | null, b: Demand | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.min === b.min && a.ideal === b.ideal && a.leadMin === b.leadMin && a.newMax === b.newMax;
+}
+
+export type RoleGridCell =
+  | { kind: "start"; span: number; memberIds: string[]; demand: Demand | null }
+  | { kind: "continued" };
+
+/**
+ * One column's vertical merge groups for the role-view (docs/roster/07-
+ * roster-manual-edit.md "Design" §3b: "顔ぶれと需要が変わらない限り縦に結合し
+ * ...顔ぶれか需要が変われば縦結合が切れる"). Returns one entry per slot
+ * (`slots.length` long, in the same order): the first slot of a run is
+ * `"start"` with `span` = how many following rows to merge under it
+ * (render as `rowSpan={span}`); every other slot in that run is
+ * `"continued"` (render nothing — an HTML rowSpan already covers it).
+ *
+ * A run breaks the moment EITHER the assigned member set OR the demand
+ * values change between consecutive slots — checking only one of the two
+ * would show a stale headcount target or hide an actual staffing change as
+ * if the slots were identical.
+ */
+export function buildRoleGridColumn(
+  slots: readonly SolverSlot[],
+  trackId: string,
+  roleId: string,
+  assignments: Assignments,
+  demands: ReadonlyMap<string, Demand>,
+): RoleGridCell[] {
+  const byCell = groupAssignmentsByCell(assignments);
+  const perSlot = slots.map((slot) => {
+    const key = demandKey(slot.id, trackId, roleId);
+    return { memberIds: byCell.get(key) ?? [], demand: demands.get(key) ?? null };
+  });
+
+  const cells: RoleGridCell[] = new Array(slots.length);
+  let i = 0;
+  while (i < perSlot.length) {
+    let span = 1;
+    while (
+      i + span < perSlot.length &&
+      sameMembers(perSlot[i].memberIds, perSlot[i + span].memberIds) &&
+      sameDemand(perSlot[i].demand, perSlot[i + span].demand)
+    ) {
+      span++;
+    }
+    cells[i] = { kind: "start", span, memberIds: perSlot[i].memberIds, demand: perSlot[i].demand };
+    for (let j = 1; j < span; j++) cells[i + j] = { kind: "continued" };
+    i += span;
+  }
+  return cells;
+}
+
+/** Per-(slot,track,role) view of `Report`'s shortages/violations — the
+ * `DemandCoverageGrid`'s single source of "is this cell a problem", built by
+ * reshaping `evaluate()`'s own output rather than re-judging shortages here
+ * (docs/roster/07-roster-manual-edit.md "制約": "evaluate を再実装しない"). */
+export type CellReport = {
+  headcountShort: number;
+  leadShort: number;
+  violations: ViolationKind[];
+};
+
+export function indexReportByCell(report: Report): Map<string, CellReport> {
+  const byCell = new Map<string, CellReport>();
+  const entry = (key: string): CellReport => {
+    const existing = byCell.get(key);
+    if (existing) return existing;
+    const fresh: CellReport = { headcountShort: 0, leadShort: 0, violations: [] };
+    byCell.set(key, fresh);
+    return fresh;
+  };
+
+  for (const s of report.shortages) {
+    const key = demandKey(s.slotId, s.trackId, s.roleId);
+    const cell = entry(key);
+    if (s.kind === "headcount") cell.headcountShort += s.amount;
+    else cell.leadShort += s.amount;
+  }
+  for (const v of report.violations) {
+    entry(demandKey(v.slotId, v.trackId, v.roleId)).violations.push(v.kind);
+  }
+  return byCell;
+}
