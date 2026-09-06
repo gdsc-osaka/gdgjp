@@ -74,10 +74,10 @@ const LIB_FEATURE_IMPORT_ALLOWLIST = new Set<string>();
 const WORKER_INTERNALS_IMPORT_ALLOWLIST = new Set<string>();
 
 // `app/lib/` holds only the domain-free primitives that exist right now.
-// Stage 02 adds `db.server.ts`; a later stage may add `utils.ts`. Whoever
-// adds one updates this set in the same change — see
-// docs/roster/01-workspace-scaffold.md "全ステージ共通の制約".
-const LIB_ALLOWED_FILES = new Set(["return-to.ts"]);
+// Stage 02 adds `db.server.ts` (D1 handle accessor only — no queries); a
+// later stage may add `utils.ts`. Whoever adds one updates this set in the
+// same change — see docs/roster/01-workspace-scaffold.md "全ステージ共通の制約".
+const LIB_ALLOWED_FILES = new Set(["return-to.ts", "db.server.ts"]);
 
 // roster has no `app/components/` yet: no app shell, and per ADR-001 UI
 // primitives come from `@gdgjp/gdg-lib`, not a local `ui/` directory. Both

@@ -1,7 +1,10 @@
 import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
 export default [
-  index("routes/home.tsx"), // "/" — event list (auth + chapter). Empty until Stage 02.
+  index("routes/home.tsx"), // "/" — event list (auth + chapter).
+
+  route("events/new", "routes/events.new.tsx"),
+  route("e/:id/design", "routes/e.$id.design.tsx"),
 
   route("signin", "routes/signin.tsx"),
   route("no-chapter", "routes/no-chapter.tsx"),

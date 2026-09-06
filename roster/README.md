@@ -11,31 +11,35 @@ Full product plan: [`docs/roster/index.md`](../docs/roster/index.md). Design dec
 
 ## Status
 
-**Stage 01 of 9 — workspace scaffold only.** This PR gets the app to "sign-in works, chapter gate
-works" and nothing else. No event, schedule, demand, application, solver, or roster screen exists
-yet; every one of those is a later stage (see `docs/roster/index.md` §7 for the stage graph).
+**Stage 02 of 9 — domain schema and the time-slot grid.** Stage 01 got the app to "sign-in works,
+chapter gate works." This stage adds: creating an event, seeing it in a list, and editing its
+schedule (phases / time slots / tracks / roles) on `/e/:id/design`. Demand input, staff
+registration, the solver, manual roster editing, history, and public views are all later stages
+(see `docs/roster/index.md` §7 for the stage graph).
 
 ## Screens (once later stages land)
 
-| Screen | Path | Auth |
-|---|---|---|
-| Event list | `/` | Chapter required |
-| Design (time slots / tracks / roles / demand) | `/e/:id/design` | Chapter required |
-| Recruiting / staff | `/e/:id/staff` | Chapter required |
-| Shift schedule | `/e/:id/roster` | Chapter required |
-| Share | `/e/:id/share` | Chapter required |
-| Staff registration (public) | `/apply/:applyToken` | Sign-in only, no chapter |
-| Public shift view | `/r/:viewToken` | None |
+| Screen | Path | Auth | Status |
+|---|---|---|---|
+| Event list | `/` | Chapter required | Done (Stage 02) |
+| Event creation | `/events/new` | Chapter required | Done (Stage 02) |
+| Design (time slots / tracks / roles) | `/e/:id/design` | Chapter required | Done (Stage 02); demand input lands Stage 03 |
+| Recruiting / staff | `/e/:id/staff` | Chapter required | Stage 04/05 |
+| Shift schedule | `/e/:id/roster` | Chapter required | Stage 07/08 |
+| Share | `/e/:id/share` | Chapter required | Stage 09 |
+| Staff registration (public) | `/apply/:applyToken` | Sign-in only, no chapter | Stage 04 |
+| Public shift view | `/r/:viewToken` | None | Stage 09 |
 
-Today only the auth plumbing exists: `/` (placeholder), `/signin`, `/no-chapter`,
-`/api/auth/*`, `/auth/signout`, `/dev/login`, `/dev/seed`.
+Routes today: `/`, `/events/new`, `/e/:id/design`, `/signin`, `/no-chapter`, `/api/auth/*`,
+`/auth/signout`, `/dev/login`, `/dev/seed`.
 
 ## How it works
 
 React Router v7 (SSR) on a Cloudflare Worker, scaffolded from `ost/` (ADR-001). D1 (`DB`) holds
-the relying-party auth tables today; domain tables (`events`, `time_slots`, `tracks`, `roles`,
-`demands`, `applications`, `assignments`, `revisions`, ...) land starting Stage 02. No ORM —
-hand-written D1 queries once Stage 02 adds `app/lib/db.server.ts`. The shift-generation solver
+the relying-party auth tables plus the Stage 02 domain schema: `events`, `phases`, `time_slots`,
+`tracks`, `roles` (seeded, ADR-007), `event_roles`. Later stages add `demands`, `applications`,
+`assignments`, `revisions`, .... No ORM — every feature hand-writes D1 queries in its own
+`*.server.ts` (`app/lib/db.server.ts` is only a D1 handle accessor). The shift-generation solver
 (Stage 06) is a pure TypeScript module with no D1 or React dependency, run from a Worker action.
 
 Full conventions and file-level notes are in `CLAUDE.md`; the code map is in `ARCHITECTURE.md`.
