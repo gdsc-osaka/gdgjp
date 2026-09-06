@@ -12,6 +12,7 @@ import { action, loader } from "./e.$id.staff";
 
 const MIGRATIONS = [
   fileURLToPath(new URL("../../migrations/0002_domain.sql", import.meta.url)),
+  fileURLToPath(new URL("../../migrations/0003_demands.sql", import.meta.url)),
   fileURLToPath(new URL("../../migrations/0004_applications.sql", import.meta.url)),
 ];
 
@@ -159,6 +160,85 @@ describe("e.$id.staff loader", () => {
       skills: [{ roleId: "reception", level: "lead", pref: 1 }],
       availability: [{ timeSlotId: "slot_1", value: "o" }],
     });
+  });
+
+  /**
+   * docs/roster/05-staff-supply-demand.md "回帰として固定すべきテスト",
+   * exercised end-to-end through the loader: two `exp`-level applicants meet
+   * headcount but the slot still needs to surface a lead shortage.
+   */
+  it("surfaces a lead shortage in supplyRows and shortageSummary, and counts registeredCount excluding withdrawals", async () => {
+    await testDb
+      .prepare(
+        "INSERT INTO tracks (id, event_id, name, color, shared, sort_order) VALUES ('trk_1', 'evt_1', '全体', '#000', 1, 0)",
+      )
+      .run();
+    await testDb
+      .prepare(
+        `INSERT INTO demands (event_id, time_slot_id, track_id, role_id, min_count, ideal_count, lead_min, new_max)
+         VALUES ('evt_1', 'slot_1', 'trk_1', 'reception', 2, 2, 1, 99)`,
+      )
+      .run();
+
+    const now = new Date().toISOString();
+    for (const [id, withdrawn] of [
+      ["app_1", 0],
+      ["app_2", 0],
+      ["app_withdrawn", 1],
+    ] as const) {
+      await testDb
+        .prepare(
+          `INSERT INTO applications (id, event_id, user_id, email, name, withdrawn, created_at, updated_at)
+           VALUES (?, 'evt_1', ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(id, `user_${id}`, `${id}@example.com`, id, withdrawn, now, now)
+        .run();
+      await testDb
+        .prepare(
+          "INSERT INTO application_skills (application_id, role_id, level, pref) VALUES (?, 'reception', 'exp', 2)",
+        )
+        .bind(id)
+        .run();
+      await testDb
+        .prepare(
+          "INSERT INTO availabilities (application_id, time_slot_id, value) VALUES (?, 'slot_1', 'o')",
+        )
+        .bind(id)
+        .run();
+    }
+
+    asOwner();
+    const result = await callLoader(
+      new Request("http://localhost/e/evt_1/staff"),
+      "evt_1",
+      asD1(testDb),
+    );
+
+    expect(result.registeredCount).toBe(2);
+    expect(result.supplyRows).toEqual([
+      {
+        label: "09:00–10:00",
+        phaseName: null,
+        slot: {
+          timeSlotId: "slot_1",
+          need: 2,
+          available: 2,
+          tight: [{ roleId: "reception", kind: "lead", lack: 1 }],
+        },
+      },
+    ]);
+    expect(result.shortageSummary).toEqual([{ roleId: "reception", kind: "lead" }]);
+  });
+
+  it("canApplyNow reflects the event's status (draft cannot apply)", async () => {
+    asOwner();
+    const result = await callLoader(
+      new Request("http://localhost/e/evt_1/staff"),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result.event.status).toBe("draft");
+    expect(result.canApplyNow).toBe(false);
   });
 });
 
@@ -437,5 +517,58 @@ describe("e.$id.staff action (owner correction)", () => {
         asD1(testDb),
       ),
     ).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("e.$id.staff action (updateStatus)", () => {
+  let testDb: TestD1Database;
+
+  beforeEach(async () => {
+    vi.mocked(requireUserWithChapter).mockReset();
+    testDb = createTestD1(MIGRATIONS);
+    await seedEvent(testDb);
+    asOwner();
+  });
+
+  function buildRequest(fields: Record<string, string>): Request {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    return new Request("http://localhost/e/evt_1/staff", { method: "POST", body: form });
+  }
+
+  it("rejects an invalid status value", async () => {
+    const result = await callAction(
+      buildRequest({ intent: "updateStatus", status: "bogus" }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ error: "不明なステータスです。", intent: "updateStatus" });
+  });
+
+  it("updates the event's status, preserving stepMin/maxConsecutive/noSoloNewcomer", async () => {
+    await testDb
+      .prepare(
+        "UPDATE events SET step_min = 30, max_consecutive = 6, no_solo_newcomer = 0 WHERE id = 'evt_1'",
+      )
+      .run();
+
+    const result = await callAction(
+      buildRequest({ intent: "updateStatus", status: "open" }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ ok: true, intent: "updateStatus" });
+
+    const row = await testDb
+      .prepare(
+        "SELECT status, step_min, max_consecutive, no_solo_newcomer FROM events WHERE id = 'evt_1'",
+      )
+      .first<{
+        status: string;
+        step_min: number;
+        max_consecutive: number;
+        no_solo_newcomer: number;
+      }>();
+    expect(row).toEqual({ status: "open", step_min: 30, max_consecutive: 6, no_solo_newcomer: 0 });
   });
 });

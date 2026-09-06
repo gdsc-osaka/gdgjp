@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   correctApplication,
   createApplication,
@@ -21,20 +21,29 @@ import { DEFAULT_PARTY, type PartyStatus } from "~/features/applications/types";
 import { validateApplyForm } from "~/features/applications/validate";
 import { requireUserWithChapter } from "~/features/auth/auth-redirect.server";
 import { canEditApplication, canManageEvent } from "~/features/auth/permissions";
-import { getEvent } from "~/features/events/events.server";
+import { ApplyLinkCard } from "~/features/events/components/ApplyLinkCard";
+import { getEvent, updateEventSettings } from "~/features/events/events.server";
+import { canApply, isEventStatus } from "~/features/events/status";
 import { listPhases, listTimeSlots } from "~/features/schedule/schedule.server";
 import { listEventRoleIds, listRoles } from "~/features/schedule/tracks.server";
-import { listApplicantDetailsForEvent } from "~/features/supply/supply.server";
+import { ShortageSummary } from "~/features/supply/components/ShortageSummary";
+import { SupplyDemandRow } from "~/features/supply/components/SupplyDemandRow";
+import { summarizeShortages } from "~/features/supply/supply";
+import {
+  getSupplyDemandForEvent,
+  listApplicantDetailsForEvent,
+} from "~/features/supply/supply.server";
 import { getDb } from "~/lib/db.server";
 import type { Route } from "./+types/e.$id.staff";
 
 /**
- * `/e/:id/staff` (docs/roster/05-staff-supply-demand.md "Design" §2, §4):
+ * `/e/:id/staff` (docs/roster/05-staff-supply-demand.md "Design" §2-§4):
  * Chapter-gated, same access pattern as `/e/:id/design`. Stage 04 built only
- * the proxy-add entry point; this stage adds the staff list (`StaffTable`)
- * and owner-correction drawer (`StaffDrawer`) — the supply-demand view
- * (`SupplyDemandRow`/`ShortageSummary`) and the apply-URL/status card
- * (`ApplyLinkCard`) land in a later commit on this same route.
+ * the proxy-add entry point; Stage 05 adds the staff list (`StaffTable`),
+ * owner-correction drawer (`StaffDrawer`), the supply-demand view
+ * (`SupplyDemandRow`/`ShortageSummary`), and the apply-URL/status card
+ * (`ApplyLinkCard`). No new route — every addition is new loader/action
+ * surface on this same URL.
  */
 // Deliberately loose — a sanity check against typos, not RFC 5322
 // validation. Don't tighten this without checking real-world addresses it'd
@@ -87,14 +96,31 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const staffDetails = Object.fromEntries(
     applicantDetails.map((d) => [d.application.id, toStaffDrawerDetail(d)]),
   );
+  const registeredCount = applicantDetails.filter((d) => !d.application.withdrawn).length;
+
+  // Reuses the applicantDetails already fetched above instead of a second
+  // application_skills/availabilities round trip (~/features/supply/
+  // supply.server#getSupplyDemandForEvent's third argument).
+  const supplyDemand = await getSupplyDemandForEvent(db, event.id, applicantDetails);
+  const supplyBySlot = new Map(supplyDemand.map((s) => [s.timeSlotId, s]));
+  const supplyRows = timeSlotViews.map((slot) => ({
+    label: `${slot.start}–${slot.end}`,
+    phaseName: slot.phaseName,
+    slot: supplyBySlot.get(slot.id) ?? { timeSlotId: slot.id, need: 0, available: 0, tight: [] },
+  }));
+  const shortageSummary = summarizeShortages(supplyDemand);
 
   return {
-    event: { id: event.id, name: event.name, hasParty: event.hasParty },
+    event: { id: event.id, name: event.name, hasParty: event.hasParty, status: event.status },
     applyUrl: `${env.APP_URL}/apply/${event.applyToken}`,
+    canApplyNow: canApply(event.status),
     roles: availableRoles,
     timeSlots: timeSlotViews,
     staff,
     staffDetails,
+    registeredCount,
+    supplyRows,
+    shortageSummary,
   };
 }
 
@@ -149,6 +175,25 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
     await correctApplication(db, existing, { skills, availability });
     return { ok: true, intent: "correct" as const };
+  }
+
+  if (intent === "updateStatus") {
+    const status = String(form.get("status") ?? "");
+    if (!isEventStatus(status)) {
+      return { error: "不明なステータスです。", intent: "updateStatus" as const };
+    }
+    // updateEventSettings overwrites the whole settings row — pass the
+    // event's current stepMin/maxConsecutive/noSoloNewcomer through
+    // unchanged so this status-only submit can't clobber them (same
+    // "preserve what this form doesn't own" rule `correctApplication`
+    // follows for name/contact/party/note).
+    await updateEventSettings(db, event.id, {
+      stepMin: event.stepMin,
+      status,
+      maxConsecutive: event.maxConsecutive,
+      noSoloNewcomer: event.noSoloNewcomer,
+    });
+    return { ok: true, intent: "updateStatus" as const };
   }
 
   if (intent !== "proxyAdd") return { error: "不明な操作です。", intent: "unknown" as const };
@@ -226,7 +271,18 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 }
 
 export default function StaffPage({ loaderData, actionData }: Route.ComponentProps) {
-  const { event, applyUrl, roles, timeSlots, staff, staffDetails } = loaderData;
+  const {
+    event,
+    applyUrl,
+    canApplyNow,
+    roles,
+    timeSlots,
+    staff,
+    staffDetails,
+    registeredCount,
+    supplyRows,
+    shortageSummary,
+  } = loaderData;
   const actionIntent = actionData && "intent" in actionData ? actionData.intent : undefined;
   const error = actionData && "error" in actionData ? actionData.error : undefined;
   // A fresh object only on an actual success — an error response is also a
@@ -239,6 +295,9 @@ export default function StaffPage({ loaderData, actionData }: Route.ComponentPro
   const staffError = actionIntent === "correct" || actionIntent === "withdraw" ? error : undefined;
   const staffSucceeded =
     actionIntent === "correct" || actionIntent === "withdraw" ? succeeded : undefined;
+  const statusError = actionIntent === "updateStatus" ? error : undefined;
+
+  const roleNameById = useMemo(() => new Map(roles.map((r) => [r.id, r.name])), [roles]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => {
@@ -252,6 +311,27 @@ export default function StaffPage({ loaderData, actionData }: Route.ComponentPro
         <h1 className="text-2xl font-bold">{event.name}</h1>
         <p className="text-sm text-neutral-600">募集・スタッフ</p>
       </div>
+
+      <ShortageSummary
+        registeredCount={registeredCount}
+        shortages={shortageSummary}
+        roleNameById={roleNameById}
+      />
+
+      <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
+        <h2 className="font-bold">需給ビュー</h2>
+        <ul className="space-y-2">
+          {supplyRows.map((row) => (
+            <SupplyDemandRow
+              key={row.slot.timeSlotId}
+              slot={row.slot}
+              label={row.label}
+              phaseName={row.phaseName}
+              roleNameById={roleNameById}
+            />
+          ))}
+        </ul>
+      </section>
 
       <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
         <h2 className="font-bold">スタッフ一覧</h2>
@@ -267,13 +347,12 @@ export default function StaffPage({ loaderData, actionData }: Route.ComponentPro
         onClose={() => setSelectedId(null)}
       />
 
-      <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
-        <h2 className="font-bold">公開登録 URL</h2>
-        <p className="text-sm text-neutral-600">
-          このURLを共有すると、Chapterに所属していない人でもスタッフとして登録できます。
-        </p>
-        <code className="block break-all rounded-xl bg-neutral-100 p-3 text-sm">{applyUrl}</code>
-      </section>
+      <ApplyLinkCard
+        applyUrl={applyUrl}
+        status={event.status}
+        canApplyNow={canApplyNow}
+        error={statusError}
+      />
 
       <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
         <h2 className="font-bold">代理登録</h2>

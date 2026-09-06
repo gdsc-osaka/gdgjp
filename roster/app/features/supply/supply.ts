@@ -35,6 +35,17 @@ export type RoleShortage =
   | { roleId: string; kind: "head"; lack: number }
   | { roleId: string; kind: "lead"; lack: number };
 
+/**
+ * UI label for a shortage's `kind` (docs/roster/05-staff-supply-demand.md
+ * "Design" §3): "頭数" for `head`, "経験者" for `lead`. Shared by
+ * `SupplyDemandRow`'s per-slot badge ("頭数: 配信 2名不足") and
+ * `ShortageSummary`'s recruiting-announcement list ("配信の経験者").
+ */
+export const SHORTAGE_KIND_LABELS: Record<RoleShortage["kind"], string> = {
+  head: "頭数",
+  lead: "経験者",
+};
+
 /** One time slot's supply-vs-demand snapshot. */
 export type SlotSupplyDemand = {
   timeSlotId: string;
