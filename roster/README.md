@@ -11,13 +11,16 @@ Full product plan: [`docs/roster/index.md`](../docs/roster/index.md). Design dec
 
 ## Status
 
-**Stage 04 of 9 — staff self-registration and owner proxy-add.** Stage 01 got the app to
-"sign-in works, chapter gate works"; Stage 02 added creating an event, seeing it in a list, and
-editing its schedule (phases / time slots / tracks / roles) on `/e/:id/design`. This stage adds
-staff self-registration through a public link (`/apply/:applyToken`, ADR-008) and the owner-side
-proxy-add entry point (`/e/:id/staff`). Demand input (Stage 03) and the solver (Stage 06) build in
-parallel with this stage; the full staff list/supply-demand view, manual roster editing, history,
-and public views are all still later stages (see `docs/roster/index.md` §7 for the stage graph).
+**Stage 05 of 9 — staff supply/demand cross-check and owner corrections.** Stages 01/02 got the
+app to "sign-in works, chapter gate works, an event's schedule can be designed"; Stage 03 added
+demand input (`/e/:id/design`'s demand matrix); Stage 04 added staff self-registration through a
+public link (`/apply/:applyToken`, ADR-008) and the owner-side proxy-add entry point; Stage 06
+(built in parallel) added the shift-generation solver as a pure module, not yet wired into any
+route. **This stage** cross-checks Stage 03's demand against Stage 04's applications
+(`app/features/supply/`) — distinguishing a headcount shortage from an experience (`lead`)
+shortage — and finishes `/e/:id/staff`: the staff list, an owner-correction drawer, the
+supply-demand view, and the apply-URL/status card. Manual roster editing, history, and public
+views are still later stages (see `docs/roster/index.md` §7 for the stage graph).
 
 ## Screens (once later stages land)
 
@@ -25,8 +28,8 @@ and public views are all still later stages (see `docs/roster/index.md` §7 for 
 |---|---|---|---|
 | Event list | `/` | Chapter required | Done (Stage 02) |
 | Event creation | `/events/new` | Chapter required | Done (Stage 02) |
-| Design (time slots / tracks / roles) | `/e/:id/design` | Chapter required | Done (Stage 02); demand input lands Stage 03 |
-| Recruiting / staff | `/e/:id/staff` | Chapter required | Done (Stage 04): apply URL + proxy-add only; full staff list/supply-demand view is Stage 05 |
+| Design (time slots / tracks / roles) | `/e/:id/design` | Chapter required | Done (Stage 02/03) |
+| Recruiting / staff | `/e/:id/staff` | Chapter required | Done (Stage 04/05): apply URL + status, proxy-add, staff list, owner corrections, supply-demand view |
 | Shift schedule | `/e/:id/roster` | Chapter required | Stage 07/08 |
 | Share | `/e/:id/share` | Chapter required | Stage 09 |
 | Staff registration (public) | `/apply/:applyToken` | Sign-in only, no chapter | Done (Stage 04) |
@@ -39,12 +42,14 @@ Routes today: `/`, `/events/new`, `/e/:id/design`, `/e/:id/staff`, `/apply/:toke
 
 React Router v7 (SSR) on a Cloudflare Worker, scaffolded from `ost/` (ADR-001). D1 (`DB`) holds
 the relying-party auth tables, the Stage 02 domain schema (`events`, `phases`, `time_slots`,
-`tracks`, `roles` seeded per ADR-007, `event_roles`), and the Stage 04 registration schema
-(`applications`, `application_skills`, `availabilities` — two UNIQUE indexes enforce ADR-008's
-proxy-registration dedup). Later stages add `demands`, `assignments`, `revisions`, .... No ORM —
-every feature hand-writes D1 queries in its own `*.server.ts` (`app/lib/db.server.ts` is only a
-D1 handle accessor). The shift-generation solver (Stage 06) is a pure TypeScript module with no
-D1 or React dependency, run from a Worker action.
+`tracks`, `roles` seeded per ADR-007, `event_roles`), the Stage 03 demand schema (`demands`), and
+the Stage 04 registration schema (`applications`, `application_skills`, `availabilities` — two
+UNIQUE indexes enforce ADR-008's proxy-registration dedup). Stage 05 adds no table — it only
+cross-checks Stage 03/04's data (`app/features/supply/`). Later stages add `assignments`,
+`revisions`, .... No ORM — every feature hand-writes D1 queries in its own `*.server.ts`
+(`app/lib/db.server.ts` is only a D1 handle accessor). The shift-generation solver (Stage 06) is a
+pure TypeScript module with no D1 or React dependency, run from a Worker action (not yet wired to
+a route).
 
 Full conventions and file-level notes are in `CLAUDE.md`; the code map is in `ARCHITECTURE.md`.
 
