@@ -6,6 +6,8 @@ export default [
   route("events/new", "routes/events.new.tsx"),
   route("e/:id/design", "routes/e.$id.design.tsx"),
 
+  route("apply/:token", "routes/apply.$token.tsx"), // public — sign-in only, no Chapter required
+
   route("signin", "routes/signin.tsx"),
   route("no-chapter", "routes/no-chapter.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),

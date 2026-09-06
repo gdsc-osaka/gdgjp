@@ -4,6 +4,7 @@ exports[`routes.ts URL surface > exposes a stable set of URLs 1`] = `
 [
   "/ (index)",
   "/api/auth/*",
+  "/apply/:token",
   "/auth/signout",
   "/dev/login",
   "/dev/seed",
