@@ -232,3 +232,18 @@ export async function updateEventSettings(
     .first<EventRow>();
   return row ? toEvent(row) : null;
 }
+
+/**
+ * Persists a new solver seed (Stage 07's "seed を変更できるようにする" —
+ * docs/roster/07-roster-manual-edit.md "Design" §2). Every `solve()` run's
+ * seed is written back here so `events.seed` always reflects "the seed that
+ * produced the currently-persisted `assignments`" — the value a plain
+ * re-generate (no seed change) reuses, and what Stage 08's history
+ * comparison would read.
+ */
+export async function setEventSeed(db: D1Database, id: string, seed: number): Promise<void> {
+  await db
+    .prepare("UPDATE events SET seed = ? WHERE id = ? AND deleted_at IS NULL")
+    .bind(seed, id)
+    .run();
+}
