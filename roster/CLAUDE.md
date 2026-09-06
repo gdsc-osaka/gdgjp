@@ -5,12 +5,17 @@ self-register through a public link, a solver auto-generates a draft schedule, o
 and publish. Full plan: `docs/roster/index.md`. Design decisions: `docs/roster/adr.md`. Read both
 before touching this app — every stage file assumes their domain model and solver spec.
 
-**Stage 04 of 9** (Stages 01/02 merged; 03/06 build in parallel with 04). Stage 01 was
-auth/chapter gate only; Stage 02 added the domain schema (events, the time-slot grid, tracks, the
-seeded role master). **This stage** adds staff registration: `applications` /
-`application_skills` / `availabilities`, the public `/apply/:applyToken` form, and
-`/e/:id/staff`'s proxy-add entry point — see `README.md` "Status" and `ARCHITECTURE.md` for the
-current code map.
+**Stage 05 of 9** (Stages 01, 02, 03, 04, 06 merged). Stage 01 was auth/chapter gate only; Stage 02
+added the domain schema (events, the time-slot grid, tracks, the seeded role master); Stage 03
+added demand input (the `demands` table, the `/e/:id/design` demand matrix); Stage 04 added staff
+registration (`applications`/`application_skills`/`availabilities`, the public
+`/apply/:applyToken` form, `/e/:id/staff`'s proxy-add entry point); Stage 06 (the solver) is a
+pure TS module built in parallel, not yet wired into any route. **This stage** cross-checks Stage
+03's demand against Stage 04's applications (`app/features/supply/`: headcount vs. experience
+shortage, kept as two distinct kinds — see "Data" below), adds the staff list (`StaffTable`) and
+an owner-correction drawer (`StaffDrawer`) to `/e/:id/staff`, and adds the apply-link/status card
+(`ApplyLinkCard`). No new route, no new migration — see `README.md` "Status" and `ARCHITECTURE.md`
+for the current code map.
 
 ## Routes (`app/routes.ts`, config mode)
 
@@ -22,9 +27,10 @@ current code map.
   (add/reorder/delete), role selection, and the demand matrix (Stage 03: `min`/`ideal`/`leadMin`/
   `newMax` per time-slot x track x role, phase-wide or per-slot). Chapter-gated via
   `canManageEvent`; 403 for a different chapter.
-- `/e/:id/staff` — the public apply URL to share, and `ProxyAddDialog` (owner-side proxy
-  registration by email, ADR-008). Chapter-gated like `/e/:id/design`. The staff list /
-  supply-demand view is Stage 05's job — this stage builds only the entry point.
+- `/e/:id/staff` — chapter-gated like `/e/:id/design`. The staff list (`StaffTable`) with an
+  owner-correction drawer (`StaffDrawer`), the supply-vs-demand view (`SupplyDemandRow`/
+  `ShortageSummary`), the apply-URL/status card (`ApplyLinkCard`), and `ProxyAddDialog`
+  (owner-side proxy registration by email, ADR-008).
 - `/apply/:token` — **public** staff self-registration. `getOptionalUser`, never
   `requireUserWithChapter` — Chapter membership must not be required to register as staff. Event
   lookup is by `apply_token` alone (`getEventByApplyToken`); the event id never appears in the
@@ -47,9 +53,12 @@ current code map.
   `app/features/schedule/tracks.server.ts` (tracks, the roles master, event_roles),
   `app/features/demand/demand.server.ts` (the demand matrix's D1 access — `ideal_count = 0` reads
   and writes identically to the row not existing at all),
-  `app/features/applications/applications.server.ts` (applications CRUD, claim, dedup),
+  `app/features/applications/applications.server.ts` (applications CRUD, claim, dedup, and Stage
+  05's `correctApplication` — the owner-correction write bundle `StaffDrawer` uses),
   `app/features/applications/{skills,availability}.server.ts` (application_skills,
-  availabilities — both delete-all-then-insert on every save).
+  availabilities — both delete-all-then-insert on every save),
+  `app/features/supply/supply.server.ts` (Stage 05 — orchestrates the above plus
+  `demand.server.ts`'s reads into the per-time-slot supply-vs-demand snapshot; writes nothing).
 - `time_slots.idx` is 0-based and contiguous per event — the solver's "previous slot" check and
   the public view's contiguous-range grouping both depend on this. Regenerating the grid
   (`schedule.server.ts#regenerateTimeSlots`) keeps the `id` of any slot whose `(start_time,
@@ -68,8 +77,12 @@ current code map.
 ## Layout (ADR-003 — feature-first from day one)
 
 - Domain code goes in `app/features/<domain>/` (server + client + UI + colocated tests). Auth,
-  events, schedule, demand, applications, and the solver are the features so far:
-  `app/features/{auth,events,schedule,demand,applications,solver}/`.
+  events, schedule, demand, applications, the solver, and supply are the features so far:
+  `app/features/{auth,events,schedule,demand,applications,solver,supply}/`.
+- `supply/` (Stage 05) is the demand-vs-applications cross-check: it imports from both `demand/`
+  and `applications/` — the only sanctioned direction. Neither of those two may import from
+  `supply/`; `applications/staff-view.ts` deliberately takes a structurally-`supply/`-compatible
+  input type instead of importing `supply/`'s own type, to keep the dependency one-way.
 - `app/lib/` holds **only** cross-cutting primitives with no domain: `return-to.ts` and
   `db.server.ts` (a D1 handle accessor, no queries — Stage 02). Do not add another file here —
   `tests/architecture/layering.test.ts` whitelists the exact set and fails on any addition. A

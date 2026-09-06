@@ -19,13 +19,25 @@ Entry points:
 - `applications.server.ts` — D1 access: `createApplication`/`updateApplication`/
   `withdrawApplication`/`claimApplication`, plus `resolveOwnApplication`, the ADR-008 orchestration
   that auto-claims a matching unclaimed proxy row and is what both `/apply/:token`'s loader and
-  action use instead of trusting a client-submitted application id.
+  action use instead of trusting a client-submitted application id. Stage 05 adds
+  `correctApplication`, the owner-correction write bundle (`/e/:id/staff`'s `StaffDrawer`):
+  reactivates the row (`withdrawn: false`, same "save reactivates" convention as `/apply/:token`)
+  and wholesale-replaces skills/availability, all attributed `updatedBy: "owner"`.
 - `skills.server.ts` / `availability.server.ts` — `application_skills`/`availabilities` D1 access.
   Both are wholesale delete-all-then-insert on every save (mirrors
   `~/features/schedule/tracks.server#setEventRoles`'s shape) — there's no partial update path.
+- `staff-view.ts` (Stage 05) — pure view-model assembly for `/e/:id/staff`'s staff list:
+  `buildStaffRows` (role-id -> role-name resolution, o/d availability counts scoped to the event's
+  current time slots) and `toStaffDrawerDetail` (the drawer's editable snapshot). Takes a
+  structurally-`ApplicantDetail`-shaped input rather than importing
+  `~/features/supply`'s actual type — `applications/` must not depend on `supply/` (docs/roster/
+  05-staff-supply-demand.md "Design" §5: the dependency runs `supply/` -> `applications/`, never
+  the reverse).
 - `components/` — `ApplyForm` (the self-registration/edit form), `RoleSkillRow` (one role's
   checkbox + conditionally-shown level/pref selects), `AvailabilityGrid` (the ○/△/× grid with
-  終日○/すべて×/午前のみ/午後のみ shortcuts), `ProxyAddDialog` (owner-side proxy-add entry point).
+  終日○/すべて×/午前のみ/午後のみ shortcuts), `ProxyAddDialog` (owner-side proxy-add entry point),
+  `StaffTable` (Stage 05: the staff list), `StaffDrawer` (Stage 05: owner corrections — reuses
+  `RoleSkillRow`/`AvailabilityGrid` verbatim rather than reimplementing the input UI).
 
 ## The public-route PII constraint
 

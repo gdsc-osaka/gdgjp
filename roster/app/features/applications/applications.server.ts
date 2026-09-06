@@ -1,4 +1,6 @@
+import { type AvailabilityInput, setAvailability } from "./availability.server";
 import { type ExistingApplication, resolveApplication } from "./claim";
+import { type SkillInput, setApplicationSkills } from "./skills.server";
 import type { ApplicationRecord, PartyStatus, UpdatedBy } from "./types";
 
 /**
@@ -303,4 +305,41 @@ export async function withdrawApplication(
     .bind(updatedBy, now, id)
     .first<ApplicationRow>();
   return row ? toApplication(row) : null;
+}
+
+/**
+ * The owner-correction write bundle `/e/:id/staff`'s staff-list drawer uses
+ * (docs/roster/05-staff-supply-demand.md "Design" §2: level/availability/
+ * role corrections, always `updatedBy: "owner"`). Bundles three existing
+ * writes — this table plus `./skills.server#setApplicationSkills` and
+ * `./availability.server#setAvailability` — behind one call so the route's
+ * action doesn't re-implement the fan-out.
+ *
+ * `withdrawn: false` on every call mirrors `/apply/:token`'s own "save
+ * reactivates" convention (a withdrawn applicant's registration becomes
+ * active again the moment its content is saved) — a dedicated `withdraw`
+ * intent is the only path that sets `withdrawn: true`, exactly as
+ * `apply.$token.tsx`'s action splits "save" from "withdraw".
+ *
+ * `existing` is passed in (not re-fetched) because every caller already has
+ * it from the permission check it had to do first (`getApplicationById` +
+ * `canEditApplication`).
+ */
+export async function correctApplication(
+  db: D1Database,
+  existing: Pick<ApplicationRecord, "id" | "name" | "contact" | "party" | "note">,
+  input: { skills: readonly SkillInput[]; availability: readonly AvailabilityInput[] },
+): Promise<void> {
+  await updateApplication(db, existing.id, {
+    name: existing.name,
+    contact: existing.contact,
+    party: existing.party,
+    note: existing.note,
+    withdrawn: false,
+    updatedBy: "owner",
+  });
+  await Promise.all([
+    setApplicationSkills(db, existing.id, input.skills),
+    setAvailability(db, existing.id, input.availability),
+  ]);
 }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type TestD1Database, asD1, createTestD1 } from "../../../tests/helpers/sqlite-d1";
 import {
   claimApplication,
+  correctApplication,
   createApplication,
   getApplicationByEventAndEmail,
   getApplicationById,
@@ -11,6 +12,8 @@ import {
   updateApplication,
   withdrawApplication,
 } from "./applications.server";
+import { listAvailabilityForApplication } from "./availability.server";
+import { listSkillsForApplication } from "./skills.server";
 
 const MIGRATIONS = [
   fileURLToPath(new URL("../../../migrations/0002_domain.sql", import.meta.url)),
@@ -419,5 +422,94 @@ describe("getApplicationByEventAndEmail", () => {
     const db = asD1(testDb);
     await seedEvent(testDb);
     expect(await getApplicationByEventAndEmail(db, EVENT_ID, "nobody@example.com")).toBeNull();
+  });
+});
+
+/**
+ * docs/roster/05-staff-supply-demand.md "回帰として固定すべきテスト": an
+ * owner correction must land as `updated_by = 'owner'`, and (like
+ * `/apply/:token`'s own "save reactivates" convention) reactivate a
+ * withdrawn applicant rather than leaving them withdrawn.
+ */
+describe("correctApplication", () => {
+  let testDb: TestD1Database;
+  let db: D1Database;
+
+  beforeEach(async () => {
+    testDb = createTestD1(MIGRATIONS);
+    db = asD1(testDb);
+    await seedEvent(testDb);
+    await testDb
+      .prepare(
+        "INSERT INTO time_slots (id, event_id, idx, start_time, end_time) VALUES ('slot_1', 'evt_1', 0, '09:00', '10:00')",
+      )
+      .run();
+  });
+
+  it("sets updated_by to owner and replaces skills/availability wholesale", async () => {
+    const created = await createApplication(db, EVENT_ID, {
+      userId: "user_1",
+      email: "a@example.com",
+      name: "Self-reported",
+      contact: null,
+      party: "undecided",
+      note: null,
+      updatedBy: "self",
+    });
+    if (!created.ok) throw new Error("setup failed");
+
+    await correctApplication(db, created.application, {
+      skills: [{ roleId: "reception", level: "lead", pref: 1 }],
+      availability: [{ timeSlotId: "slot_1", value: "x" }],
+    });
+
+    const updated = await getApplicationById(db, EVENT_ID, created.application.id);
+    expect(updated?.updatedBy).toBe("owner");
+
+    expect(await listSkillsForApplication(db, created.application.id)).toEqual([
+      { applicationId: created.application.id, roleId: "reception", level: "lead", pref: 1 },
+    ]);
+    expect(await listAvailabilityForApplication(db, created.application.id)).toEqual([
+      { applicationId: created.application.id, timeSlotId: "slot_1", value: "x" },
+    ]);
+  });
+
+  it("reactivates a withdrawn application, the same 'save reactivates' rule as /apply/:token", async () => {
+    const created = await createApplication(db, EVENT_ID, {
+      userId: "user_1",
+      email: "a@example.com",
+      name: "A",
+      contact: null,
+      party: "undecided",
+      note: null,
+      updatedBy: "self",
+    });
+    if (!created.ok) throw new Error("setup failed");
+    await withdrawApplication(db, created.application.id, "self");
+
+    await correctApplication(db, created.application, { skills: [], availability: [] });
+
+    const updated = await getApplicationById(db, EVENT_ID, created.application.id);
+    expect(updated?.withdrawn).toBe(false);
+    expect(updated?.updatedBy).toBe("owner");
+  });
+
+  it("leaves email/userId untouched, like updateApplication", async () => {
+    const created = await createApplication(db, EVENT_ID, {
+      userId: "user_1",
+      email: "a@example.com",
+      name: "A",
+      contact: null,
+      party: "undecided",
+      note: null,
+      updatedBy: "self",
+    });
+    if (!created.ok) throw new Error("setup failed");
+
+    await correctApplication(db, created.application, { skills: [], availability: [] });
+
+    const updated = await getApplicationById(db, EVENT_ID, created.application.id);
+    expect(updated?.email).toBe("a@example.com");
+    expect(updated?.userId).toBe("user_1");
   });
 });
