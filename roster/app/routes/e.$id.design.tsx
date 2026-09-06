@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import { requireUserWithChapter } from "~/features/auth/auth-redirect.server";
 import { canManageEvent } from "~/features/auth/permissions";
+import { DemandMatrix } from "~/features/demand/components/DemandMatrix";
+import { StepMinImpactWarning } from "~/features/demand/components/StepMinImpactWarning";
+import { bulkUpsertDemands, listDemandsForEvent } from "~/features/demand/demand.server";
+import { type MatrixMode, timeSlotIdsForTarget } from "~/features/demand/matrix";
+import type { DemandValue } from "~/features/demand/types";
+import { firstDemandValidationMessage, validateDemand } from "~/features/demand/validate";
 import { EventSettingsForm } from "~/features/events/components/EventSettingsForm";
 import { getEvent, updateEventSettings } from "~/features/events/events.server";
 import { isEventStatus } from "~/features/events/status";
@@ -50,14 +56,25 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
   const event = await requireDesignAccess(env, request, params.id);
   const db = getDb(env);
-  const [phases, timeSlots, tracks, roles, eventRoleIds] = await Promise.all([
+  const [phases, timeSlots, tracks, roles, eventRoleIds, demands] = await Promise.all([
     listPhases(db, event.id),
     listTimeSlots(db, event.id),
     listTracks(db, event.id),
     listRoles(db),
     listEventRoleIds(db, event.id),
+    listDemandsForEvent(db, event.id),
   ]);
-  return { event, phases, timeSlots, tracks, roles, eventRoleIds };
+  return { event, phases, timeSlots, tracks, roles, eventRoleIds, demands };
+}
+
+/** `min`/`ideal`/`leadMin`/`newMax` from a demand form submission, or `null` if any is missing/non-numeric/negative. */
+function parseDemandValueFromForm(form: FormData): DemandValue | null {
+  const min = Number.parseInt(String(form.get("min") ?? ""), 10);
+  const ideal = Number.parseInt(String(form.get("ideal") ?? ""), 10);
+  const leadMin = Number.parseInt(String(form.get("leadMin") ?? ""), 10);
+  const newMax = Number.parseInt(String(form.get("newMax") ?? ""), 10);
+  if ([min, ideal, leadMin, newMax].some((n) => Number.isNaN(n) || n < 0)) return null;
+  return { min, ideal, leadMin, newMax };
 }
 
 async function regenerateAfterScheduleChange(
@@ -153,13 +170,59 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       await setEventRoles(db, event.id, roleIds);
       return { ok: true };
     }
+    // `saveDemand` / `copyDemand` back `~/features/demand/components/DemandDrawer`
+    // (docs/roster/03-demand-input.md "Design" §4). Both share the same
+    // value fields; `copyDemand` additionally fans the value out to the
+    // checked `copyTrackId` (same row, other track) and `copyRowKey` (other
+    // phase, same track) targets — see the drawer's module doc for why
+    // those two axes are independent rather than a full cross-product.
+    case "saveDemand":
+    case "copyDemand": {
+      const mode = String(form.get("mode") ?? "") as MatrixMode;
+      const rowKey = String(form.get("rowKey") ?? "");
+      const trackId = String(form.get("trackId") ?? "");
+      const roleId = String(form.get("roleId") ?? "");
+      if (!rowKey || !trackId || !roleId) return { error: "需要の対象が不正です。" };
+
+      const value = parseDemandValueFromForm(form);
+      if (!value) return { error: "需要の入力が不正です。" };
+      const validationErrors = validateDemand(value);
+      if (validationErrors.length > 0) {
+        return { error: firstDemandValidationMessage(value) ?? "需要の入力が不正です。" };
+      }
+
+      const timeSlots = await listTimeSlots(db, event.id);
+      const targets: { rowKey: string; trackId: string }[] =
+        intent === "copyDemand"
+          ? [
+              { rowKey, trackId },
+              ...form.getAll("copyTrackId").map((id) => ({ rowKey, trackId: String(id) })),
+              ...form.getAll("copyRowKey").map((key) => ({ rowKey: String(key), trackId })),
+            ]
+          : [{ rowKey, trackId }];
+
+      const entries = targets.flatMap((target) =>
+        timeSlotIdsForTarget(mode, target.rowKey, timeSlots).map((timeSlotId) => ({
+          timeSlotId,
+          trackId: target.trackId,
+          roleId,
+          ...value,
+        })),
+      );
+      await bulkUpsertDemands(db, event.id, entries);
+      return { ok: true };
+    }
     default:
       return { error: "不明な操作です。" };
   }
 }
 
 export default function EventDesign({ loaderData, actionData }: Route.ComponentProps) {
-  const { event, phases, timeSlots, tracks, roles, eventRoleIds } = loaderData;
+  const { event, phases, timeSlots, tracks, roles, eventRoleIds, demands } = loaderData;
+  // The "役割を追加" affordance only offers roles the event has actually
+  // selected (docs/roster/03-demand-input.md "Design" §3) — DemandMatrix
+  // expects that filtering to already be done by its caller.
+  const selectedRoles = roles.filter((r) => eventRoleIds.includes(r.id));
   return (
     <main className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-8 p-6 lg:p-10">
       <div>
@@ -186,6 +249,21 @@ export default function EventDesign({ loaderData, actionData }: Route.ComponentP
       </Section>
       <Section title="使う役割">
         <RolePicker roles={roles} selectedRoleIds={eventRoleIds} />
+      </Section>
+      <Section title="需要">
+        <StepMinImpactWarning
+          event={event}
+          phases={phases}
+          timeSlots={timeSlots}
+          demands={demands}
+        />
+        <DemandMatrix
+          phases={phases}
+          timeSlots={timeSlots}
+          tracks={tracks}
+          roles={selectedRoles}
+          demands={demands}
+        />
       </Section>
     </main>
   );
