@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import type { Assignments, Demand, Report } from "~/features/solver/types";
 import { demandKey } from "~/features/solver/types";
 import {
+  type CellReport,
+  VIOLATION_LABELS,
   buildGridColumns,
   gridColumnKey,
   groupAssignmentsByCell,
@@ -104,7 +106,7 @@ export function DemandCoverageGrid({
                           ) : null}
                           {cellReport && cellReport.violations.length > 0 ? (
                             <span className="text-[10px] font-bold text-gdg-red">
-                              {violationLabel(cellReport.violations[0])}
+                              {VIOLATION_LABELS[cellReport.violations[0]]}
                             </span>
                           ) : null}
                         </>
@@ -126,7 +128,7 @@ export function DemandCoverageGrid({
 function coverageClass(
   demand: Demand | undefined,
   current: number,
-  cellReport: { headcountShort: number; leadShort: number; violations: string[] } | undefined,
+  cellReport?: CellReport,
 ): string {
   if (!demand) return "border-transparent";
   if ((cellReport?.headcountShort ?? 0) > 0) return "border-gdg-red bg-gdg-red/10";
@@ -139,19 +141,12 @@ function coverageClass(
 function coverageLabel(
   demand: Demand | undefined,
   current: number,
-  cellReport: { headcountShort: number; leadShort: number; violations: string[] } | undefined,
+  cellReport?: CellReport,
 ): string {
   if (!demand) return "需要なし";
   const parts = [`現在${current}名 / 理想${demand.ideal}名`];
   if (cellReport?.headcountShort) parts.push(`頭数${cellReport.headcountShort}名不足`);
   if (cellReport?.leadShort) parts.push(`経験者${cellReport.leadShort}名不足`);
-  for (const v of cellReport?.violations ?? []) parts.push(violationLabel(v));
+  for (const v of cellReport?.violations ?? []) parts.push(VIOLATION_LABELS[v]);
   return parts.join("、");
-}
-
-function violationLabel(kind: string): string {
-  if (kind === "newcomerOver") return "初参加者超過";
-  if (kind === "soloNewcomer") return "初参加者のみ";
-  if (kind === "over") return "理想超過";
-  return kind;
 }

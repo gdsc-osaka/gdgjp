@@ -122,8 +122,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       return { error: "入力が不正です。", intent: "assign" as const };
     }
     const current = await readAssignmentsMap(db, event.id);
+    // Map.set on an existing key overwrites it in place, so this alone both
+    // moves the applicant off any OTHER cell they held in this slot and
+    // places them in the new one — no separate delete needed.
     for (const slotId of slotIds) {
-      current.delete(assignmentKey(applicationId, slotId));
       current.set(assignmentKey(applicationId, slotId), { trackId, roleId, locked: false });
     }
     await writeAssignments(db, event.id, current);

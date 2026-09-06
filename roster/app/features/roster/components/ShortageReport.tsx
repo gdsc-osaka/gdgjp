@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import type { Report, Shortage, Violation, ViolationKind } from "~/features/solver/types";
+import type { Report, Shortage, Violation } from "~/features/solver/types";
+import { VIOLATION_LABELS } from "../grid";
 
 const MAX_ITEMS = 8;
 
@@ -93,7 +94,7 @@ export function ShortageReport({ report, ...maps }: { report: Report } & NameMap
           {skillMixCapped.shown.map((v) => (
             <li key={`${v.slotId}:${v.trackId}:${v.roleId}:${v.kind}`}>
               <p>
-                {locationLabel(v, maps)} — {violationText(v.kind)}
+                {locationLabel(v, maps)} — {VIOLATION_LABELS[v.kind]}
               </p>
               {v.kind === "soloNewcomer" ? (
                 <p className="text-xs text-neutral-500">
@@ -132,9 +133,4 @@ function ShortageList({
       {restCount > 0 ? <p className="text-xs text-neutral-500">ほか{restCount}件</p> : null}
     </>
   );
-}
-
-function violationText(kind: ViolationKind): string {
-  if (kind === "newcomerOver") return "初参加者が上限超過";
-  return "初参加者だけの枠";
 }

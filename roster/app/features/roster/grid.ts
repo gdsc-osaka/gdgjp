@@ -157,6 +157,15 @@ export function buildRoleGridColumn(
   return cells;
 }
 
+/** The single source of `ViolationKind` display wording — shared by
+ * `ShortageReport` and `DemandCoverageGrid` so the same violation never
+ * reads as two different phrases depending on which view shows it. */
+export const VIOLATION_LABELS: Record<ViolationKind, string> = {
+  newcomerOver: "初参加者が上限超過",
+  soloNewcomer: "初参加者だけの枠",
+  over: "理想超過",
+};
+
 /** Per-(slot,track,role) view of `Report`'s shortages/violations — the
  * `DemandCoverageGrid`'s single source of "is this cell a problem", built by
  * reshaping `evaluate()`'s own output rather than re-judging shortages here
