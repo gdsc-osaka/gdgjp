@@ -1,4 +1,5 @@
 import type { UserChapter } from "@gdgjp/gdg-lib";
+import type { EventRecord } from "~/features/events/events.server";
 
 /**
  * Single point of permission judgment for roster (docs/roster/index.md §6
@@ -12,13 +13,10 @@ import type { UserChapter } from "@gdgjp/gdg-lib";
  * this file.
  */
 
-/** The subset of an event's fields permission checks need. Stage 02 will
- * import the real `Event` domain type and this alias will point at it;
- * callers should keep depending on this local alias rather than a concrete
- * shape so that swap stays a one-line change. */
-export type PermissionEvent = {
-  chapterId: number;
-};
+/** The subset of an event's fields permission checks need — derived from the
+ * real `EventRecord` domain type (Stage 02) via `Pick` rather than a hand-
+ * duplicated shape, so a future field rename here is caught by the compiler. */
+export type PermissionEvent = Pick<EventRecord, "chapterId">;
 
 /**
  * Can any of the caller's chapter memberships manage this event? True iff the
