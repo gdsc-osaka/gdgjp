@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { Assignments, Demand, Report } from "~/features/solver/types";
+import type { Assignments, Demand, Report, SolverInput } from "~/features/solver/types";
 import { assignmentKey, demandKey } from "~/features/solver/types";
 import {
   buildGridColumns,
   buildRoleGridColumn,
+  buildStaffCellCandidates,
   groupAssignmentsByApplication,
   groupAssignmentsByCell,
   indexReportByCell,
+  suggestForRange,
 } from "./grid";
 
 const SLOTS = [
@@ -198,5 +200,90 @@ describe("indexReportByCell", () => {
       leadShort: 0,
       violations: ["soloNewcomer"],
     });
+  });
+});
+
+const BASE_INPUT: SolverInput = {
+  slots: SLOTS,
+  tracks: [{ id: "trk_a" }],
+  roles: [{ id: "roleX" }],
+  demands: new Map([
+    [demandKey("s0", "trk_a", "roleX"), DEMAND],
+    [demandKey("s1", "trk_a", "roleX"), DEMAND],
+  ]),
+  applications: [
+    {
+      id: "app_a",
+      withdrawn: false,
+      skills: { roleX: { level: "lead", pref: 1 } },
+      availability: { s0: "o", s1: "x" },
+    },
+    {
+      id: "app_b",
+      withdrawn: false,
+      skills: { roleX: { level: "new", pref: 2 } },
+      availability: { s0: "o", s1: "o" },
+    },
+  ],
+  options: { noSoloNewcomer: true, maxConsecutive: 4, seed: 1 },
+};
+
+describe("buildStaffCellCandidates", () => {
+  it("lists every (track, role) with demand at the slot, with current fill counts", () => {
+    const assignments: Assignments = new Map([
+      [assignmentKey("app_a", "s0"), { trackId: "trk_a", roleId: "roleX", locked: false }],
+    ]);
+    const candidates = buildStaffCellCandidates(BASE_INPUT, assignments, "app_b", "s0");
+    expect(candidates).toEqual([
+      {
+        trackId: "trk_a",
+        roleId: "roleX",
+        demand: DEMAND,
+        current: 1,
+        leadCurrent: 1,
+        newCurrent: 0,
+        warnings: [],
+      },
+    ]);
+  });
+
+  it("does not warn 'already assigned' about the applicant's own current cell in this slot", () => {
+    const assignments: Assignments = new Map([
+      [assignmentKey("app_a", "s0"), { trackId: "trk_a", roleId: "roleX", locked: false }],
+    ]);
+    // app_a is asking to move within the same slot — hardViolations must be
+    // checked against a copy with their own entry removed first, or every
+    // candidate (including their current one) would wrongly warn.
+    const candidates = buildStaffCellCandidates(BASE_INPUT, assignments, "app_a", "s0");
+    expect(candidates[0].warnings).toEqual([]);
+  });
+
+  it("falls back to a synthetic withdrawn applicant instead of throwing when the id is unknown", () => {
+    const candidates = buildStaffCellCandidates(BASE_INPUT, new Map(), "app_ghost", "s0");
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].warnings.length).toBeGreaterThan(0);
+  });
+
+  it("returns [] for a slot the SolverInput doesn't know about", () => {
+    expect(buildStaffCellCandidates(BASE_INPUT, new Map(), "app_a", "no-such-slot")).toEqual([]);
+  });
+});
+
+describe("suggestForRange", () => {
+  it("excludes candidates who already occupy this exact cell", () => {
+    const assignments: Assignments = new Map([
+      [assignmentKey("app_a", "s0"), { trackId: "trk_a", roleId: "roleX", locked: false }],
+    ]);
+    const suggestions = suggestForRange(BASE_INPUT, assignments, ["s0"], "trk_a", "roleX");
+    expect(suggestions.map((s) => s.applicationId)).not.toContain("app_a");
+    expect(suggestions.map((s) => s.applicationId)).toContain("app_b");
+  });
+
+  it("unions warnings across every slot in the range, not just the first", () => {
+    // app_a is "o" at s0 but "x" at s1 — a single-slot suggestFor("s0")
+    // would miss the s1 problem entirely.
+    const suggestions = suggestForRange(BASE_INPUT, new Map(), ["s0", "s1"], "trk_a", "roleX");
+    const appA = suggestions.find((s) => s.applicationId === "app_a");
+    expect(appA?.warnings.some((w) => w.includes("稼働不可"))).toBe(true);
   });
 });

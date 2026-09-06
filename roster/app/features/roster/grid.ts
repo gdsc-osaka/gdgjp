@@ -1,11 +1,20 @@
+import { hardViolations } from "~/features/solver/constraints";
+import { type Suggestion, suggestFor } from "~/features/solver/suggest";
 import type {
   Assignments,
   Demand,
   Report,
+  SolverApplication,
+  SolverInput,
   SolverSlot,
   ViolationKind,
 } from "~/features/solver/types";
-import { demandKey, parseAssignmentKey, parseDemandKey } from "~/features/solver/types";
+import {
+  assignmentKey,
+  demandKey,
+  parseAssignmentKey,
+  parseDemandKey,
+} from "~/features/solver/types";
 
 /**
  * Pure grid-assembly logic shared by the 3 views on `/e/:id/roster`
@@ -176,4 +185,127 @@ export function indexReportByCell(report: Report): Map<string, CellReport> {
     entry(demandKey(v.slotId, v.trackId, v.roleId)).violations.push(v.kind);
   }
   return byCell;
+}
+
+/** One (track, role) option `CellDrawer` offers for a staff member's given
+ * time slot — the demand cell's current fill numbers plus `hardViolations`'
+ * warning strings for placing THIS applicant there. */
+export type StaffCellCandidate = {
+  trackId: string;
+  roleId: string;
+  demand: Demand;
+  current: number;
+  leadCurrent: number;
+  newCurrent: number;
+  warnings: string[];
+};
+
+/**
+ * Every (track, role) with demand at `slotId`, annotated for `CellDrawer`
+ * (docs/roster/07-roster-manual-edit.md "Design" §5a). Calls `hardViolations`
+ * — never re-implements the hard-constraint check — against a COPY of
+ * `assignments` with this applicant's own current entry at `slotId` removed
+ * first: they're being offered a chance to move to a different cell in the
+ * same slot, and without this the "1人2箇所は不可" warning would misfire on
+ * every candidate merely because they already occupy some OTHER cell in
+ * this exact slot (the one `CellDrawer`'s "外す" button already handles).
+ *
+ * An `applicationId` absent from `input.applications` (the withdrawn-but-
+ * still-assigned edge case, docs/roster/07-roster-manual-edit.md's
+ * `solver-input.server.ts` filters withdrawn people out entirely) falls
+ * back to a synthetic withdrawn stand-in so `hardViolations` still reports
+ * an honest (if unhelpful) warning instead of throwing.
+ */
+export function buildStaffCellCandidates(
+  input: SolverInput,
+  assignments: Assignments,
+  applicationId: string,
+  slotId: string,
+): StaffCellCandidate[] {
+  const slot = input.slots.find((s) => s.id === slotId);
+  if (!slot) return [];
+  const app: SolverApplication = input.applications.find((a) => a.id === applicationId) ?? {
+    id: applicationId,
+    withdrawn: true,
+    skills: {},
+    availability: {},
+  };
+  const appsById = new Map(input.applications.map((a) => [a.id, a]));
+  const byCell = groupAssignmentsByCell(assignments);
+  const checkAgainst = new Map(assignments);
+  checkAgainst.delete(assignmentKey(applicationId, slotId));
+
+  const columns = new Map<string, GridColumn>();
+  for (const key of input.demands.keys()) {
+    const parsed = parseDemandKey(key);
+    if (parsed.slotId === slotId) columns.set(gridColumnKey(parsed.trackId, parsed.roleId), parsed);
+  }
+
+  return [...columns.values()].map(({ trackId, roleId }): StaffCellCandidate => {
+    const demand = input.demands.get(demandKey(slotId, trackId, roleId));
+    if (!demand) throw new Error(`unreachable: ${trackId}/${roleId} was built from a demand key`);
+    const memberIds = byCell.get(demandKey(slotId, trackId, roleId)) ?? [];
+    let leadCurrent = 0;
+    let newCurrent = 0;
+    for (const id of memberIds) {
+      const level = appsById.get(id)?.skills[roleId]?.level;
+      if (level === "lead") leadCurrent++;
+      else if (level === "new") newCurrent++;
+    }
+    return {
+      trackId,
+      roleId,
+      demand,
+      current: memberIds.length,
+      leadCurrent,
+      newCurrent,
+      warnings: hardViolations(input, app, slot, trackId, roleId, checkAgainst),
+    };
+  });
+}
+
+/**
+ * `suggestFor`, extended for `DemandCellDrawer`'s bulk-range selection
+ * (docs/roster/07-roster-manual-edit.md "Design" §3b/§5b: a merged
+ * role-view cell places the chosen candidate into every slot in the range
+ * at once). Categorization/pref ordering come from `slotIds[0]` (a merged
+ * range is guaranteed to share the same lineup, but a non-member's
+ * AVAILABILITY can still differ slot to slot — this is a deliberate
+ * simplification, not a determinism concern, since it only affects what's
+ * shown before a click, not what `writeAssignments` persists after one).
+ * Warnings are the UNION of `hardViolations` across every slot in the
+ * range, so a mid-range conflict is never hidden. Candidates who are
+ * already a member of this exact cell are dropped — they're already listed
+ * as a current occupant with their own "外す" control.
+ */
+export function suggestForRange(
+  input: SolverInput,
+  assignments: Assignments,
+  slotIds: readonly string[],
+  trackId: string,
+  roleId: string,
+): Suggestion[] {
+  const [firstSlotId] = slotIds;
+  if (!firstSlotId) return [];
+  const currentOccupants = new Set(
+    groupAssignmentsByCell(assignments).get(demandKey(firstSlotId, trackId, roleId)) ?? [],
+  );
+  const appsById = new Map(input.applications.map((a) => [a.id, a]));
+  const slotsById = new Map(input.slots.map((s) => [s.id, s]));
+
+  return suggestFor(input, assignments, firstSlotId, trackId, roleId)
+    .filter((s) => !currentOccupants.has(s.applicationId))
+    .map((s) => {
+      const app = appsById.get(s.applicationId);
+      if (!app) return s;
+      const warnings = new Set(s.warnings);
+      for (const slotId of slotIds.slice(1)) {
+        const slot = slotsById.get(slotId);
+        if (!slot) continue;
+        for (const w of hardViolations(input, app, slot, trackId, roleId, assignments)) {
+          warnings.add(w);
+        }
+      }
+      return { ...s, warnings: [...warnings] };
+    });
 }
