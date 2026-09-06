@@ -14,6 +14,7 @@ import {
   listTimeSlots,
   regenerateTimeSlots,
 } from "~/features/schedule/schedule.server";
+import { isValidTime } from "~/features/schedule/slots";
 import {
   createTrack,
   deleteTrack,
@@ -23,6 +24,7 @@ import {
   reorderTracks,
   setEventRoles,
 } from "~/features/schedule/tracks.server";
+import { getDb } from "~/lib/db.server";
 import type { Route } from "./+types/e.$id.design";
 
 export function meta({ data }: Route.MetaArgs) {
@@ -38,7 +40,7 @@ export function meta({ data }: Route.MetaArgs) {
 async function requireDesignAccess(env: Env, request: Request, id: string | undefined) {
   const { chapters } = await requireUserWithChapter(env, request);
   if (!id) throw new Response(null, { status: 404 });
-  const event = await getEvent(env.DB, id);
+  const event = await getEvent(getDb(env), id);
   if (!event) throw new Response(null, { status: 404 });
   if (!canManageEvent(chapters, event)) throw new Response("Forbidden", { status: 403 });
   return event;
@@ -47,7 +49,7 @@ async function requireDesignAccess(env: Env, request: Request, id: string | unde
 export async function loader({ request, context, params }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
   const event = await requireDesignAccess(env, request, params.id);
-  const db = env.DB;
+  const db = getDb(env);
   const [phases, timeSlots, tracks, roles, eventRoleIds] = await Promise.all([
     listPhases(db, event.id),
     listTimeSlots(db, event.id),
@@ -74,7 +76,7 @@ async function regenerateAfterScheduleChange(
 export async function action({ request, context, params }: Route.ActionArgs) {
   const env = context.cloudflare.env;
   const event = await requireDesignAccess(env, request, params.id);
-  const db = env.DB;
+  const db = getDb(env);
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");
 
@@ -94,14 +96,20 @@ export async function action({ request, context, params }: Route.ActionArgs) {
         noSoloNewcomer: form.get("noSoloNewcomer") === "1",
       });
       if (!updated) throw new Response(null, { status: 404 });
-      await regenerateAfterScheduleChange(db, updated);
+      // Only the step size changes the slot grid — skip the regenerate
+      // round-trip when the other three settings are all that changed.
+      if (updated.stepMin !== event.stepMin) {
+        await regenerateAfterScheduleChange(db, updated);
+      }
       return { ok: true };
     }
     case "createPhase": {
       const name = String(form.get("name") ?? "").trim();
       const from = String(form.get("from") ?? "");
       const to = String(form.get("to") ?? "");
-      if (!name || !from || !to || from >= to) return { error: "フェーズの入力が不正です。" };
+      if (!name || !isValidTime(from) || !isValidTime(to) || from >= to) {
+        return { error: "フェーズの入力が不正です。" };
+      }
       await createPhase(db, event.id, { name, from, to });
       await regenerateAfterScheduleChange(db, event);
       return { ok: true };
@@ -139,7 +147,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       return { ok: true };
     }
     case "setRoles": {
-      await setEventRoles(db, event.id, form.getAll("roleId").map(String));
+      const submitted = new Set(form.getAll("roleId").map(String));
+      const knownIds = new Set((await listRoles(db)).map((r) => r.id));
+      const roleIds = [...submitted].filter((id) => knownIds.has(id));
+      await setEventRoles(db, event.id, roleIds);
       return { ok: true };
     }
     default:

@@ -3,7 +3,9 @@ import { requireUserWithChapter } from "~/features/auth/auth-redirect.server";
 import { EventForm } from "~/features/events/components/EventForm";
 import { createEvent } from "~/features/events/events.server";
 import { regenerateTimeSlots } from "~/features/schedule/schedule.server";
+import { isValidTime } from "~/features/schedule/slots";
 import { createTrack } from "~/features/schedule/tracks.server";
+import { getDb } from "~/lib/db.server";
 import type { Route } from "./+types/events.new";
 
 export function meta() {
@@ -37,13 +39,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 
   if (!name) return { error: "イベント名を入力してください。" };
   if (!date) return { error: "開催日を選択してください。" };
-  if (!startTime || !endTime || startTime >= endTime) {
+  if (!isValidTime(startTime) || !isValidTime(endTime) || startTime >= endTime) {
     return { error: "開始時刻は終了時刻より前にしてください。" };
   }
   if (![15, 30, 60].includes(stepMin)) return { error: "刻み幅が不正です。" };
   if (!chapter) return { error: "チャプターを選択してください。" };
 
-  const event = await createEvent(env.DB, {
+  const db = getDb(env);
+  const event = await createEvent(db, {
     chapterId: chapter.chapterId,
     name,
     date,
@@ -52,8 +55,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     stepMin,
     createdBy: user.id,
   });
-  await regenerateTimeSlots(env.DB, event.id, { start: startTime, end: endTime, stepMin }, []);
-  await createTrack(env.DB, event.id, { name: "全体", color: "#4285f4", shared: true });
+  await regenerateTimeSlots(db, event.id, { start: startTime, end: endTime, stepMin }, []);
+  await createTrack(db, event.id, { name: "全体", color: "#4285f4", shared: true });
 
   return redirect(`/e/${event.id}/design`);
 }

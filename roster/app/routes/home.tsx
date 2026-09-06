@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { requireUserWithChapter } from "~/features/auth/auth-redirect.server";
 import { EventCard } from "~/features/events/components/EventCard";
 import { listEventsForChapters } from "~/features/events/events.server";
+import { getDb } from "~/lib/db.server";
 import type { Route } from "./+types/home";
 
 export function meta() {
@@ -12,7 +13,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
   const { user, chapters } = await requireUserWithChapter(env, request);
   const events = await listEventsForChapters(
-    env.DB,
+    getDb(env),
     chapters.map((c) => c.chapterId),
   );
   return { user: { name: user.name, email: user.email }, events };
