@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
-import { ClaimsUnavailableError, fetchChapterForUser } from "~/features/auth/chapter.server";
 import { getAuth } from "~/features/auth/auth.server";
+import { ClaimsUnavailableError, fetchChapterForUser } from "~/features/auth/chapter.server";
 import type { Route } from "./+types/no-chapter";
 
 export function meta() {
