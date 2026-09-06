@@ -1,4 +1,5 @@
 import { reconcileSlotKeys } from "~/features/schedule/reconcile";
+import { type PhaseWindow, buildSlots } from "~/features/schedule/slots";
 import type { Demand } from "./types";
 
 /**
@@ -40,4 +41,29 @@ export function demandLossOnSlotChange(
     lostCount: lostDemands.length,
     lostSlotIds: [...new Set(lostDemands.map((d) => d.timeSlotId))],
   };
+}
+
+/**
+ * `lostCount` for each candidate step-size option other than the event's
+ * current one — precomputed so the real "イベント設定" step-size select
+ * (`~/features/events/components/EventSettingsForm`) can warn before its
+ * own submit goes through, rather than only in a separate preview widget
+ * nobody has to look at (docs/roster/03-demand-input.md "Design" §6: the
+ * warning must appear "保存前に"). `event.stepMin` itself is omitted since
+ * choosing the current value never changes the grid.
+ */
+export function demandLossByStepMinOption(
+  event: { startTime: string; endTime: string; stepMin: number },
+  phases: readonly PhaseWindow[],
+  timeSlots: readonly ExistingSlotKey[],
+  demands: readonly Demand[],
+  stepMinOptions: readonly number[],
+): Record<number, number> {
+  const result: Record<number, number> = {};
+  for (const stepMin of stepMinOptions) {
+    if (stepMin === event.stepMin) continue;
+    const nextSlots = buildSlots({ start: event.startTime, end: event.endTime, stepMin }, phases);
+    result[stepMin] = demandLossOnSlotChange(timeSlots, nextSlots, demands).lostCount;
+  }
+  return result;
 }

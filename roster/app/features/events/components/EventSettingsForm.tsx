@@ -2,7 +2,7 @@ import { Form } from "react-router";
 import type { EventRecord } from "~/features/events/events.server";
 import { STATUSES, STATUS_LABELS } from "~/features/events/status";
 
-const STEP_OPTIONS = [15, 30, 60] as const;
+export const STEP_OPTIONS = [15, 30, 60] as const;
 const MAX_CONSECUTIVE_OPTIONS = [3, 4, 5, 6] as const;
 
 /**
@@ -17,10 +17,43 @@ const MAX_CONSECUTIVE_OPTIONS = [3, 4, 5, 6] as const;
  * Name / date / start / end aren't editable here — changing the step size
  * is the only lever exposed for schedule regeneration in this stage's UI
  * (the design doc's settings card lists exactly these four fields).
+ *
+ * `demandLossByStepMin` (docs/roster/03-demand-input.md "Design" §6, Stage
+ * 03) is `~/features/demand/impact#demandLossByStepMinOption`'s output,
+ * precomputed by the route from data it already loaded. Submitting a
+ * `stepMin` that would lose demand rows is gated by a native `confirm()` —
+ * this is the one real place the warning has to appear "保存前に", not a
+ * separate preview elsewhere on the page. Defaults to `{}` so this
+ * component still works standalone (e.g. in a future test) without a
+ * caller that knows about the demand feature.
  */
-export function EventSettingsForm({ event }: { event: EventRecord }) {
+export function EventSettingsForm({
+  event,
+  demandLossByStepMin = {},
+}: {
+  event: EventRecord;
+  demandLossByStepMin?: Partial<Record<number, number>>;
+}) {
   return (
-    <Form method="post" className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <Form
+      method="post"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+      onSubmit={(formEvent) => {
+        const form = formEvent.currentTarget;
+        const stepMinInput = form.elements.namedItem("stepMin");
+        const stepMin =
+          stepMinInput instanceof HTMLSelectElement ? Number(stepMinInput.value) : null;
+        const lostCount = stepMin === null ? 0 : (demandLossByStepMin[stepMin] ?? 0);
+        if (
+          lostCount > 0 &&
+          !confirm(
+            `刻み幅を${stepMin}分に変更すると、${lostCount}件の需要が失われます。続行しますか？`,
+          )
+        ) {
+          formEvent.preventDefault();
+        }
+      }}
+    >
       <input type="hidden" name="intent" value="updateSettings" />
 
       <label className="block space-y-1">

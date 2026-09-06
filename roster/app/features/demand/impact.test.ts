@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { demandLossOnSlotChange } from "./impact";
+import { demandLossByStepMinOption, demandLossOnSlotChange } from "./impact";
 import type { Demand } from "./types";
 
 function demand(timeSlotId: string, overrides: Partial<Demand> = {}): Demand {
@@ -81,5 +81,39 @@ describe("demandLossOnSlotChange", () => {
     const result = demandLossOnSlotChange(existing, next, demands);
     expect(result.lostCount).toBe(2);
     expect(result.lostSlotIds).toEqual(["slot_1"]);
+  });
+});
+
+describe("demandLossByStepMinOption", () => {
+  const event = { startTime: "09:00", endTime: "11:00", stepMin: 60 };
+  const existingSlots = [
+    { id: "slot_1", start: "09:00", end: "10:00" },
+    { id: "slot_2", start: "10:00", end: "11:00" },
+  ];
+
+  it("omits the event's current step size — choosing it changes nothing", () => {
+    const result = demandLossByStepMinOption(event, [], existingSlots, [], [15, 30, 60]);
+    expect(Object.keys(result).sort()).toEqual(["15", "30"]);
+  });
+
+  /**
+   * This is the exact gap the stage doc's manual E2E step 10 and
+   * completion condition #7 describe: the real "イベント設定" step-size
+   * select must be able to warn *before* its own submit goes through, not
+   * only via a separate, disconnected preview. This function is what makes
+   * that possible without a server round trip at submit time.
+   */
+  it("reports lostCount per candidate option, matching demandLossOnSlotChange for that option", () => {
+    const demands = [demand("slot_1"), demand("slot_2")];
+    const result = demandLossByStepMinOption(event, [], existingSlots, demands, [15, 30, 60]);
+    // 60 -> 30/15 min regenerates the grid with entirely different
+    // (start, end) keys, so both existing slots' demand is lost either way.
+    expect(result[30]).toBe(2);
+    expect(result[15]).toBe(2);
+  });
+
+  it("reports 0 when a candidate option loses no demand", () => {
+    const result = demandLossByStepMinOption(event, [], existingSlots, [], [30]);
+    expect(result[30]).toBe(0);
   });
 });
