@@ -5,6 +5,7 @@ import {
   computeSlotSupplyDemand,
   computeSupplyDemand,
   summarizeShortages,
+  toSupplyApplicant,
 } from "./supply";
 
 const SLOT_1 = "slot_1";
@@ -350,5 +351,35 @@ describe("summarizeShortages", () => {
     expect(summarizeShortages([{ timeSlotId: SLOT_1, need: 0, available: 0, tight: [] }])).toEqual(
       [],
     );
+  });
+});
+
+describe("toSupplyApplicant", () => {
+  it("builds skills/availability maps keyed by roleId/timeSlotId from the domain records", () => {
+    const result = toSupplyApplicant(
+      { id: "app_1", withdrawn: false },
+      [{ roleId: STREAM, level: "lead" }],
+      [{ timeSlotId: SLOT_1, value: "o" }],
+    );
+
+    expect(result.applicationId).toBe("app_1");
+    expect(result.withdrawn).toBe(false);
+    expect(result.skills.get(STREAM)).toBe("lead");
+    expect(result.availability.get(SLOT_1)).toBe("o");
+  });
+
+  it("passes through withdrawn as-is regardless of skills/availability content", () => {
+    const result = toSupplyApplicant(
+      { id: "app_2", withdrawn: true },
+      [{ roleId: STREAM, level: "exp" }],
+      [{ timeSlotId: SLOT_1, value: "o" }],
+    );
+    expect(result.withdrawn).toBe(true);
+  });
+
+  it("produces an empty map for a role/slot the applicant has no row for", () => {
+    const result = toSupplyApplicant({ id: "app_3", withdrawn: false }, [], []);
+    expect(result.skills.size).toBe(0);
+    expect(result.availability.size).toBe(0);
   });
 });

@@ -1,4 +1,10 @@
-import type { AvailabilityValue, Level } from "~/features/applications/types";
+import type {
+  ApplicationRecord,
+  ApplicationSkillRecord,
+  AvailabilityRecord,
+  AvailabilityValue,
+  Level,
+} from "~/features/applications/types";
 import type { Demand } from "~/features/demand/types";
 
 /**
@@ -59,6 +65,28 @@ export type SupplyApplicant = {
 };
 
 /** Withdrawn applicants and `x`/unspecified slots never count as available (docs/roster/05-staff-supply-demand.md "制約"). */
+/**
+ * Builds one applicant's `SupplyApplicant` from the domain records Stage
+ * 04's reads already produce (`~/features/applications`'
+ * `ApplicationRecord`/`ApplicationSkillRecord`/`AvailabilityRecord`) — the
+ * only place a real `SupplyApplicant` is constructed. `supply.server.ts`
+ * calls this once per applicant; `Pick` keeps the dependency to exactly the
+ * fields used, so an unrelated field rename on those types can't break this
+ * mapping silently.
+ */
+export function toSupplyApplicant(
+  application: Pick<ApplicationRecord, "id" | "withdrawn">,
+  skills: readonly Pick<ApplicationSkillRecord, "roleId" | "level">[],
+  availability: readonly Pick<AvailabilityRecord, "timeSlotId" | "value">[],
+): SupplyApplicant {
+  return {
+    applicationId: application.id,
+    withdrawn: application.withdrawn,
+    skills: new Map(skills.map((s) => [s.roleId, s.level])),
+    availability: new Map(availability.map((a) => [a.timeSlotId, a.value])),
+  };
+}
+
 function isAvailable(applicant: SupplyApplicant, timeSlotId: string): boolean {
   if (applicant.withdrawn) return false;
   const value: AvailabilityValue = applicant.availability.get(timeSlotId) ?? "x";
