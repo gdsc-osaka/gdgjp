@@ -91,3 +91,35 @@ CREATE TABLE event_roles (
   role_id  TEXT NOT NULL REFERENCES roles(id),
   PRIMARY KEY (event_id, role_id)
 );
+CREATE TABLE applications (
+  id           TEXT PRIMARY KEY,
+  event_id     TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  user_id      TEXT,                        -- NULL only for a proxy registration
+  email        TEXT NOT NULL,
+  name         TEXT NOT NULL,
+  contact      TEXT,                        -- day-of contact method (optional)
+  party        TEXT NOT NULL DEFAULT 'undecided'
+                 CHECK (party IN ('yes','no','undecided')),
+  note         TEXT,
+  withdrawn    INTEGER NOT NULL DEFAULT 0,
+  updated_by   TEXT NOT NULL DEFAULT 'self' CHECK (updated_by IN ('self','owner')),
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+CREATE UNIQUE INDEX applications_event_user ON applications (event_id, user_id)
+  WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX applications_event_email ON applications (event_id, email);
+CREATE INDEX applications_event_idx ON applications (event_id);
+CREATE TABLE application_skills (
+  application_id TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  role_id        TEXT NOT NULL REFERENCES roles(id),
+  level          TEXT NOT NULL DEFAULT 'new' CHECK (level IN ('lead','exp','new')),
+  pref           INTEGER NOT NULL DEFAULT 2 CHECK (pref IN (1,2)),
+  PRIMARY KEY (application_id, role_id)
+);
+CREATE TABLE availabilities (
+  application_id TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  time_slot_id   TEXT NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
+  value          TEXT NOT NULL CHECK (value IN ('o','d','x')),
+  PRIMARY KEY (application_id, time_slot_id)
+);
