@@ -1,20 +1,11 @@
 import { useMemo } from "react";
-import { LEVEL_LABELS, type Level } from "~/features/applications/types";
-import type { Assignments, Availability } from "~/features/solver/types";
+import { LEVEL_LABELS } from "~/features/applications/types";
+import type { Assignments } from "~/features/solver/types";
 import { assignmentKey } from "~/features/solver/types";
+import type { StaffGridColumn } from "../grid";
 
+export type { StaffGridColumn } from "../grid";
 export type StaffGridSlot = { id: string; start: string; end: string };
-
-export type StaffGridColumn = {
-  applicationId: string;
-  name: string;
-  withdrawn: boolean;
-  /** For the column header only — ADR-005 / docs/roster/07-roster-manual-edit.md
-   * "Design" §3a: experience level is shown here, never inside a cell. */
-  skills: { roleName: string; level: Level }[];
-  /** slotId -> availability, used only to flag a soft ("d") or hard ("x") mismatch cell — never rendered as text. */
-  availability: Record<string, Availability>;
-};
 
 type TrackInfo = { name: string; color: string };
 

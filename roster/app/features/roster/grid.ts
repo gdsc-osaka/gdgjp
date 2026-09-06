@@ -2,7 +2,9 @@ import { hardViolations } from "~/features/solver/constraints";
 import { type Suggestion, suggestFor } from "~/features/solver/suggest";
 import type {
   Assignments,
+  Availability,
   Demand,
+  Level,
   Report,
   SolverApplication,
   SolverInput,
@@ -307,5 +309,52 @@ export function suggestForRange(
         }
       }
       return { ...s, warnings: [...warnings] };
+    });
+}
+
+/** One `StaffGrid` column — a display-ready staff member (docs/roster/07-
+ * roster-manual-edit.md "Design" §3a). Experience level lives here (the
+ * column header) and nowhere else — `StaffGrid` never receives it per cell. */
+export type StaffGridColumn = {
+  applicationId: string;
+  name: string;
+  withdrawn: boolean;
+  skills: { roleName: string; level: Level }[];
+  availability: Record<string, Availability>;
+};
+
+/**
+ * Builds `StaffGrid`'s columns from the route's already-fetched display
+ * `applications` (id/name/withdrawn) and the `SolverInput` already built for
+ * `evaluate()` — no second D1 read. A withdrawn applicant is included only
+ * if they still have a residual assignment (an edge case: withdrawing after
+ * generation doesn't retroactively clear their rows) so a leftover
+ * violation stays visible instead of silently disappearing from the grid.
+ */
+export function buildStaffColumns(
+  applications: readonly { id: string; name: string; withdrawn: boolean }[],
+  input: SolverInput,
+  roleNameById: ReadonlyMap<string, string>,
+  assignments: Assignments,
+): StaffGridColumn[] {
+  const solverAppById = new Map(input.applications.map((a) => [a.id, a]));
+  const assignedAppIds = new Set(
+    [...assignments.keys()].map((key) => parseAssignmentKey(key).applicationId),
+  );
+
+  return applications
+    .filter((a) => !a.withdrawn || assignedAppIds.has(a.id))
+    .map((a) => {
+      const solverApp = solverAppById.get(a.id);
+      return {
+        applicationId: a.id,
+        name: a.name,
+        withdrawn: a.withdrawn,
+        skills: Object.entries(solverApp?.skills ?? {}).map(([roleId, s]) => ({
+          roleName: roleNameById.get(roleId) ?? roleId,
+          level: s.level,
+        })),
+        availability: solverApp?.availability ?? {},
+      };
     });
 }
