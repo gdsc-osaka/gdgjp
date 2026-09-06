@@ -65,6 +65,12 @@ export const DEFAULT_PARTY: PartyStatus = "undecided";
 export const UPDATED_BY_VALUES = ["self", "owner"] as const;
 export type UpdatedBy = (typeof UPDATED_BY_VALUES)[number];
 
+/** The staff list's "最終更新" column (docs/roster/05-staff-supply-demand.md "Design" §2). */
+export const UPDATED_BY_LABELS: Record<UpdatedBy, string> = {
+  self: "本人",
+  owner: "オーナー",
+};
+
 /** A staff registration for one event (docs/roster/index.md §4 "applications"). */
 export type ApplicationRecord = {
   id: string;

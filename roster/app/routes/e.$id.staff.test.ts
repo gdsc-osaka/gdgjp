@@ -111,6 +111,55 @@ describe("e.$id.staff loader", () => {
     expect(result.roles).toEqual([{ id: "reception", name: "受付" }]);
     expect(result.timeSlots).toHaveLength(1);
   });
+
+  it("builds a staff row and drawer detail for each application, resolving role names", async () => {
+    const now = new Date().toISOString();
+    await testDb
+      .prepare(
+        `INSERT INTO applications (id, event_id, user_id, email, name, created_at, updated_at)
+         VALUES ('app_1', 'evt_1', 'user_1', 'a@example.com', 'A', ?, ?)`,
+      )
+      .bind(now, now)
+      .run();
+    await testDb
+      .prepare(
+        "INSERT INTO application_skills (application_id, role_id, level, pref) VALUES ('app_1', 'reception', 'lead', 1)",
+      )
+      .run();
+    await testDb
+      .prepare(
+        "INSERT INTO availabilities (application_id, time_slot_id, value) VALUES ('app_1', 'slot_1', 'o')",
+      )
+      .run();
+
+    asOwner();
+    const result = await callLoader(
+      new Request("http://localhost/e/evt_1/staff"),
+      "evt_1",
+      asD1(testDb),
+    );
+
+    expect(result.staff).toEqual([
+      {
+        applicationId: "app_1",
+        name: "A",
+        withdrawn: false,
+        roles: [{ roleId: "reception", roleName: "受付", level: "lead", pref: 1 }],
+        availableCount: 1,
+        softAvailableCount: 0,
+        party: "undecided",
+        updatedBy: "self",
+        updatedAt: now,
+      },
+    ]);
+    expect(result.staffDetails.app_1).toEqual({
+      applicationId: "app_1",
+      name: "A",
+      withdrawn: false,
+      skills: [{ roleId: "reception", level: "lead", pref: 1 }],
+      availability: [{ timeSlotId: "slot_1", value: "o" }],
+    });
+  });
 });
 
 describe("e.$id.staff action (proxy add)", () => {
@@ -131,7 +180,7 @@ describe("e.$id.staff action (proxy add)", () => {
 
   it("rejects an unknown intent", async () => {
     const result = await callAction(buildRequest({ intent: "bogus" }), "evt_1", asD1(testDb));
-    expect(result).toEqual({ error: "不明な操作です。" });
+    expect(result).toEqual({ error: "不明な操作です。", intent: "unknown" });
   });
 
   it("rejects a malformed email", async () => {
@@ -140,7 +189,10 @@ describe("e.$id.staff action (proxy add)", () => {
       "evt_1",
       asD1(testDb),
     );
-    expect(result).toEqual({ error: "メールアドレスの形式が正しくありません。" });
+    expect(result).toEqual({
+      error: "メールアドレスの形式が正しくありません。",
+      intent: "proxyAdd",
+    });
   });
 
   it("creates a new proxy registration with user_id NULL", async () => {
@@ -160,7 +212,7 @@ describe("e.$id.staff action (proxy add)", () => {
       "evt_1",
       asD1(testDb),
     );
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, intent: "proxyAdd" });
 
     const row = await testDb
       .prepare("SELECT user_id, email, name, contact, updated_by FROM applications WHERE email = ?")
@@ -214,7 +266,7 @@ describe("e.$id.staff action (proxy add)", () => {
       "evt_1",
       asD1(testDb),
     );
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, intent: "proxyAdd" });
 
     const rows = await testDb
       .prepare("SELECT name FROM applications WHERE email = ?")
@@ -259,5 +311,131 @@ describe("e.$id.staff action (proxy add)", () => {
       .prepare("SELECT user_id, name FROM applications WHERE id = 'app_claimed'")
       .first<{ user_id: string | null; name: string }>();
     expect(row).toEqual({ user_id: "user_real", name: "Owner Corrected" });
+  });
+});
+
+describe("e.$id.staff action (owner correction)", () => {
+  let testDb: TestD1Database;
+
+  beforeEach(async () => {
+    vi.mocked(requireUserWithChapter).mockReset();
+    testDb = createTestD1(MIGRATIONS);
+    await seedEvent(testDb);
+    const now = new Date().toISOString();
+    await testDb
+      .prepare(
+        `INSERT INTO applications (id, event_id, user_id, email, name, created_at, updated_at)
+         VALUES ('app_1', 'evt_1', 'user_1', 'a@example.com', 'Self Reported', ?, ?)`,
+      )
+      .bind(now, now)
+      .run();
+    await testDb
+      .prepare(
+        "INSERT INTO application_skills (application_id, role_id, level, pref) VALUES ('app_1', 'reception', 'new', 2)",
+      )
+      .run();
+    asOwner();
+  });
+
+  function buildRequest(fields: Record<string, string>): Request {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    return new Request("http://localhost/e/evt_1/staff", { method: "POST", body: form });
+  }
+
+  it("404s when the applicationId doesn't belong to this event", async () => {
+    await expect(
+      callAction(
+        buildRequest({ intent: "correct", applicationId: "no-such-app" }),
+        "evt_1",
+        asD1(testDb),
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  /**
+   * docs/roster/05-staff-supply-demand.md "回帰として固定すべきテスト":
+   * corrections land as updated_by = owner.
+   */
+  it("corrects skill level and availability, setting updated_by to owner", async () => {
+    const result = await callAction(
+      buildRequest({
+        intent: "correct",
+        applicationId: "app_1",
+        role_reception: "on",
+        level_reception: "lead",
+        pref_reception: "1",
+        avail_slot_1: "x",
+      }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ ok: true, intent: "correct" });
+
+    const skill = await testDb
+      .prepare("SELECT level, pref FROM application_skills WHERE application_id = 'app_1'")
+      .first<{ level: string; pref: number }>();
+    expect(skill).toEqual({ level: "lead", pref: 1 });
+
+    const app = await testDb
+      .prepare("SELECT updated_by FROM applications WHERE id = 'app_1'")
+      .first<{ updated_by: string }>();
+    expect(app).toEqual({ updated_by: "owner" });
+  });
+
+  it("reactivates a withdrawn application on correct, the same 'save reactivates' rule as /apply/:token", async () => {
+    await testDb.prepare("UPDATE applications SET withdrawn = 1 WHERE id = 'app_1'").run();
+
+    await callAction(
+      buildRequest({
+        intent: "correct",
+        applicationId: "app_1",
+        role_reception: "on",
+        level_reception: "new",
+        pref_reception: "2",
+        avail_slot_1: "o",
+      }),
+      "evt_1",
+      asD1(testDb),
+    );
+
+    const app = await testDb
+      .prepare("SELECT withdrawn FROM applications WHERE id = 'app_1'")
+      .first<{ withdrawn: number }>();
+    expect(app?.withdrawn).toBe(0);
+  });
+
+  it("withdraws without touching skills, setting updated_by to owner", async () => {
+    const result = await callAction(
+      buildRequest({ intent: "withdraw", applicationId: "app_1" }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ ok: true, intent: "withdraw" });
+
+    const app = await testDb
+      .prepare("SELECT withdrawn, updated_by FROM applications WHERE id = 'app_1'")
+      .first<{ withdrawn: number; updated_by: string }>();
+    expect(app).toEqual({ withdrawn: 1, updated_by: "owner" });
+
+    const skill = await testDb
+      .prepare("SELECT level FROM application_skills WHERE application_id = 'app_1'")
+      .first<{ level: string }>();
+    expect(skill).toEqual({ level: "new" });
+  });
+
+  it("403s a chapter that doesn't own the event, even with a valid applicationId", async () => {
+    vi.mocked(requireUserWithChapter).mockResolvedValue({
+      user: { id: "u2", email: "u2@example.com", name: "U2", image: null, isAdmin: false },
+      chapter: OTHER_CHAPTER,
+      chapters: [OTHER_CHAPTER],
+    });
+    await expect(
+      callAction(
+        buildRequest({ intent: "correct", applicationId: "app_1" }),
+        "evt_1",
+        asD1(testDb),
+      ),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });
