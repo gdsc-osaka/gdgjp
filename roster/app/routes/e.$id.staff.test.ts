@@ -1,0 +1,263 @@
+import { fileURLToPath } from "node:url";
+import type { UserChapter } from "@gdgjp/gdg-lib";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("~/features/auth/auth-redirect.server", () => ({
+  requireUserWithChapter: vi.fn(),
+}));
+
+import { requireUserWithChapter } from "~/features/auth/auth-redirect.server";
+import { type TestD1Database, asD1, createTestD1 } from "../../tests/helpers/sqlite-d1";
+import { action, loader } from "./e.$id.staff";
+
+const MIGRATIONS = [
+  fileURLToPath(new URL("../../migrations/0002_domain.sql", import.meta.url)),
+  fileURLToPath(new URL("../../migrations/0004_applications.sql", import.meta.url)),
+];
+
+const OWNER_CHAPTER: UserChapter = { chapterId: 1, chapterSlug: "tokyo", role: "member" };
+const OTHER_CHAPTER: UserChapter = { chapterId: 99, chapterSlug: "osaka", role: "member" };
+
+function mockContext(db: D1Database) {
+  return {
+    cloudflare: { env: { DB: db, APP_URL: "https://roster.gdgs.jp" } as unknown as Env },
+  } as Parameters<typeof loader>[0]["context"];
+}
+
+function routeArgs(request: Request, id: string, db: D1Database) {
+  return {
+    request,
+    params: { id },
+    context: mockContext(db),
+    unstable_pattern: "/e/:id/staff",
+    unstable_url: new URL(request.url),
+  };
+}
+
+function callLoader(request: Request, id: string, db: D1Database) {
+  return loader(routeArgs(request, id, db) as Parameters<typeof loader>[0]);
+}
+
+function callAction(request: Request, id: string, db: D1Database) {
+  return action(routeArgs(request, id, db) as Parameters<typeof action>[0]);
+}
+
+async function seedEvent(testDb: TestD1Database) {
+  const now = new Date().toISOString();
+  await testDb
+    .prepare(
+      `INSERT INTO events (id, chapter_id, name, date, start_time, end_time, seed, apply_token, view_token, has_party, created_at, updated_at)
+       VALUES ('evt_1', 1, 'DevFest', '2026-11-07', '09:00', '19:00', 1, 'tok1', 'view1', 1, ?, ?)`,
+    )
+    .bind(now, now)
+    .run();
+  await testDb
+    .prepare("INSERT INTO event_roles (event_id, role_id) VALUES ('evt_1', 'reception')")
+    .run();
+  await testDb
+    .prepare(
+      "INSERT INTO time_slots (id, event_id, idx, start_time, end_time) VALUES ('slot_1', 'evt_1', 0, '09:00', '10:00')",
+    )
+    .run();
+}
+
+function asOwner() {
+  vi.mocked(requireUserWithChapter).mockResolvedValue({
+    user: { id: "owner_1", email: "owner@example.com", name: "Owner", image: null, isAdmin: false },
+    chapter: OWNER_CHAPTER,
+    chapters: [OWNER_CHAPTER],
+  });
+}
+
+describe("e.$id.staff loader", () => {
+  let testDb: TestD1Database;
+
+  beforeEach(async () => {
+    vi.mocked(requireUserWithChapter).mockReset();
+    testDb = createTestD1(MIGRATIONS);
+    await seedEvent(testDb);
+  });
+
+  it("404s for an unknown event id", async () => {
+    asOwner();
+    await expect(
+      callLoader(
+        new Request("http://localhost/e/no-such-event/staff"),
+        "no-such-event",
+        asD1(testDb),
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("403s a chapter that doesn't own the event", async () => {
+    vi.mocked(requireUserWithChapter).mockResolvedValue({
+      user: { id: "u2", email: "u2@example.com", name: "U2", image: null, isAdmin: false },
+      chapter: OTHER_CHAPTER,
+      chapters: [OTHER_CHAPTER],
+    });
+    await expect(
+      callLoader(new Request("http://localhost/e/evt_1/staff"), "evt_1", asD1(testDb)),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("returns the apply URL built from apply_token and the event's recruiting roles", async () => {
+    asOwner();
+    const result = await callLoader(
+      new Request("http://localhost/e/evt_1/staff"),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result.applyUrl).toBe("https://roster.gdgs.jp/apply/tok1");
+    expect(result.roles).toEqual([{ id: "reception", name: "受付" }]);
+    expect(result.timeSlots).toHaveLength(1);
+  });
+});
+
+describe("e.$id.staff action (proxy add)", () => {
+  let testDb: TestD1Database;
+
+  beforeEach(async () => {
+    vi.mocked(requireUserWithChapter).mockReset();
+    testDb = createTestD1(MIGRATIONS);
+    await seedEvent(testDb);
+    asOwner();
+  });
+
+  function buildRequest(fields: Record<string, string>): Request {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    return new Request("http://localhost/e/evt_1/staff", { method: "POST", body: form });
+  }
+
+  it("rejects an unknown intent", async () => {
+    const result = await callAction(buildRequest({ intent: "bogus" }), "evt_1", asD1(testDb));
+    expect(result).toEqual({ error: "不明な操作です。" });
+  });
+
+  it("rejects a malformed email", async () => {
+    const result = await callAction(
+      buildRequest({ intent: "proxyAdd", email: "not-an-email", name: "X" }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ error: "メールアドレスの形式が正しくありません。" });
+  });
+
+  it("creates a new proxy registration with user_id NULL", async () => {
+    const result = await callAction(
+      buildRequest({
+        intent: "proxyAdd",
+        email: "proxy@example.com",
+        name: "Proxy Person",
+        contact: "",
+        party: "undecided",
+        note: "",
+        role_reception: "on",
+        level_reception: "new",
+        pref_reception: "2",
+        avail_slot_1: "o",
+      }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ ok: true });
+
+    const row = await testDb
+      .prepare("SELECT user_id, email, name, contact, updated_by FROM applications WHERE email = ?")
+      .bind("proxy@example.com")
+      .first<{
+        user_id: string | null;
+        email: string;
+        name: string;
+        contact: string;
+        updated_by: string;
+      }>();
+    expect(row).toEqual({
+      user_id: null,
+      email: "proxy@example.com",
+      name: "Proxy Person",
+      contact: "proxy@example.com", // fell back to the email since contact was blank
+      updated_by: "owner",
+    });
+  });
+
+  it("upserts by email — a second proxyAdd for the same address edits that row instead of duplicating it", async () => {
+    await callAction(
+      buildRequest({
+        intent: "proxyAdd",
+        email: "proxy@example.com",
+        name: "First Name",
+        contact: "",
+        party: "undecided",
+        note: "",
+        role_reception: "on",
+        level_reception: "new",
+        pref_reception: "2",
+        avail_slot_1: "o",
+      }),
+      "evt_1",
+      asD1(testDb),
+    );
+    const result = await callAction(
+      buildRequest({
+        intent: "proxyAdd",
+        email: "proxy@example.com",
+        name: "Corrected Name",
+        contact: "",
+        party: "undecided",
+        note: "",
+        role_reception: "on",
+        level_reception: "new",
+        pref_reception: "2",
+        avail_slot_1: "o",
+      }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ ok: true });
+
+    const rows = await testDb
+      .prepare("SELECT name FROM applications WHERE email = ?")
+      .bind("proxy@example.com")
+      .all<{ name: string }>();
+    expect(rows.results).toEqual([{ name: "Corrected Name" }]);
+  });
+
+  /**
+   * ADR-008: proxy-add never overwrites a row's user_id. Editing an
+   * already-claimed application by email (owner correcting a self-reported
+   * value) must leave the link to that person's account intact.
+   */
+  it("never touches user_id when upserting an already-claimed application", async () => {
+    const now = new Date().toISOString();
+    await testDb
+      .prepare(
+        `INSERT INTO applications (id, event_id, user_id, email, name, created_at, updated_at)
+         VALUES ('app_claimed', 'evt_1', 'user_real', 'claimed@example.com', 'Self Reported', ?, ?)`,
+      )
+      .bind(now, now)
+      .run();
+
+    await callAction(
+      buildRequest({
+        intent: "proxyAdd",
+        email: "claimed@example.com",
+        name: "Owner Corrected",
+        contact: "",
+        party: "undecided",
+        note: "",
+        role_reception: "on",
+        level_reception: "new",
+        pref_reception: "2",
+        avail_slot_1: "o",
+      }),
+      "evt_1",
+      asD1(testDb),
+    );
+
+    const row = await testDb
+      .prepare("SELECT user_id, name FROM applications WHERE id = 'app_claimed'")
+      .first<{ user_id: string | null; name: string }>();
+    expect(row).toEqual({ user_id: "user_real", name: "Owner Corrected" });
+  });
+});
