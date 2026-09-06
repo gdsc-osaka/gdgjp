@@ -6,17 +6,20 @@
 - This map is a **contract: move a file, update this map in the same change.** An unmaintained
   map is an immediately false one.
 - Full plan and stage breakdown: `docs/roster/index.md`; design decisions: `docs/roster/adr.md`.
-- Stage 01 (this PR) is done: auth + chapter gate only. No domain code exists yet.
+- Stage 01 was auth + chapter gate only. **Stage 02 (this PR)** adds the domain schema: events,
+  the time-slot grid (phases/time_slots), tracks, and the seeded role master (event_roles).
 
 ## Code map
 
 | What you're looking for | Where |
 |---|---|
 | Auth (RP session, chapter ACL, sign-in redirect, permission judgment) | `app/features/auth/` |
-| Cross-cutting primitive with no domain (`safeReturnTo`) | `app/lib/` — 1 file only, see "Placement rules" |
+| Cross-cutting primitives with no domain (`safeReturnTo`, D1 handle accessor) | `app/lib/` — 2 files only, see "Placement rules" |
 | App shell UI | doesn't exist yet — no shared chrome, no local `ui/` (ADR-001: UI primitives come from `@gdgjp/gdg-lib`) |
 | Solver (Stage 06) | will be `app/features/solver/` — pure TS, no D1/React |
-| Domain schema (events, time slots, tracks, roles, demand, applications, assignments, revisions) | doesn't exist yet — Stage 02 onward, see `docs/roster/index.md` §4 |
+| Events (`events` table CRUD, status lifecycle) | `app/features/events/` |
+| Schedule (phases, the time-slot grid + its regenerate/reconcile logic, tracks, roles, event_roles) | `app/features/schedule/` |
+| Domain schema not yet built (demands, applications, assignments, revisions) | Stage 03 onward, see `docs/roster/index.md` §4 |
 
 ## Route surface
 
@@ -24,7 +27,9 @@
 
 ```
 app/routes/
-  home.tsx          "/" — placeholder event list (auth + chapter required)
+  home.tsx          "/" — event list (auth + chapter required)
+  events.new.tsx      "/events/new" — create an event
+  e.$id.design.tsx    "/e/:id/design" — event settings, phases/time slots, tracks, roles
   signin.tsx         "/signin" — redirects into the gdg-lib auth flow
   no-chapter.tsx      "/no-chapter"
   api.auth.$.ts       "/api/auth/*" — gdg-lib RP plumbing
@@ -40,9 +45,10 @@ signal that a route was added, moved, or removed — expected to fail when you a
 
 1. **Domain code goes in `app/features/<domain>/`.** Server + client + UI + colocated tests
    together. UI subfolder (once one exists) is `app/features/<domain>/components/`.
-2. **`app/lib/` holds only domain-free cross-cutting primitives.** Today: `return-to.ts`. Adding
-   a new file here is presumed wrong — it almost always belongs under `app/features/<domain>/`.
-   `layering.test.ts` whitelists the exact top-level set.
+2. **`app/lib/` holds only domain-free cross-cutting primitives.** Today: `return-to.ts` and
+   `db.server.ts` (a D1 handle accessor — no queries). Adding a new file here is presumed wrong —
+   it almost always belongs under `app/features/<domain>/`. `layering.test.ts` whitelists the
+   exact top-level set.
 3. **`app/components/` would hold only the app shell + local `ui/` primitives — neither exists.**
    Per ADR-001, roster has no local UI primitive layer; shared UI comes from `@gdgjp/gdg-lib`.
 4. **`app/routes/` holds only route modules.** Loader/action logic beyond "read the request, call
