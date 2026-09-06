@@ -49,12 +49,24 @@ type NodePin struct {
 	MinMinor int `json:"minMinor"`
 }
 
+// AntigravityPin pins the `agy` binary (ADR-032). Unlike CursorAgentPin/GWSPin/GdgCliPin,
+// only x86_64 is required: agy has no public multi-arch GitHub release to fetch an aarch64
+// build/checksum from, and every antigravity host today is x86_64. Add aarch64 once such a
+// build exists. Also unlike those, this pin is only validated when backend.name is actually
+// "antigravity" (see parseSpecBytes) -- every other spec in the repo, including every test
+// fixture, predates this backend and has no reason to carry a pin for it.
+type AntigravityPin struct {
+	Version string            `json:"version"`
+	SHA256  map[string]string `json:"sha256"`
+}
+
 type PinsSpec struct {
 	CursorAgent CursorAgentPin `json:"cursorAgent"`
 	Xangi       XangiPin       `json:"xangi"`
 	GWS         GWSPin         `json:"gws"`
 	GdgCli      GdgCliPin      `json:"gdgCli"`
 	Node        NodePin        `json:"node"`
+	Antigravity AntigravityPin `json:"antigravity"`
 }
 
 type SystemdSpec struct {
@@ -296,6 +308,17 @@ func parseSpecBytes(raw []byte, origin string) (SpecFile, error) {
 	}
 	if spec.Pins.Node.MinMinor < 0 {
 		return spec, fmt.Errorf("spec.pins.node.minMinor must be a non-negative integer in %s", origin)
+	}
+
+	// Validate antigravity pin -- only when that backend is actually selected (see
+	// AntigravityPin doc comment); every other spec is free to omit it entirely.
+	if spec.Backend.Name == "antigravity" {
+		if strings.TrimSpace(spec.Pins.Antigravity.Version) == "" {
+			return spec, fmt.Errorf("spec.pins.antigravity.version must be non-empty when backend.name is \"antigravity\" in %s", origin)
+		}
+		if !hex64Regex.MatchString(spec.Pins.Antigravity.SHA256["x86_64"]) {
+			return spec, fmt.Errorf("spec.pins.antigravity.sha256 must contain a valid 64-hex string for x86_64 when backend.name is \"antigravity\" in %s", origin)
+		}
 	}
 
 	// agentsIndex is optional; default the paths when enabled and unset.

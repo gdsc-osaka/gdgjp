@@ -8,14 +8,23 @@
 
 - [ ] Lima 上での systemd/apparmor/sudoers/useradd の実機統合テストを CI に配線する。
       ADR-030 が「今後の課題」と明記したまま。`.github/workflows/agent-host-release.yml`
-      には現状 Lima ステップが無い。
-- [ ] リポジトリ設定変更（人間の承認が要る、ADR-030 が記録のみで留めた項目）:
-  - branch protection
-  - 署名コミット必須化
-  - GitHub Environment protection rule
+      には現状 Lima ステップが無い。**2026-09-06 時点で調査済み**: Lima 自体は不要と判明
+      （ADR-030/032 が Lima に言及するのは著者が macOS 開発機から検証していたためで、
+      `ubuntu-latest` runner は最初から実 Ubuntu VM で sudo/systemd が使える）。実装計画を
+      `docs/plans/01-agent-host-lima-ci-and-permission-separation.md` に起票済み、レビュー待ち。
+- [x] リポジトリ設定変更（2026-09-06、gh CLI で確認・適用済み）:
+  - branch protection — **調査の結果すでに有効だった**（ruleset `main`, id 15974538。
+    PR 必須・承認 1・force-push 禁止・削除禁止。classic branch-protection API では
+    見えず ruleset API でのみ確認できる点に注意）
+  - 署名コミット必須化 — 上記 ruleset に `required_signatures` ルールを追加して対応
+  - GitHub Environment protection rule — `Production` environment に
+    `deployment_branch_policy: {protected_branches: true}` を設定（従来は無保護で
+    どのブランチからでも deploy 可能だった）
 - [ ] 「エージェントから到達できるどの経路もリリース生成リポジトリへ push できない」という
       不変条件を、ファイル権限だけでなく GitHub 側の権限分離（wiki transport token vs
-      monorepo write 権限）でもテスト固定する。
+      monorepo write 権限）でもテスト固定する。上記と同じ実装計画ファイルの Design Part 2
+      に設計済み（`NPM_READ_TOKEN` が唯一エージェントスロットに到達する GitHub 資格情報）、
+      実装待ち。
 
 ## Stage 13 — xangi-packaging
 
@@ -55,8 +64,11 @@ publish、xangi の依存切替、CI 修正、ホスト側 GitHub Packages 認�
 機構（ACL ゲート、hooks/settings/permissions バンドル、能力レジストリ）は実装済みだが、
 本番投入条件が未達。ADR-032 の残タスク:
 
-- [ ] `pins.antigravity`（version + sha256）を `agent-host.schema.json` に追加し、
-      具体的な `agy` バイナリをピン留めする。
+- [x] `pins.antigravity`（version + sha256）を `agent-host.schema.json` に追加し、
+      具体的な `agy` バイナリ(`mincra-srv` に実際に入っている v1.1.27)をピン留めした。
+      x86_64 の sha256 のみ必須(`agy` は公開マルチアーチ配布が無いため aarch64 は無し)。
+      他の pin と異なり `backend.name == "antigravity"` の場合のみ検証される
+      (既存テストフィクスチャを含む他の全 spec は影響を受けない)。
 - [ ] pin 済みバイナリに対して、ADR-032 の手動実機検証（PreToolUse deny/allow、
       `command(wk)`/`command(gws)` permission ゲート）と同等の E2E をやり直し、
       再現性を確認する。

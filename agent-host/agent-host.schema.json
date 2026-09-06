@@ -179,6 +179,33 @@
           },
           "required": ["major", "minMinor"],
           "additionalProperties": false
+        },
+        "antigravity": {
+          "type": "object",
+          "description": "Pins the `agy` binary (ADR-032). Only x86_64 is required: agy has no public multi-arch GitHub release, unlike cursorAgent/gws/gdgCli.",
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "object",
+              "properties": {
+                "x86_64": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "aarch64": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": ["x86_64"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["version", "sha256"],
+          "additionalProperties": false
         }
       },
       "required": ["cursorAgent", "xangi", "gws", "gdgCli", "node"],
