@@ -246,6 +246,49 @@ test("legacy bash installer and verify scripts are deleted", () => {
     false,
     "agent-host/lib/verify.sh must be removed; replaced by gdg agent-host verify",
   );
+  assert.equal(
+    existsSync(join(repositoryRoot, "agents-index/install.sh")),
+    false,
+    "agents-index/install.sh must be removed; folded into gdg agent-host apply (Stage 08)",
+  );
+  assert.equal(
+    existsSync(join(repositoryRoot, ".github/scripts/agents-index-install.test.mjs")),
+    false,
+    "agents-index-install.test.mjs must be removed; assertions moved to the golden tree and agentsindex_test.go",
+  );
+});
+
+test("tracked *.sh files match the checked-in shell allowlist", async () => {
+  const ls = spawnSync("git", ["ls-files", "*.sh"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+  });
+  assert.equal(ls.status, 0, ls.stderr);
+  const tracked = ls.stdout.trim().split("\n").filter(Boolean).sort();
+
+  const allowlistRaw = await readFile(
+    join(repositoryRoot, ".github/scripts/shell-allowlist.txt"),
+    "utf8",
+  );
+  const allowlist = allowlistRaw.trim().split("\n").filter(Boolean).sort();
+
+  assert.deepEqual(
+    tracked,
+    allowlist,
+    "git ls-files '*.sh' drifted from .github/scripts/shell-allowlist.txt. " +
+      "Adding a shell script must show up as an allowlist change in the PR diff.",
+  );
+
+  // The agent-host provisioning path is a single shell (the bootstrap). The only
+  // *.sh allowed under agent-host/ are the Lima dev helpers and the spawn-slot
+  // template, never a provisioning installer.
+  const agentHostShells = allowlist.filter((p) => p.startsWith("agent-host/"));
+  for (const path of agentHostShells) {
+    assert.ok(
+      path.startsWith("agent-host/dev/") || path === "agent-host/config/spawn-slot.sh",
+      `unexpected shell under agent-host/: ${path} (provisioning must be bootstrap-only)`,
+    );
+  }
 });
 
 test("gdg agent-host apply prefix mode writes layout", async () => {
@@ -287,7 +330,7 @@ test("gdg agent-host apply prefix mode writes layout", async () => {
     assert.equal(spec.pins.cursorAgent.version, "2026.08.11-e8db854");
     assert.ok(spec.pins.cursorAgent.sha256.x86_64);
     assert.ok(spec.pins.cursorAgent.sha256.aarch64);
-    assert.equal(spec.pins.gdgCli.version, "0.3.1");
+    assert.equal(spec.pins.gdgCli.version, "0.4.0");
     assert.equal(spec.pins.gdgCli.assetTemplate, "gdg_{version}_linux_{arch}.zip");
     assert.ok(spec.pins.gdgCli.sha256.x86_64);
     assert.ok(spec.pins.gdgCli.sha256.aarch64);
@@ -295,7 +338,7 @@ test("gdg agent-host apply prefix mode writes layout", async () => {
     assert.equal(spec.pins.gws.version, "v0.22.5");
 
     const cliConfigSrc = await readFile(
-      join(repositoryRoot, "agent-host/config/cli-config.json"),
+      join(repositoryRoot, "agent-host/config/backends/cursor/cli-config.json"),
       "utf8",
     );
     assert.doesNotMatch(cliConfigSrc, /google-workspace/);
@@ -406,6 +449,48 @@ test("gdg agent-host apply prefix mode writes layout", async () => {
   }
 });
 
+// agents-index.service runs `node /opt/agents-index/src/cli.ts` through Node's
+// strip-only TypeScript loader. Non-erasable syntax (parameter properties, enums,
+// namespaces) makes that a restart loop with ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX.
+// Load every rendered daemon source and assert the loader accepts it. Missing
+// npm deps surface as ERR_MODULE_NOT_FOUND, which is fine here — the loader ran.
+test("rendered agents-index daemon sources load under Node's strip-only loader", async () => {
+  const prefix = await mkdtemp(join(tmpdir(), "gdg-agent-ai-smoke-"));
+  try {
+    const result = emitLayout({
+      ...process.env,
+      GDG_SETUP_PREFIX: prefix,
+      GDG_AGENT_SLOT_COUNT: "4",
+      GDG_BIN: ensureGdgBin(),
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+
+    const srcRoot = join(prefix, "opt/agents-index/src");
+    const walk = async (dir) => {
+      const out = [];
+      for (const e of await readdir(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) out.push(...(await walk(p)));
+        else if (e.name.endsWith(".ts")) out.push(p);
+      }
+      return out;
+    };
+    const files = await walk(srcRoot);
+    assert.ok(files.length >= 10, `expected the daemon tree, found ${files.length} files`);
+
+    for (const file of files) {
+      const run = spawnSync(process.execPath, [file], { encoding: "utf8" });
+      assert.doesNotMatch(
+        run.stderr ?? "",
+        /ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX/,
+        `${file} contains non-erasable TypeScript; the deployed daemon cannot load it:\n${run.stderr}`,
+      );
+    }
+  } finally {
+    await rm(prefix, { recursive: true, force: true });
+  }
+});
+
 test("agent-host/workspace/ contains no private Google Drive/Sheets URLs or Discord IDs", async () => {
   const workspaceDir = join(repositoryRoot, "agent-host/workspace");
   const entries = await readdir(workspaceDir, { recursive: true, withFileTypes: true });
@@ -479,6 +564,31 @@ test("agent-host.json slotCount changes propagate to sudoers, tmpfiles, and per-
 
     assert.equal(existsSync(join(prefix, "home/gdgagent-run-2/.cursor/sandbox.json")), true);
     assert.equal(existsSync(join(prefix, "home/gdgagent-run-3/.cursor/sandbox.json")), false);
+
+    // agents-index is folded into the same spec: --slots and SupplementaryGroups
+    // follow slotCount, with no /opt/gdgjp checkout dependency. It is a system
+    // unit (User=/Group=) because a --user manager cannot set the slot groups
+    // the daemon needs to chgrp the per-slot index sockets.
+    const unit = await readFile(join(prefix, "etc/systemd/system/agents-index.service"), "utf8");
+    assert.match(unit, /^User=gdgagent-svc$/m);
+    assert.match(unit, /^Group=gdgagent-svc$/m);
+    assert.match(unit, /^WantedBy=multi-user\.target$/m);
+    assert.match(unit, /--slots 3 /);
+    assert.match(
+      unit,
+      /SupplementaryGroups=gdgwiki gdgagent-run-0 gdgagent-run-1 gdgagent-run-2$/m,
+    );
+    assert.doesNotMatch(unit, /gdgagent-run-3/);
+    assert.doesNotMatch(unit, /\/opt\/gdgjp/);
+    assert.match(unit, /# gdg-artifacts-rev: [0-9a-f]{16}/);
+    assert.match(unit, /ExecStart=\/usr\/bin\/node \/opt\/agents-index\/src\/cli\.ts watch/);
+
+    // The daemon deploys self-contained; the ACL import is rewritten off @gdgjp/gdg-lib.
+    const filter = await readFile(join(prefix, "opt/agents-index/src/acl/filter.ts"), "utf8");
+    assert.doesNotMatch(filter, /@gdgjp\/gdg-lib/);
+    assert.match(filter, /from "\.\/agent\.ts"/);
+    assert.equal(existsSync(join(prefix, "opt/agents-index/src/acl/agent.ts")), true);
+    assert.equal(existsSync(join(prefix, "opt/agents-index/package-lock.json")), true);
   } finally {
     await rm(prefix, { recursive: true, force: true });
     await rm(specDir, { recursive: true, force: true });
@@ -707,17 +817,22 @@ test("rejects unsupported backend values in schema and agent-host apply", async 
     const baseSpec = JSON.parse(
       await readFile(join(repositoryRoot, "agent-host/agent-host.json"), "utf8"),
     );
-    const badBackendSpec = {
+    const unknownBackendSpec = {
       ...baseSpec,
       backend: {
-        name: "antigravity",
+        name: "unknown-llm",
         model: "composer-2.5",
+        isolation: {
+          slotLauncher: true,
+          osSandbox: "workspace",
+          toolGate: "preToolUse-failClosed",
+        },
       },
     };
-    const badSpecPath = join(customSpecDir, "agent-host.json");
-    await writeFile(badSpecPath, JSON.stringify(badBackendSpec, null, 2), "utf8");
+    const unknownSpecPath = join(customSpecDir, "unknown-backend.json");
+    await writeFile(unknownSpecPath, JSON.stringify(unknownBackendSpec, null, 2), "utf8");
 
-    // Schema validation must reject antigravity
+    // Schema validation must reject unknown-llm
     const ajvCheck = spawnSync(
       "npx",
       [
@@ -726,23 +841,83 @@ test("rejects unsupported backend values in schema and agent-host apply", async 
         "-s",
         join(repositoryRoot, "agent-host/agent-host.schema.json"),
         "-d",
-        badSpecPath,
+        unknownSpecPath,
       ],
       { encoding: "utf8" },
     );
     assert.notEqual(ajvCheck.status, 0);
 
-    // agent-host apply must fail closed on unsupported backend
-    const applyCheck = applyLayout(
+    // agent-host apply must fail closed on unknown backend
+    const applyCheckUnknown = applyLayout(
       {
         ...process.env,
-        GDG_SPEC: badSpecPath,
+        GDG_SPEC: unknownSpecPath,
         GDG_SETUP_PREFIX: "/tmp/fake-prefix",
       },
       ["--dry-run"],
     );
-    assert.notEqual(applyCheck.status, 0);
-    assert.match(applyCheck.stderr, /Unsupported backend/);
+    assert.notEqual(applyCheckUnknown.status, 0);
+    assert.match(applyCheckUnknown.stderr, /unknown backend/);
+
+    // Schema validation must reject missing isolation
+    const missingIsolationSpec = {
+      ...baseSpec,
+      backend: {
+        name: "cursor",
+        model: "composer-2.5",
+      },
+    };
+    const missingIsoPath = join(customSpecDir, "missing-iso.json");
+    await writeFile(missingIsoPath, JSON.stringify(missingIsolationSpec, null, 2), "utf8");
+    const ajvIsoCheck = spawnSync(
+      "npx",
+      [
+        "ajv-cli",
+        "validate",
+        "-s",
+        join(repositoryRoot, "agent-host/agent-host.schema.json"),
+        "-d",
+        missingIsoPath,
+      ],
+      { encoding: "utf8" },
+    );
+    assert.notEqual(ajvIsoCheck.status, 0);
+
+    // agent-host apply must fail closed on antigravity because it lacks 3 layers
+    const antigravitySpec = {
+      ...baseSpec,
+      backend: {
+        name: "antigravity",
+        model: "gemini-2.5",
+        isolation: {
+          slotLauncher: true,
+          osSandbox: "workspace",
+          toolGate: "preToolUse-failClosed",
+        },
+      },
+    };
+    const antigravityPath = join(customSpecDir, "antigravity.json");
+    await writeFile(antigravityPath, JSON.stringify(antigravitySpec, null, 2), "utf8");
+    const applyCheckAntigravity = applyLayout(
+      {
+        ...process.env,
+        GDG_SPEC: antigravityPath,
+        GDG_SETUP_PREFIX: "/tmp/fake-prefix",
+      },
+      ["--dry-run"],
+    );
+    assert.notEqual(applyCheckAntigravity.status, 0);
+    assert.match(applyCheckAntigravity.stderr, /does not satisfy required isolation/);
+    // Stage 12 lifted slot isolation into CliRunnerBase for all xangi adapters, so slotLauncher
+    // is now satisfied for antigravity too — it must not appear in the failure output any more.
+    // Stage 14 (ADR-032) implemented the toolGate mechanism (acl-gate.ts reuse via a root-owned
+    // per-slot hooks.json) and end-to-end verified it against an unpinned agy build, but its
+    // code-review follow-up requires a pinned+checksummed agy version and an E2E test against
+    // that exact binary before the registry may claim the guarantee — so toolGate (alongside
+    // osSandbox, unverified boundary equivalence) still blocks the switch here.
+    assert.doesNotMatch(applyCheckAntigravity.stderr, /slotLauncher/);
+    assert.match(applyCheckAntigravity.stderr, /toolGate/);
+    assert.match(applyCheckAntigravity.stderr, /osSandbox/);
   } finally {
     await rm(customSpecDir, { recursive: true, force: true });
   }
@@ -777,6 +952,93 @@ test("spec node pin strictly enforces pinned Node minor version", async () => {
       ["--dry-run"],
     );
     assert.notEqual(check.status, 0);
+  } finally {
+    await rm(customSpecDir, { recursive: true, force: true });
+  }
+});
+
+test("validate-spec command and build-agent-host-release enforce release gating", async () => {
+  const { validateSpecForPublish } = await import("../../scripts/build-agent-host-release.mjs");
+  const bin = ensureGdgBin();
+
+  // 1. Default spec is production and satisfies validate-spec --for-release
+  const prodCheck = spawnSync(
+    bin,
+    ["agent-host", "validate-spec", "--for-release", "--spec", defaultSpec],
+    {
+      encoding: "utf8",
+    },
+  );
+  assert.equal(prodCheck.status, 0, prodCheck.stderr || prodCheck.stdout);
+
+  // 2. Development spec passes validate-spec but is rejected by --for-release and publish gate
+  const customSpecDir = await mkdtemp(join(tmpdir(), "gdg-agent-dev-spec-"));
+  try {
+    const baseSpec = JSON.parse(await readFile(defaultSpec, "utf8"));
+    const devSpec = {
+      ...baseSpec,
+      environment: "development",
+      backend: {
+        name: "antigravity",
+        model: "gemini-2.5",
+        isolation: {
+          slotLauncher: false,
+          osSandbox: "none",
+          toolGate: "none",
+        },
+      },
+    };
+    const devSpecPath = join(customSpecDir, "dev-spec.json");
+    const devSpecContent = JSON.stringify(devSpec, null, 2);
+    await writeFile(devSpecPath, devSpecContent, "utf8");
+
+    // Local validation succeeds
+    const localCheck = spawnSync(bin, ["agent-host", "validate-spec", "--spec", devSpecPath], {
+      encoding: "utf8",
+    });
+    assert.equal(localCheck.status, 0, localCheck.stderr || localCheck.stdout);
+
+    // Release validation gate fails
+    const releaseCheck = spawnSync(
+      bin,
+      ["agent-host", "validate-spec", "--for-release", "--spec", devSpecPath],
+      { encoding: "utf8" },
+    );
+    assert.notEqual(releaseCheck.status, 0);
+    assert.match(releaseCheck.stderr, /cannot be published/);
+
+    // scripts/build-agent-host-release.mjs validateSpecForPublish rejects dev spec
+    assert.throws(() => {
+      validateSpecForPublish(devSpecPath, devSpecContent, bin);
+    }, /cannot be published/);
+
+    // 3. A spec that OMITS "environment" entirely must be rejected for release, not silently
+    // defaulted to production -- distinguishing this from an explicit "production" spec is only
+    // possible against the raw JSON, before ordinary spec loading defaults the omission away.
+    const { environment: _omitted, ...specWithoutEnvironment } = baseSpec;
+    const noEnvPath = join(customSpecDir, "no-environment-spec.json");
+    const noEnvContent = JSON.stringify(specWithoutEnvironment, null, 2);
+    await writeFile(noEnvPath, noEnvContent, "utf8");
+
+    // Ordinary (non-release) validation still accepts the omission (defaults to production).
+    const noEnvLocalCheck = spawnSync(bin, ["agent-host", "validate-spec", "--spec", noEnvPath], {
+      encoding: "utf8",
+    });
+    assert.equal(noEnvLocalCheck.status, 0, noEnvLocalCheck.stderr || noEnvLocalCheck.stdout);
+
+    // Release validation gate rejects the omission.
+    const noEnvReleaseCheck = spawnSync(
+      bin,
+      ["agent-host", "validate-spec", "--for-release", "--spec", noEnvPath],
+      { encoding: "utf8" },
+    );
+    assert.notEqual(noEnvReleaseCheck.status, 0);
+    assert.match(noEnvReleaseCheck.stderr, /environment.*required/i);
+
+    // scripts/build-agent-host-release.mjs validateSpecForPublish rejects the omission too.
+    assert.throws(() => {
+      validateSpecForPublish(noEnvPath, noEnvContent, bin);
+    }, /environment/i);
   } finally {
     await rm(customSpecDir, { recursive: true, force: true });
   }

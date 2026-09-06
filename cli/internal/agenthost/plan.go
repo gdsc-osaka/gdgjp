@@ -2,6 +2,7 @@ package agenthost
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -82,6 +83,14 @@ func BuildPlan(ctx context.Context, opts PlanOptions) (*Plan, error) {
 		return nil, err
 	}
 
+	// Stage 10 Tier boundary: paths.workspace must be converged exclusively through the Stage 09
+	// sync-workspace transaction (mutex, local-modification detection, Mode B journal), never as a
+	// generic file/dir resource here. Enforced structurally, before any --only filtering, so it
+	// cannot be scoped away.
+	if err := ValidateWorkspaceDelegation(resources, paths.WikiRoot); err != nil {
+		return nil, err
+	}
+
 	// Filter by --only if specified
 	onlySet, err := parseOnlyFilter(opts.Only)
 	if err != nil {
@@ -111,6 +120,40 @@ func BuildPlan(ctx context.Context, opts PlanOptions) (*Plan, error) {
 	}
 
 	return plan, nil
+}
+
+// ValidateWorkspaceDelegation is Stage 10's structural enforcement of the Tier boundary:
+// the *content* of paths.workspace must be converged exclusively through the Stage 09
+// sync-workspace transaction (wiki mutex, local-modification detection, Mode B write-ahead
+// journal), never through a generic file/dir resource planned here. If this ever finds a
+// violation, a release apply could otherwise overwrite the live worktree out from under a
+// concurrent sleep/ingest run.
+//
+// A DirResource for the workspace root path itself is exempt: the mountpoint's existence, mode,
+// and ownership are managed here (so WikiCloneResource has somewhere to clone into) before any
+// content ever exists under it. Only resources *strictly inside* workspacePath are violations.
+func ValidateWorkspaceDelegation(resources []Resource, workspacePath string) error {
+	if strings.TrimSpace(workspacePath) == "" {
+		return nil
+	}
+	clean := filepath.Clean(workspacePath)
+	prefix := clean + string(filepath.Separator)
+	for _, r := range resources {
+		var p string
+		switch res := r.(type) {
+		case *FileResource:
+			p = res.Path
+		case *DirResource:
+			p = res.Path
+		default:
+			continue
+		}
+		cp := filepath.Clean(p)
+		if strings.HasPrefix(cp, prefix) {
+			return fmt.Errorf("plan invariant violation: %s resource %s targets inside paths.workspace (%s); workspace/ content must be converged exclusively through the Tier 1 sync-workspace transaction, never as a generic file/dir resource", r.ResourceType(), p, workspacePath)
+		}
+	}
+	return nil
 }
 
 func parseOnlyFilter(only string) (map[string]bool, error) {
@@ -161,6 +204,11 @@ func parseOnlyFilter(only string) (map[string]bool, error) {
 }
 
 func buildDesiredResources(paths layoutPaths, prune bool) ([]Resource, error) {
+	backendPolicy, err := GetBackendPolicy(paths.Spec.Backend.Name)
+	if err != nil {
+		return nil, err
+	}
+
 	var res []Resource
 
 	// 1. Users and Groups
@@ -231,6 +279,30 @@ func buildDesiredResources(paths layoutPaths, prune bool) ([]Resource, error) {
 		Group: "gdgagent-svc",
 	})
 	res = append(res, &DirResource{
+		Path:  paths.VarLibRoot,
+		Mode:  0o750,
+		Owner: "gdgagent-svc",
+		Group: "gdgagent-svc",
+	})
+	res = append(res, &DirResource{
+		Path:  filepath.Join(paths.VarLibRoot, "workspace-staging"),
+		Mode:  0o700,
+		Owner: "gdgagent-svc",
+		Group: "gdgagent-svc",
+	})
+	res = append(res, &DirResource{
+		Path:  filepath.Join(paths.VarLibRoot, "workspace-backup"),
+		Mode:  0o700,
+		Owner: "gdgagent-svc",
+		Group: "gdgagent-svc",
+	})
+	res = append(res, &DirResource{
+		Path:  filepath.Join(paths.VarLibRoot, "workspace-journal"),
+		Mode:  0o700,
+		Owner: "gdgagent-svc",
+		Group: "gdgagent-svc",
+	})
+	res = append(res, &DirResource{
 		Path:  filepath.Join(paths.EtcRoot, "sudoers.d"),
 		Mode:  0o755,
 		Owner: "root",
@@ -245,6 +317,24 @@ func buildDesiredResources(paths layoutPaths, prune bool) ([]Resource, error) {
 	res = append(res, &DirResource{
 		Path:  filepath.Join(paths.EtcRoot, "apparmor.d"),
 		Mode:  0o755,
+		Owner: "root",
+		Group: "root",
+	})
+	// Stage 10: live spec published by each successful release apply (world-readable, root-owned;
+	// see release.go's publishLiveSpec). Every gdg agent-host subcommand falls back to this path
+	// when --spec/GDG_SPEC are unset, so config-only changes take effect without a manual --spec.
+	res = append(res, &DirResource{
+		Path:  filepath.Join(paths.EtcRoot, "gdg-agent"),
+		Mode:  0o755,
+		Owner: "root",
+		Group: "root",
+	})
+	// Stage 10: release generations (/var/lib/agent-host/releases/<version>). root:root 0700 --
+	// deliberately outside even gdgagent-svc's reach, since no slot uid or service account should
+	// be able to read or tamper with release generations or the "current" pointer.
+	res = append(res, &DirResource{
+		Path:  filepath.Join(paths.VarLibRoot, "releases"),
+		Mode:  0o700,
 		Owner: "root",
 		Group: "root",
 	})
@@ -276,19 +366,11 @@ func buildDesiredResources(paths layoutPaths, prune bool) ([]Resource, error) {
 	// Slot directories
 	for slot := 0; slot < paths.SlotCount; slot++ {
 		slotUser := fmt.Sprintf("gdgagent-run-%d", slot)
-		slotHome := filepath.Join(paths.HomeRoot, slotUser)
-		res = append(res, &DirResource{
-			Path:  filepath.Join(slotHome, ".cursor"),
-			Mode:  unixFileMode(0o1775),
-			Owner: "root",
-			Group: slotUser,
-		})
-		res = append(res, &DirResource{
-			Path:  filepath.Join(slotHome, ".cursor", "projects"),
-			Mode:  0o755,
-			Owner: slotUser,
-			Group: slotUser,
-		})
+		slotDirs, err := backendPolicy.BuildSlotDirectories(paths, slot)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, slotDirs...)
 		res = append(res, &DirResource{
 			Path:  filepath.Join(paths.RunRoot, strconv.Itoa(slot)),
 			Mode:  0o750,
@@ -327,18 +409,22 @@ func buildDesiredResources(paths layoutPaths, prune bool) ([]Resource, error) {
 		Group: "root",
 	})
 
-	cliConfigTemplate, err := configBytes("cli-config.json")
+	backendHostRes, err := backendPolicy.BuildHostResources(paths)
 	if err != nil {
 		return nil, err
 	}
-	cliConfigCanonical := []byte(subst(string(cliConfigTemplate), paths.SpecAgentRoot, "", ""))
-	res = append(res, &FileResource{
-		Path:  filepath.Join(paths.AgentRoot, "lib", "cli-config.json"),
-		Data:  cliConfigCanonical,
-		Mode:  0o444,
-		Owner: "root",
-		Group: "root",
-	})
+	res = append(res, backendHostRes...)
+
+	releaseKeyBytes, err := configBytes("release-key.pub")
+	if err == nil && len(releaseKeyBytes) > 0 {
+		res = append(res, &FileResource{
+			Path:  filepath.Join(paths.AgentRoot, "lib", "release-key.pub"),
+			Data:  releaseKeyBytes,
+			Mode:  0o644,
+			Owner: "root",
+			Group: "root",
+		})
+	}
 
 	// Bin wrappers
 	res = append(res, &FileResource{
@@ -364,91 +450,41 @@ func buildDesiredResources(paths layoutPaths, prune bool) ([]Resource, error) {
 	})
 
 	// Slot configs and launchers
-	hooksTemplate, err := configBytes("hooks.json")
-	if err != nil {
-		return nil, err
-	}
-	sandboxTemplate, err := configBytes("sandbox.json.in")
-	if err != nil {
-		return nil, err
-	}
-	mcpTemplate, err := configBytes("mcp.json.in")
-	if err != nil {
-		return nil, err
-	}
-	extraMCP, err := configBytes("extra-mcp.json")
-	if err != nil {
-		return nil, err
-	}
-	permissions, err := configBytes("permissions.json")
-	if err != nil {
-		return nil, err
-	}
 	spawnTemplate, err := configBytes("spawn-slot.sh")
 	if err != nil {
 		return nil, err
 	}
 
 	for slot := 0; slot < paths.SlotCount; slot++ {
-		slotUser := fmt.Sprintf("gdgagent-run-%d", slot)
-		slotHome := filepath.Join(paths.HomeRoot, slotUser)
-		cursorDir := filepath.Join(slotHome, ".cursor")
 		specSlotRun := filepath.Join(paths.SpecRunRoot, strconv.Itoa(slot))
 		indexSocket := filepath.Join(paths.SpecRunRoot, strconv.Itoa(slot), "index.sock")
 
-		res = append(res, &FileResource{
-			Path:  filepath.Join(cursorDir, "hooks.json"),
-			Data:  []byte(subst(string(hooksTemplate), paths.SpecAgentRoot, "", "")),
-			Mode:  0o444,
-			Owner: "root",
-			Group: "root",
-		})
-		res = append(res, &FileResource{
-			Path:  filepath.Join(cursorDir, "cli-config.json"),
-			Data:  []byte(subst(string(cliConfigTemplate), paths.SpecAgentRoot, "", "")),
-			Mode:  0o644,
-			Owner: slotUser,
-			Group: slotUser,
-		})
-		res = append(res, &FileResource{
-			Path:  filepath.Join(cursorDir, "sandbox.json"),
-			Data:  []byte(subst(string(sandboxTemplate), paths.SpecAgentRoot, specSlotRun, "")),
-			Mode:  0o444,
-			Owner: "root",
-			Group: "root",
-		})
-		mergedMCP, mcpErr := mergeSlotMCP([]byte(subst(string(mcpTemplate), paths.SpecAgentRoot, "", indexSocket)), extraMCP)
-		if mcpErr != nil {
-			return nil, mcpErr
+		slotBackendRes, err := backendPolicy.BuildSlotResources(paths, slot, specSlotRun, indexSocket)
+		if err != nil {
+			return nil, err
 		}
-		res = append(res, &FileResource{
-			Path:  filepath.Join(cursorDir, "mcp.json"),
-			Data:  mergedMCP,
-			Mode:  0o444,
-			Owner: "root",
-			Group: "root",
-		})
-		res = append(res, &FileResource{
-			Path:  filepath.Join(cursorDir, "permissions.json"),
-			Data:  permissions,
-			Mode:  0o444,
-			Owner: "root",
-			Group: "root",
-		})
+		res = append(res, slotBackendRes...)
 
-		spawn := subst(string(spawnTemplate), paths.SpecAgentRoot, "", "")
-		spawn = strings.ReplaceAll(spawn, "__SLOT__", strconv.Itoa(slot))
-		res = append(res, &FileResource{
-			Path:  filepath.Join(paths.AgentRoot, "bin", fmt.Sprintf("spawn-slot-%d", slot)),
-			Data:  []byte(spawn),
-			Mode:  0o755,
-			Owner: "root",
-			Group: "root",
-		})
+		if paths.Spec.Backend.Isolation.SlotLauncher {
+			spawn := subst(string(spawnTemplate), paths.SpecAgentRoot, "", "")
+			spawn = strings.ReplaceAll(spawn, "__SLOT__", strconv.Itoa(slot))
+			res = append(res, &FileResource{
+				Path:  filepath.Join(paths.AgentRoot, "bin", fmt.Sprintf("spawn-slot-%d", slot)),
+				Data:  []byte(spawn),
+				Mode:  0o755,
+				Owner: "root",
+				Group: "root",
+			})
+		}
 	}
 
 	// 4. Sudoers
 	sudoersContent := generateSudoersContent(paths)
+	if paths.Spec.Backend.Isolation.SlotLauncher {
+		if err := ValidateSudoersSlotLauncher(sudoersContent, paths.SlotCount); err != nil {
+			return nil, err
+		}
+	}
 	res = append(res, &SudoersResource{
 		Path: filepath.Join(paths.EtcRoot, "sudoers.d", "gdg-agent"),
 		Data: []byte(sudoersContent),
@@ -462,18 +498,7 @@ func buildDesiredResources(paths layoutPaths, prune bool) ([]Resource, error) {
 		Prefix: paths.Prefix,
 	})
 
-	// 6. AppArmor
-	apparmorData, err := configBytes("apparmor.d-cursor-agent-cursorsandbox")
-	if err != nil {
-		return nil, err
-	}
-	res = append(res, &AppArmorResource{
-		Path:   filepath.Join(paths.EtcRoot, "apparmor.d", "cursor-agent-cursorsandbox"),
-		Data:   apparmorData,
-		Prefix: paths.Prefix,
-	})
-
-	// 7. Systemd units
+	// 6. Systemd units
 	userUnitDir := filepath.Join(paths.HomeRoot, "gdgagent-svc", ".config", "systemd", "user")
 
 	xangiUnit := `[Unit]
@@ -482,7 +507,7 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=/opt/xangi
-ExecStart=/usr/bin/node /opt/xangi/node_modules/tsx/dist/cli.mjs /opt/xangi/src/index.ts
+ExecStart=/usr/bin/node /opt/xangi/dist/index.js
 Environment=XANGI_SETUP_CONFIG_PATH=/home/gdgagent-svc/.config/xangi/xangi.json
 Environment=XANGI_SETUP_STATE_DIR=/home/gdgagent-svc/.local/share/xangi
 Restart=on-failure
@@ -611,6 +636,107 @@ WantedBy=timers.target
 		Prefix: paths.Prefix,
 	})
 
+	syncService := `[Unit]
+Description=agent-host-sync (GDG agent workspace sync)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gdg agent-host sync-workspace
+`
+	res = append(res, &SystemdUnitResource{
+		UnitName: "agent-host-sync.service",
+		Path:     filepath.Join(userUnitDir, "agent-host-sync.service"),
+		Data:     []byte(syncService),
+		Mode:     0o644,
+		Owner:    "gdgagent-svc",
+		Group:    "gdgagent-svc",
+		Scope:    "user",
+		User:     "gdgagent-svc",
+		Prefix:   paths.Prefix,
+	})
+
+	syncTimer := `[Unit]
+Description=Run agent-host-sync every 5 minutes
+
+[Timer]
+OnUnitActiveSec=5min
+OnBootSec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+`
+	res = append(res, &SystemdUnitResource{
+		UnitName: "agent-host-sync.timer",
+		Path:     filepath.Join(userUnitDir, "agent-host-sync.timer"),
+		Data:     []byte(syncTimer),
+		Mode:     0o644,
+		Owner:    "gdgagent-svc",
+		Group:    "gdgagent-svc",
+		Scope:    "user",
+		User:     "gdgagent-svc",
+		Enable:   true,
+		Prefix:   paths.Prefix,
+	})
+
+	// 7a. Stage 10 Tier 2: agent-host-apply, the pull-type release converger. Unlike
+	// agent-host-sync (Tier 1, gdgagent-svc --user unit), converging spec/config/packages/systemd
+	// requires root, so this is a system unit -- same scope as agents-index.service.
+	systemUnitDir := filepath.Join(paths.EtcRoot, "systemd", "system")
+	res = append(res, &DirResource{
+		Path:  systemUnitDir,
+		Mode:  0o755,
+		Owner: "root",
+		Group: "root",
+	})
+
+	applyService := `[Unit]
+Description=agent-host-apply (GDG agent host Tier 2 control-plane release apply)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gdg agent-host release apply
+`
+	res = append(res, &SystemdUnitResource{
+		UnitName: "agent-host-apply.service",
+		Path:     filepath.Join(systemUnitDir, "agent-host-apply.service"),
+		Data:     []byte(applyService),
+		Mode:     0o644,
+		Owner:    "root",
+		Group:    "root",
+		Scope:    "system",
+		Prefix:   paths.Prefix,
+	})
+
+	applyInterval := "1h"
+	if paths.Spec.Release != nil && strings.TrimSpace(paths.Spec.Release.ApplyInterval) != "" {
+		applyInterval = paths.Spec.Release.ApplyInterval
+	}
+	applyTimer := fmt.Sprintf(`[Unit]
+Description=Run agent-host-apply periodically
+
+[Timer]
+OnUnitActiveSec=%s
+OnBootSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+`, applyInterval)
+	res = append(res, &SystemdUnitResource{
+		UnitName: "agent-host-apply.timer",
+		Path:     filepath.Join(systemUnitDir, "agent-host-apply.timer"),
+		Data:     []byte(applyTimer),
+		Mode:     0o644,
+		Owner:    "root",
+		Group:    "root",
+		Scope:    "system",
+		Enable:   true,
+		Prefix:   paths.Prefix,
+	})
+
 	// 8. Runtime Packages & Binaries
 	nodeMajor := paths.Spec.Pins.Node.Major
 	if nodeMajor == 0 {
@@ -663,11 +789,11 @@ WantedBy=timers.target
 
 	xangiRepo := paths.Spec.Pins.Xangi.Repo
 	if xangiRepo == "" {
-		xangiRepo = "https://github.com/Harineko0/xangi.git"
+		xangiRepo = "https://github.com/gdg-jp/xangi.git"
 	}
 	xangiRef := paths.Spec.Pins.Xangi.Ref
 	if xangiRef == "" {
-		xangiRef = "b3db5919a5e33769ef8d7bcef245aa6b76974948"
+		xangiRef = "f69572739f46931cff1d3edbe7c34409a9f329ee"
 	}
 	res = append(res, &GitResource{
 		Destination: "/opt/xangi",
@@ -676,6 +802,29 @@ WantedBy=timers.target
 		Symlink:     "/usr/local/bin/xangi",
 		Prefix:      paths.Prefix,
 	})
+
+	// @gdg-jp/gdg-lib is resolved from GitHub Packages (Stage 13), not a
+	// sibling /opt/gdgjp checkout. The token is never written into this file:
+	// npm substitutes ${NODE_AUTH_TOKEN} from the exec environment below, so
+	// .npmrc itself carries no secret and can be world-readable.
+	res = append(res, &FileResource{
+		Path:  paths.Prefix + "/opt/xangi/.npmrc",
+		Data:  []byte("@gdg-jp:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n"),
+		Mode:  0o644,
+		Owner: "root",
+		Group: "root",
+	})
+
+	var npmCiEnv []string
+	if data, err := os.ReadFile("/home/gdgagent-svc/.config/xangi/secrets.json"); err == nil {
+		var sec map[string]any
+		if json.Unmarshal(data, &sec) == nil {
+			if tok, ok := sec["NPM_READ_TOKEN"].(string); ok && strings.TrimSpace(tok) != "" {
+				npmCiEnv = []string{"NODE_AUTH_TOKEN=" + strings.TrimSpace(tok)}
+			}
+		}
+	}
+
 	res = append(res, &ExecResource{
 		Name:           "npm-ci:/opt/xangi",
 		Command:        []string{"npm", "ci"},
@@ -684,7 +833,17 @@ WantedBy=timers.target
 		StateFile:      "/opt/xangi/node_modules/.package-lock.sha256",
 		CheckDir:       "/opt/xangi/node_modules",
 		ChmodRecursive: "/opt/xangi/node_modules",
+		Env:            npmCiEnv,
 		Prefix:         paths.Prefix,
+	})
+	res = append(res, &ExecResource{
+		Name:      "npm-build:/opt/xangi",
+		Command:   []string{"npm", "run", "build"},
+		Dir:       "/opt/xangi",
+		WatchFile: "/opt/xangi/.git/HEAD",
+		StateFile: "/opt/xangi/dist/.build.sha256",
+		CheckDir:  "/opt/xangi/dist",
+		Prefix:    paths.Prefix,
 	})
 
 	if paths.Prefix == "" {
@@ -704,6 +863,13 @@ WantedBy=timers.target
 		})
 	}
 
+	// 9. agents-index daemon (folded in from agents-index/install.sh at Stage 08).
+	aiRes, err := buildAgentsIndexResources(paths)
+	if err != nil {
+		return nil, err
+	}
+	res = append(res, aiRes...)
+
 	// 6. Cleanup of obsolete/decommissioned resources gated by prune
 	if prune {
 		// 6a. Undeclared bin files (ResourceType: "file")
@@ -713,6 +879,9 @@ WantedBy=timers.target
 				"wk":          true,
 				"gws":         true,
 				"index-proxy": true,
+			}
+			if paths.Spec.AgentsIndex.Enabled {
+				knownBin["agents-index"] = true
 			}
 			for slot := 0; slot < paths.SlotCount; slot++ {
 				knownBin["spawn-slot-"+strconv.Itoa(slot)] = true
@@ -833,7 +1002,11 @@ func generateTmpfilesContent(paths layoutPaths) string {
 
 func buildLangfuseForwarderResources(prefix string) ([]Resource, error) {
 	var res []Resource
-	destDir := filepath.Join(prefix, "opt", "langfuse-forwarder")
+	// Match the string-concatenation idiom used for every other /opt path in
+	// this file: filepath.Join("", "opt", ...) drops the leading separator and
+	// yields a relative path, so a live (prefix == "") apply would write the
+	// tree under the caller's cwd instead of /opt.
+	destDir := prefix + "/opt/langfuse-forwarder"
 	res = append(res, &DirResource{
 		Path:  destDir,
 		Mode:  0o755,

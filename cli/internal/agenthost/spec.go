@@ -12,8 +12,9 @@ import (
 )
 
 type BackendSpec struct {
-	Name  string `json:"name"`
-	Model string `json:"model"`
+	Name      string        `json:"name"`
+	Model     string        `json:"model"`
+	Isolation IsolationSpec `json:"isolation"`
 }
 
 type DiscordSpec struct {
@@ -60,6 +61,12 @@ type SystemdSpec struct {
 	DropIns map[string]map[string]string `json:"dropIns"`
 }
 
+type AgentsIndexSpec struct {
+	Enabled bool   `json:"enabled"`
+	DataDir string `json:"dataDir"`
+	DBPath  string `json:"dbPath"`
+}
+
 type layoutPaths struct {
 	SlotCount     int
 	SpecAgentRoot string
@@ -71,6 +78,7 @@ type layoutPaths struct {
 	RunRoot       string
 	EtcRoot       string
 	HomeRoot      string
+	VarLibRoot    string
 	Spec          SpecFile
 }
 
@@ -168,14 +176,31 @@ type PathsSpec struct {
 	RunRoot   string `json:"runRoot"`
 }
 
+type WorkspaceSyncSpec struct {
+	Interval string `json:"interval,omitempty"`
+	Source   string `json:"source,omitempty"`
+}
+
+// ReleaseSpec configures Tier 2 control-plane release fetch, apply cadence, and generation
+// retention. It is optional; ApplyRelease falls back to compiled-in defaults when unset.
+type ReleaseSpec struct {
+	ManifestBaseURL string `json:"manifestBaseURL,omitempty"`
+	ApplyInterval   string `json:"applyInterval,omitempty"`
+	Keep            int    `json:"keep,omitempty"`
+}
+
 type SpecFile struct {
-	Schema    string      `json:"$schema,omitempty"`
-	SlotCount int         `json:"slotCount"`
-	Backend   BackendSpec `json:"backend"`
-	Discord   DiscordSpec `json:"discord"`
-	Pins      PinsSpec    `json:"pins"`
-	Paths     PathsSpec   `json:"paths"`
-	Systemd   SystemdSpec `json:"systemd,omitempty"`
+	Schema        string             `json:"$schema,omitempty"`
+	Environment   string             `json:"environment,omitempty"`
+	SlotCount     int                `json:"slotCount"`
+	Backend       BackendSpec        `json:"backend"`
+	Discord       DiscordSpec        `json:"discord"`
+	Pins          PinsSpec           `json:"pins"`
+	Paths         PathsSpec          `json:"paths"`
+	Systemd       SystemdSpec        `json:"systemd,omitempty"`
+	AgentsIndex   AgentsIndexSpec    `json:"agentsIndex,omitempty"`
+	WorkspaceSync *WorkspaceSyncSpec `json:"workspaceSync,omitempty"`
+	Release       *ReleaseSpec       `json:"release,omitempty"`
 }
 
 func parseSpecBytes(raw []byte, origin string) (SpecFile, error) {
@@ -184,6 +209,12 @@ func parseSpecBytes(raw []byte, origin string) (SpecFile, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&spec); err != nil {
 		return spec, fmt.Errorf("Failed to parse spec at %s: %w", origin, err)
+	}
+
+	if spec.Environment == "" {
+		spec.Environment = "production"
+	} else if spec.Environment != "production" && spec.Environment != "development" {
+		return spec, fmt.Errorf("spec.environment must be one of [production, development] in %s (got %q)", origin, spec.Environment)
 	}
 
 	if spec.SlotCount < 1 {
@@ -204,11 +235,17 @@ func parseSpecBytes(raw []byte, origin string) (SpecFile, error) {
 		}
 	}
 
-	if spec.Backend.Name != "cursor" {
-		return spec, fmt.Errorf("Unsupported backend: %q. Only \"cursor\" is supported at this stage.", spec.Backend.Name)
+	if strings.TrimSpace(spec.Backend.Name) == "" {
+		return spec, fmt.Errorf("spec.backend.name must be a non-empty string in %s", origin)
 	}
 	if strings.TrimSpace(spec.Backend.Model) == "" {
 		return spec, fmt.Errorf("spec.backend.model must be a non-empty string in %s", origin)
+	}
+	if err := ValidateIsolationValues(spec.Backend.Isolation); err != nil {
+		return spec, fmt.Errorf("spec.backend.isolation invalid in %s: %w", origin, err)
+	}
+	if err := ValidateBackendContract(spec); err != nil {
+		return spec, err
 	}
 
 	switch spec.Discord.CompletionNotify {
@@ -261,6 +298,27 @@ func parseSpecBytes(raw []byte, origin string) (SpecFile, error) {
 		return spec, fmt.Errorf("spec.pins.node.minMinor must be a non-negative integer in %s", origin)
 	}
 
+	// agentsIndex is optional; default the paths when enabled and unset.
+	if spec.AgentsIndex.Enabled {
+		if strings.TrimSpace(spec.AgentsIndex.DataDir) == "" {
+			spec.AgentsIndex.DataDir = "/var/lib/agents-index"
+		}
+		if !strings.HasPrefix(spec.AgentsIndex.DataDir, "/") {
+			return spec, fmt.Errorf("spec.agentsIndex.dataDir must be an absolute path in %s", origin)
+		}
+		if strings.TrimSpace(spec.AgentsIndex.DBPath) == "" {
+			spec.AgentsIndex.DBPath = filepath.Join(spec.AgentsIndex.DataDir, "index.db")
+		}
+		if !strings.HasPrefix(spec.AgentsIndex.DBPath, "/") {
+			return spec, fmt.Errorf("spec.agentsIndex.dbPath must be an absolute path in %s", origin)
+		}
+	}
+
+	// release is optional; when present its fields are advisory (defaults live in release.go).
+	if spec.Release != nil && spec.Release.Keep < 0 {
+		return spec, fmt.Errorf("spec.release.keep must be a non-negative integer in %s", origin)
+	}
+
 	return spec, nil
 }
 
@@ -309,6 +367,11 @@ func resolveLayoutPaths(spec SpecFile, prefix string, slotCountOverride int) (la
 		paths.HomeRoot = v
 	} else {
 		paths.HomeRoot = prefix + "/home"
+	}
+	if v := os.Getenv("GDG_SETUP_VAR_LIB_ROOT"); v != "" {
+		paths.VarLibRoot = v
+	} else {
+		paths.VarLibRoot = prefix + "/var/lib/agent-host"
 	}
 	return paths, nil
 }

@@ -16,6 +16,11 @@
     "sha256": "b64f780c011c3d123776175e7341816f9e86beef11c98f80a2dde6086fa0ecb1"
   },
   {
+    "path": "etc/gdg-agent",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
     "path": "etc/sudoers.d",
     "type": "dir",
     "mode": "0755"
@@ -25,6 +30,34 @@
     "type": "file",
     "mode": "0440",
     "sha256": "0a2b13453cc1b90efdfacdf6b2fc203767b858dc7a32a8974eb87064816c0d45"
+  },
+  {
+    "path": "etc/systemd",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
+    "path": "etc/systemd/system",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
+    "path": "etc/systemd/system/agent-host-apply.service",
+    "type": "file",
+    "mode": "0644",
+    "sha256": "a2767d7b0ed1309e41b6cf3728e3da1e401e5778d80646fe53bc1aab98f9afc6"
+  },
+  {
+    "path": "etc/systemd/system/agent-host-apply.timer",
+    "type": "file",
+    "mode": "0644",
+    "sha256": "a9108960c0c830803b290e4f9b0ac86336798521bc2c6b08e58d7708ba1d99d9"
+  },
+  {
+    "path": "etc/systemd/system/agents-index.service",
+    "type": "file",
+    "mode": "0644",
+    "sha256": "a11a8150aa6c957616a4779324eb57658f96dfea1ae4dd7e8205d9e297ee880c"
   },
   {
     "path": "etc/tmpfiles.d",
@@ -243,6 +276,18 @@
     "mode": "0755"
   },
   {
+    "path": "home/gdgagent-svc/.config/systemd/user/agent-host-sync.service",
+    "type": "file",
+    "mode": "0644",
+    "sha256": "15ade739fc6723987426315015dbfb18803c7b1eaf59c2dec6cc2dbb56645fde"
+  },
+  {
+    "path": "home/gdgagent-svc/.config/systemd/user/agent-host-sync.timer",
+    "type": "file",
+    "mode": "0644",
+    "sha256": "15091c4c5a8f247e9873f08684231194dddfac52f3e8578d856781980cce8d75"
+  },
+  {
     "path": "home/gdgagent-svc/.config/systemd/user/langfuse-forwarder.service",
     "type": "file",
     "mode": "0644",
@@ -258,7 +303,7 @@
     "path": "home/gdgagent-svc/.config/systemd/user/xangi.service",
     "type": "file",
     "mode": "0644",
-    "sha256": "af84b5e5624cdb5c6bb40198d8d12389e5afe773f13904316fbbdd64d77a76d6"
+    "sha256": "6841c35d9ff470d28a3f8e9f25d5b59ce66a25a3089ae489eae5dc79e98ce4af"
   },
   {
     "path": "home/gdgagent-svc/.config/systemd/user/xangi.service.d",
@@ -277,6 +322,116 @@
     "mode": "0755"
   },
   {
+    "path": "opt/agents-index",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
+    "path": "opt/agents-index/package-lock.json",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "6f73e245f974ae75e7788b5f3d04b112c72a53ca0ff83c0126e76f383c24868a"
+  },
+  {
+    "path": "opt/agents-index/package.json",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "730e48f1a21dcbf1cb9d8f5714178662ba0679276821d6ff75cc99db17372fee"
+  },
+  {
+    "path": "opt/agents-index/src",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
+    "path": "opt/agents-index/src/acl",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
+    "path": "opt/agents-index/src/acl/agent.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "502c33ea67e2500feeeef96178a923a7f9e3b48521bf89d2578099bf1972a0f5"
+  },
+  {
+    "path": "opt/agents-index/src/acl/filter.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "3887d69d2c8ad77ae1cec6759fca645f7190b5e1c4aa4146d6e41ab8db14d9fa"
+  },
+  {
+    "path": "opt/agents-index/src/acl/frontmatter.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "5b4438658d21736c840ff05b9293e26d35cc024c31e48be2e9284f9420dd885c"
+  },
+  {
+    "path": "opt/agents-index/src/authz.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "213f07ba70098f0e1b74213881168c9d7523881ec4d98fd0cb8af006de74ecee"
+  },
+  {
+    "path": "opt/agents-index/src/cli.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "0158ec2be70664982237004e0b697d344ee6241c923a3e0d0996e624b8e53ec7"
+  },
+  {
+    "path": "opt/agents-index/src/index.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "48d46e8db8a757e6a51e02bf6638ea06197ef94c9208d33de135d0205681de63"
+  },
+  {
+    "path": "opt/agents-index/src/indexer",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
+    "path": "opt/agents-index/src/indexer/chunk.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "d83cc035ba6d1f16a3428ffd6aaeb4045cb2f584d251c39a317242b9142dfb14"
+  },
+  {
+    "path": "opt/agents-index/src/indexer/embed.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "82cc83ae64bcf2b97dd6d337dd85924a542afb1f8bf59c8d6968d72a1cda0bb7"
+  },
+  {
+    "path": "opt/agents-index/src/indexer/store.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "3f88c1879633f4103866e1695776a3e19fbde64afff6ed51757b7f83d80f2b1c"
+  },
+  {
+    "path": "opt/agents-index/src/indexer/watcher.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "1441edbc3f218d99551d622d6356879b0979bd4ac6ccf4a2d028c3eba29df54d"
+  },
+  {
+    "path": "opt/agents-index/src/proxy.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "1210eab0cb6d7b38f75eef45df747dea6d49652b0482b15b9519ad73f85f02d2"
+  },
+  {
+    "path": "opt/agents-index/src/search.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "172219a29145cd3432858a7206bbb4f255192b44b8effb3dbce7e1bec0b6f623"
+  },
+  {
+    "path": "opt/agents-index/src/socket-access.ts",
+    "type": "file",
+    "mode": "0444",
+    "sha256": "1e6dab235bb56e3b1f98a104a4c95dbbe724290ae467bfb23bfbbe22446ebcac"
+  },
+  {
     "path": "opt/gdg-agent",
     "type": "dir",
     "mode": "0755"
@@ -285,6 +440,12 @@
     "path": "opt/gdg-agent/bin",
     "type": "dir",
     "mode": "0755"
+  },
+  {
+    "path": "opt/gdg-agent/bin/agents-index",
+    "type": "file",
+    "mode": "0755",
+    "sha256": "dd289cf2c94037c58cf41dd1359d4b23542f2941f19c01d31379555e2e970206"
   },
   {
     "path": "opt/gdg-agent/bin/gws",
@@ -343,7 +504,7 @@
     "path": "opt/gdg-agent/lib/acl-gate.ts",
     "type": "file",
     "mode": "0444",
-    "sha256": "5f46099da609860e4fa598ab4466444f972b8c0f4e8eb8d7410819dda35d7f39"
+    "sha256": "69c49059ae55e54227d3bc4a4b404d6d02a61c3fb6d1ac63da090de046124d46"
   },
   {
     "path": "opt/gdg-agent/lib/acl-insert-core.ts",
@@ -373,7 +534,7 @@
     "path": "opt/gdg-agent/lib/exec-spawn.ts",
     "type": "file",
     "mode": "0444",
-    "sha256": "588fc7ea3c56dd58d2a9b55bb1717786fc52dec2b92c64f53f399e9d252fddb4"
+    "sha256": "f9ace3fb662e378409a712079a8c417c87ca95d2c5cbc00dfad15880e9ed923d"
   },
   {
     "path": "opt/gdg-agent/lib/gws.ts",
@@ -388,10 +549,16 @@
     "sha256": "1210eab0cb6d7b38f75eef45df747dea6d49652b0482b15b9519ad73f85f02d2"
   },
   {
+    "path": "opt/gdg-agent/lib/release-key.pub",
+    "type": "file",
+    "mode": "0644",
+    "sha256": "8921911d074074e18c9c530a2fa7e0edba57fc1d07612c0c7a413242dc441772"
+  },
+  {
     "path": "opt/gdg-agent/lib/shell-allowlist.ts",
     "type": "file",
     "mode": "0444",
-    "sha256": "092627e8a5c2b8ee8b4b69d4a81dd28d0c371a3ed80f299d277ac8533528ce17"
+    "sha256": "11ed7e9264b7906054d92621c85e9dddd13dbe628098d1c7297ba008f60bb62b"
   },
   {
     "path": "opt/gdg-agent/lib/wk.ts",
@@ -404,6 +571,17 @@
     "type": "file",
     "mode": "0444",
     "sha256": "609158e6c5fbc237939fa3ddf7faab80ab690bdc0c8d584414a885130103c4e8"
+  },
+  {
+    "path": "opt/xangi",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
+    "path": "opt/xangi/.npmrc",
+    "type": "file",
+    "mode": "0644",
+    "sha256": "3a5264e4ee06754bf863981cbe6e1928441e5aaada49fdeb26cd8f1cb5746094"
   },
   {
     "path": "run",
@@ -449,5 +627,50 @@
     "path": "srv/gdg-agent/wiki",
     "type": "dir",
     "mode": "2770"
+  },
+  {
+    "path": "var",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
+    "path": "var/lib",
+    "type": "dir",
+    "mode": "0755"
+  },
+  {
+    "path": "var/lib/agent-host",
+    "type": "dir",
+    "mode": "0750"
+  },
+  {
+    "path": "var/lib/agent-host/releases",
+    "type": "dir",
+    "mode": "0700"
+  },
+  {
+    "path": "var/lib/agent-host/workspace-backup",
+    "type": "dir",
+    "mode": "0700"
+  },
+  {
+    "path": "var/lib/agent-host/workspace-journal",
+    "type": "dir",
+    "mode": "0700"
+  },
+  {
+    "path": "var/lib/agent-host/workspace-staging",
+    "type": "dir",
+    "mode": "0700"
+  },
+  {
+    "path": "var/lib/agents-index",
+    "type": "dir",
+    "mode": "0700"
+  },
+  {
+    "path": "var/lib/agents-index/hf",
+    "type": "dir",
+    "mode": "0700"
   }
 ]

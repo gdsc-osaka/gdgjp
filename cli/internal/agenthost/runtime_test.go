@@ -67,6 +67,33 @@ func TestSystemdUnitResourceRendering(t *testing.T) {
 	}
 }
 
+// buildLangfuseForwarderResources only ever runs live (prefix == ""). A
+// filepath.Join("", "opt", ...) there yields a *relative* path, so a sudo apply
+// writes the whole source tree under the operator's cwd instead of /opt. Every
+// resource path must be absolute under /opt/langfuse-forwarder.
+func TestLangfuseForwarderResourcePathsAreAbsolute(t *testing.T) {
+	res, err := buildLangfuseForwarderResources("")
+	if err != nil {
+		t.Fatalf("buildLangfuseForwarderResources: %v", err)
+	}
+	if len(res) == 0 {
+		t.Fatal("expected embedded langfuse-forwarder resources, got none")
+	}
+	var sawFile bool
+	for _, r := range res {
+		id := r.ID()
+		if !strings.HasPrefix(id, "/opt/langfuse-forwarder") {
+			t.Errorf("resource path %q is not absolute under /opt/langfuse-forwarder", id)
+		}
+		if r.ResourceType() == "file" {
+			sawFile = true
+		}
+	}
+	if !sawFile {
+		t.Error("expected at least one embedded file resource")
+	}
+}
+
 func TestOverlayHarnessConfRendering(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -201,6 +228,46 @@ func TestExecResourceConditions(t *testing.T) {
 	}
 }
 
+// TestExecResourceEnvPassedToCommand guards the Env field added for Stage 13:
+// npm-ci for /opt/xangi needs NODE_AUTH_TOKEN in the child process environment
+// to authenticate against npm.pkg.github.com, without ever touching disk.
+func TestExecResourceEnvPassedToCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	watchFile := filepath.Join(tmpDir, "watch")
+	stateFile := filepath.Join(tmpDir, "state")
+	outFile := filepath.Join(tmpDir, "out.txt")
+
+	if err := os.WriteFile(watchFile, []byte("v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	execRes := &ExecResource{
+		Name:      "test-env",
+		Command:   []string{"sh", "-c", "printf '%s' \"$MY_TEST_TOKEN\" > " + outFile},
+		Dir:       tmpDir,
+		WatchFile: watchFile,
+		StateFile: stateFile,
+		Env:       []string{"MY_TEST_TOKEN=secret-value-123"},
+	}
+
+	if _, err := execRes.Plan(context.Background()); err != nil {
+		t.Fatalf("Plan failed: %v", err)
+	}
+	// applyUnchecked exercises the same subprocess/env logic as Apply, minus
+	// the production-only uid-0 gate that would make this test a no-op.
+	if err := execRes.applyUnchecked(context.Background()); err != nil {
+		t.Fatalf("applyUnchecked failed: %v", err)
+	}
+
+	got, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("reading output file: %v", err)
+	}
+	if string(got) != "secret-value-123" {
+		t.Errorf("expected child process to see MY_TEST_TOKEN=secret-value-123, got %q", string(got))
+	}
+}
+
 func TestWikiCloneResource(t *testing.T) {
 	tmpDir := t.TempDir()
 	wikiDir := filepath.Join(tmpDir, "srv", "gdg-agent", "wiki")
@@ -255,16 +322,30 @@ func TestSelfReexec(t *testing.T) {
 		return nil
 	}
 
-	pins := GdgCliPin{
-		Version: "0.1.4",
-		SHA256: map[string]string{
-			"x86_64":  "dummy-amd64",
-			"aarch64": "dummy-arm64",
+	spec := SpecFile{
+		Environment: "production",
+		Backend: BackendSpec{
+			Name:  "cursor",
+			Model: "composer-2.5",
+			Isolation: IsolationSpec{
+				SlotLauncher: true,
+				OSSandbox:    "workspace",
+				ToolGate:     "preToolUse-failClosed",
+			},
+		},
+		Pins: PinsSpec{
+			GdgCli: GdgCliPin{
+				Version: "0.1.4",
+				SHA256: map[string]string{
+					"x86_64":  "0d8affab878ab1ba9c7f8df9efae1a47964db9bfb356592d7ee43a23ec14be3b",
+					"aarch64": "5dbf544d0cf9ed34cce688fbb6e40fc1e5cbc3719ff50a2a1e62438729bb07a0",
+				},
+			},
 		},
 	}
 
 	// In dev mode without force, no reexec
-	err := CheckAndReexecSelf(context.Background(), "dev", pins, []string{"gdg", "agent-host", "apply"}, mockReexec)
+	err := CheckAndReexecSelf(context.Background(), "dev", spec, []string{"gdg", "agent-host", "apply"}, mockReexec)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -273,7 +354,7 @@ func TestSelfReexec(t *testing.T) {
 	}
 
 	// Same version -> no reexec
-	err = CheckAndReexecSelf(context.Background(), "0.1.4", pins, []string{"gdg", "agent-host", "apply"}, mockReexec)
+	err = CheckAndReexecSelf(context.Background(), "0.1.4", spec, []string{"gdg", "agent-host", "apply"}, mockReexec)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -283,7 +364,7 @@ func TestSelfReexec(t *testing.T) {
 
 	// Mismatched version with test hook
 	t.Setenv("GDG_REEXEC_TEST_HOOK", "1")
-	err = CheckAndReexecSelf(context.Background(), "0.1.3", pins, []string{"gdg", "agent-host", "apply"}, mockReexec)
+	err = CheckAndReexecSelf(context.Background(), "0.1.3", spec, []string{"gdg", "agent-host", "apply"}, mockReexec)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

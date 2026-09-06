@@ -33,8 +33,12 @@
 | [022](#adr-022-ローカル実行物を-node-ネイティブ-typescript-に統一する) | ローカル実行物を Node ネイティブ TypeScript に統一する | Accepted |
 | [023](#adr-023-ローカル検証環境を-ubuntu-vm-に置きdocker-を採らない) | ローカル検証環境を Ubuntu VM に置き、Docker を採らない | Accepted |
 | [024](#adr-024-ci-の-script-tests-における-private-submodule-チェックアウトの失敗と暫定方針) | CI の script-tests における private submodule チェックアウトの失敗と暫定方針 | Accepted |
-| [025](#adr-025-公開前コンテンツレビューと-squash-import-による-public-化) | 公開前コンテンツレビューと squash import による public 化 | Accepted |
 | [026](#adr-026-収束エンジンを-go-gdg-cli-とし宣言的-specピン留めpull-型配信を採用する) | 収束エンジンを Go (gdg CLI) とし宣言的 spec・ピン留め・pull 型配信を採用する | Accepted |
+| [027](#adr-027-agents-index-を-spec-と収束エンジンへ吸収しプロビジョニング用シェルを-bootstrap-1-本に一本化する) | agents-index を spec と収束エンジンへ吸収し、プロビジョニング用シェルを bootstrap 1 本に一本化する | Accepted |
+| [028](#adr-028-署名基盤アーカイブ防御mode-b-によるワークスペース同期tier-1を採用する) | 署名基盤・アーカイブ防御・Mode B によるワークスペース同期（Tier 1）を採用する | Accepted |
+| [029](#adr-029-バックエンド能力契約fail-closedと二重化された本番防御下限を採用する) | バックエンド能力契約（fail-closed）と二重化された本番防御下限 | Accepted |
+| [030](#adr-030-tier-2-署名リリースと-pull-型適用ロールバック) | Tier 2 署名リリースと pull 型適用、ロールバック | Accepted |
+| [031](#adr-031-gdgjpgdg-lib-の-acl-評価器のみを-github-packages-へ-publish-する) | `@gdgjp/gdg-lib` の ACL 評価器のみを GitHub Packages へ publish する | Accepted |
 
 ---
 
@@ -2057,4 +2061,699 @@ Accepted
 - sudoers 生成時の実バグが解消され、不正な設定による sudo 破損が構造的に防止された。
 - プロビジョニング用シェル本数 5 本が維持され、Stage 05（レイアウト Go 生成への移行）および Stage 06-07（Go 収束エンジン導入）への前提条件が整った。
 
+---
 
+## ADR-027: agents-index を spec と収束エンジンへ吸収し、プロビジョニング用シェルを bootstrap 1 本に一本化する
+
+### Status
+
+Accepted
+
+### Date
+
+2026-09-04
+
+### Context
+
+`docs/agents-local-refactoring/index.md` の Stage 08。同一ホスト上に 3 本目のインストーラ（`agents-index/install.sh`・252 行）が残っており、`agents-local/install.sh`（Stage 07 で撤去済み）との間に「先にこちらを走らせろ」という暗黙の実行順序と hard-fail があった。加えて `--slots 4` が spec の `slotCount` と二重管理になっていた。daemon は monorepo チェックアウト（`/opt/gdgjp/agents-index`）から `node src/cli.ts` で起動しており、Stage 13 の `/opt/gdgjp` 撤去をブロックしていた。
+
+### Decision
+
+**1. agents-index を宣言的 spec に載せる**
+
+- `agent-host/agent-host.json` に `agentsIndex`（`enabled` / `dataDir` / `dbPath`）を追加し、`agent-host.schema.json` で検証する。
+- `agents-index.service` の `--slots` と `SupplementaryGroups` は `spec.slotCount` から、`--run-root` は `spec.paths.runRoot` から導出する。リテラルで持たない。
+- `agents-index.service` は **system unit**（`/etc/systemd/system/`、`User=gdgagent-svc`、`WantedBy=multi-user.target`）とする。xangi/langfuse は `systemctl --user` だが、agents-index は per-slot ソケットを `gdgagent-run-<N>` グループへ `chgrp` するため `SupplementaryGroups=` が必須で、非特権の `--user` マネージャはグループ資格情報を設定できない（`GROUP` ステップで失敗する）。収束エンジンに system scope の `SystemdUnitResource` 対応を追加した。
+
+**2. 収束エンジンへ吸収する（新しいリソース型は足さない）**
+
+- `cli/internal/agenthost/agentsindex.go` が既存の `dir` / `file` / `systemd` / `exec` リソースだけで agents-index を展開する。全リソースが 1 つの `plan` に入るため、旧 hard-fail（順序依存）は不要になった。
+- `agents-index.service` の `[Unit]` にデプロイ成果物全体のダイジェスト（`# gdg-artifacts-rev:`）を埋め込む。ソース・ACL バンドル・lockfile のいずれかが変わると unit の内容が変わり、`SystemdUnitResource` が daemon-reload + restart を行う。新しい `gdg` バイナリを配っても古い Node プロセスが動き続けることはない。
+- `agentsIndex.enabled` が `false` のときは撤去を宣言する。`SystemdUnitDeleteResource`（`FileDeleteResource` の systemd 版）で unit を停止・無効化・削除し、`/opt/agents-index` も消す。永続データ `/var/lib/agents-index` は残す。
+- 収束エンジンへ渡す daemon ソースは、`agents-index/src` を再帰ミラー（削除も反映）した成果物にする。手書きのファイル一覧を持たない。
+- `agents-index/install.sh` と `.github/scripts/agents-index-install.test.mjs` を削除し、アサーションを golden ツリーと `agentsindex_test.go` へ移した。
+
+**3. 自己完結した成果物から起動する**
+
+- `gdg agent-host apply` が `/opt/agents-index` へ daemon ソースを配置する。`@gdgjp/agents-index` workspace パッケージの `src/**` を verbatim でコピーし、`@gdgjp/gdg-lib/acl/agent` の import だけを、隣に置く esbuild バンドル（Stage 05 で `/opt/gdg-agent/lib/acl.ts` に配置しているものと同一）へ書き換える。
+- 標準の `package.json` + `package-lock.json`（`workspace:*` 依存なし）を `agent-host/agents-index/` に置き、`npm ci` を `exec` リソースで回す（`/opt/xangi`・`/opt/langfuse-forwarder` と同じ方式）。
+- `agents-index.service` の `ExecStart` に `/opt/gdgjp` は現れない。これが Stage 13 の `/opt/gdgjp` 撤去の前提を満たす。
+
+**4. シェル一本化の到達点**
+
+- agent-host のプロビジョニング用シェルは `scripts/install-gdg-agent-host.sh`（bootstrap・約 40 行）1 本のみ。
+- CI の不変条件は `find` の総数ではなく、`.github/scripts/shell-allowlist.txt` との完全一致で表現する（`git ls-files '*.sh'` と照合）。新しいシェルを足すには allowlist の変更が PR の diff に現れる。
+
+### Alternatives Considered
+
+- **esbuild で agents-index を単一ファイルへバンドル**: ビルドツールの追加が必要。native 依存（`better-sqlite3` 等）は結局 `npm ci` になるため、import 書き換え方式の方が既存パターンに収まる。
+- **`/opt/agents-index` へ専用 git clone**: チェックアウト依存が残り、Stage 13 の `/opt/gdgjp` 撤去と本質的に同じ問題を先送りするだけ。
+- **`systemctl --user` unit（xangi と同じ）+ `SupplementaryGroups=` を落として親マネージャのグループ継承に頼る**: slot 追加時にユーザーマネージャの再起動（xangi も巻き添えで停止）が必要になり、収束が壊れる。system unit なら PID 1 が明示的にグループを設定できる。
+
+### Consequences
+
+- 1 コマンド（`gdg agent-host apply`）で agents-index を含むホスト全体が収束する。
+- `slotCount` を変えると `agents-index.service` の `--slots` と `SupplementaryGroups` が追随する。二重管理の余地が消えた。
+- agents-index が `/opt/gdgjp` を参照しなくなり、Stage 13 の clone 撤去の前提が整った。
+- `ApplyPlan` の Phase 3（systemd）が Phase 2（exec）と同様にライブ状態で再 plan するようになった。`npm ci` が `node_modules` を作った直後の同一 apply で unit が起動するようになり、収束に追加の apply が要らなくなった。
+- `SystemdUnitDeleteResource` の `systemctl` 失敗（`disable --now` / `daemon-reload`）を握り潰さず伝播する。unit が本当に存在しない場合のみ許容する。
+- agent-host のプロビジョニング用シェルが 2 本 → 1 本（開始時点の 7 本からの到達点）。一本化が完了した。
+
+---
+
+## ADR-028: 署名基盤・アーカイブ防御・Mode B によるワークスペース同期（Tier 1）を採用する
+
+### Status
+
+Accepted
+
+### Date
+
+2026-09-04
+
+### Context
+
+全体方針の第 1 要求である「`agent-host/workspace/.agents/skills/` にスキルを追加して push したら、本番のエージェントが自動で使えるようになる」を実現するため、Tier 1 ワークスペース同期（`gdg agent-host sync-workspace`）を新設する。
+
+旧 `agent-host/install.sh` の `seed_wiki_cursor_files` には以下の問題があった:
+1. `rm -rf` + `cp -a` により、ホスト上のローカル変更が黙って破壊されていた。
+2. 稼働中 worktree（`/srv/gdg-agent/wiki`）に対して wiki mutex を取得しておらず、sleep ingest（毎朝 04:00 JST）や Discord ターンの変更と競合する危険があった。
+3. 配信物の署名検証がなく、真正性が担保されていなかった（SHA-256 マニフェストのみでは改竄者がマニフェストごと差し替え可能）。
+4. 途中でプロセスが `SIGKILL` された場合の原子性が担保されておらず、新旧ファイルが混在した状態が残りうる。
+
+また、Tier 1 はスキルの高速反映を目的とするため、ホスト実行時設定（`agent-host.json` や `config/`）を巻き込んではならず（それらは Tier 2 / Stage 10 の担当）、機械的な境界強制が求められる。
+
+### Decision
+
+**1. Ed25519 detached manifest envelope 形式と共通署名基盤の採用**
+- `cli/internal/agenthost/signing.go` に、アーカイブ外の detached なマニフェストエンベロープ（`ManifestEnvelope`）形式と Ed25519 署名検証（`VerifyEnvelopeSignature`）を実装した。
+- エンベロープはアーカイブ全体の `sha256` / `size` / `entryCount` / `uncompressedSize` と per-file ハッシュ一覧（`entries`）を保持し、アーカイブ自体には署名を含めない（自己 digest 依存の循環を防止）。
+- この署名検証コードとマニフェスト形式は、Stage 10 の Tier 2 リリース管理でもそのまま再利用する。
+- 署名鍵の管理方針: リリース/バンドル署名秘密鍵は CI Secret（`AGENT_HOST_SIGNING_KEY`）として保管し、検証用公開鍵は `/opt/gdg-agent/lib/release-key.pub`（root:root、0644）に配置する。`/opt/gdg-agent/lib` は 0755 root 所有のため、slot uid（`gdgagent-run-*`）から改竄・上書きできない。
+
+**2. 多層アーカイブ展開防御の徹底**
+- 署名は「誰が作ったか」のみを保証し中身の安全性を保証しないため、展開前に以下の防御を行う:
+  - アーカイブに触れる前に Ed25519 署名を検証（無効なら即座に中止）。
+  - アーカイブ実バイトの SHA-256 と size をエンベロープと照合。
+  - 合計サイズとエントリ数の上限検査（zip bomb 防御）。
+- 展開処理は `tar -xzf` に丸投げせず、`archive/tar` で 1 エントリずつ検査し、以下を検出した場合はスキップではなく即座に中止する:
+  - 絶対パス（`/` で始まるパス）
+  - パストラバーサル（`..` を含むパス）
+  - シンボリックリンクおよびハードリンク
+  - デバイスファイル・FIFO・ソケット等の非通常ファイル
+  - 重複するエントリパス
+  - エンベロープの `entries` allowlist に存在しないエントリ
+- 展開は staging ディレクトリ（`/var/lib/agent-host/workspace-staging/<version>/`）に行い、per-file SHA-256 検証がすべて通過するまで live worktree には一切触れない。
+
+**3. 原子性として「方式 B（Write-Ahead Journal + 実バイトバックアップ + 起動時リカバリ）」の採用**
+- 方式 A（単一ディレクトリ + `renameat2(RENAME_EXCHANGE)`）と方式 B の比較検討の結果、**方式 B** を採用した。
+  - 方式 A は Linux 固有（macOS で単体テスト不可）であり、`.agents/`、`.claude/`、`.codex/`、`.cursor/rules/local.mdc` という複数のトップレベルパスを 1 つのシステムコールで交換するには親コンテナディレクトリまたは symlink が必須となるが、これは Cursor CLI サンドボックス境界および xangi の `src/skills.ts` による直接相対パス解決と衝突する。
+  - 方式 B は対象パスの現在の実バイトを `/var/lib/agent-host/workspace-backup/<txn-id>/` にバックアップし、write-ahead journal（`/var/lib/agent-host/workspace-journal/<txn-id>.json`）を書き `fsync` してから live worktree への temp-write + rename を行う。
+  - 適用途中でプロセスが `SIGKILL` されても、次回の `sync-workspace` 起動時に **wiki mutex を取得した直後・外部ソース取得の前** にリカバリ処理が走り、バックアップから実バイトを完全復元する。
+  - `gdg agent-host verify` にも未完了トランザクション検出を追加した。
+
+**4. wiki mutex による直列化と clean yield**
+- `/srv/gdg-agent/wiki` の既存 mutex（`filepath.Join(wikiRoot, ".gdgwiki/ingest-locks.json.mutex")`）を取得してから同期処理を行う。独自ロックは作らない。
+- mutex が既に保持されている場合（sleep ingest 等が稼働中）、エラーで異常終了するのではなく、ログを出力して exit 0 でクリーンに終了し、次回のタイマー実行（5 分後）に処理を譲る（clean yield）。
+
+**5. `--force` の厳格な契約**
+- ローカル変更が検出された場合、`--force` が指定されていない限り適用を中止し、破壊を防ぐ。
+- `--force` はローカル変更の上書きのみを許可し、署名検証・マニフェスト照合・アーカイブ検査・Tier 1 配信境界チェックを一切迂回しない。
+
+**6. systemd タイマーによる定期実行**
+- `agent-host-sync.service`（Type=oneshot）および `agent-host-sync.timer`（OnUnitActiveSec=5min, OnBootSec=2min）を `gdgagent-svc` の user scope unit として配置・収束させる。
+
+### Consequences
+
+- スキルを `agent-host/workspace/.agents/skills/` に push するだけで、最長 5 分で本番の `/srv/gdg-agent/wiki/.agents/skills/` に安全かつ自動的に反映される。
+- `AGENTS.md` の更新に伴い、`.cursor/rules/local.mdc` が常に `---\nalwaysApply: true\n---\n\n` を前置して自動生成・追随する。
+- 署名基盤・アーカイブ防御・マニフェストエンベロープ形式が確立され、Stage 10 の Tier 2 リリース管理に再利用可能となった。
+
+---
+
+## ADR-029: バックエンド能力契約（fail-closed）と二重化された本番防御下限を採用する
+
+### Status
+
+Accepted
+
+### Date
+
+2026-09-05
+
+### Context
+
+全体方針の第 2 要求は「spec の `backend.name` を `cursor` → `antigravity` に変えて push したら本番のバックエンドが入れ替わる」である。しかし現状のままバックエンドを切り替えると、本番運用において非オプション（"none of which is optional in production"）と定義されている 3 層の信頼境界（preToolUse ゲート、uid/slot 分離、OS サンドボックス）がすべて暗黙のうちに外れてしまう。
+
+1. **preToolUse ゲート**: Cursor CLI の `~/.cursor/hooks.json`（`failClosed: true`）に依存しており、Antigravity（`agy` CLI）には同等のプログラム的 pre-tool フックが存在しない。
+2. **uid/slot 分離**: `cursor-cli.ts` のみ `assertSlotLauncher` / `sudoLauncherArgs` 経由で slot ユーザーとして起動している。`antigravity-cli.ts` は素の `spawn()` であり分離がない。
+3. **OS サンドボックス**: Cursor の `sandbox.mode: "enabled"` + `readBoundary: "workspace"` に依存している。`antigravity-cli.ts` はむしろ `--dangerously-skip-permissions` を渡す経路を持つ。
+
+さらに、spec 内の `isolation` 定義だけでは、spec 側の要求レベルを下げることによって防御が外れてしまう。また、自己更新（re-exec）機能が悪意のある、あるいは下限の緩いバイナリへ re-exec してしまうと、バイナリ内にコンパイルされた下限すら無効化される危険（re-exec の穴）があった。
+
+### Decision
+
+**1. spec への `backend.isolation` の必須化**
+- `agent-host.schema.json` および `agent-host.json` において、`backend.isolation` を必須フィールドとして定義した。
+- `slotLauncher`（boolean）、`osSandbox`（`"workspace"` | `"none"`）、`toolGate`（`"preToolUse-failClosed"` | `"none"`）の 3 項目をすべて明示することを強制し、省略を禁止した。
+
+**2. Go 収束エンジン内のバックエンド能力レジストリによる契約検証**
+- `cli/internal/agenthost/backend.go` に、各バックエンドが実際に提供可能な能力を記述するレジストリ（`backends`）を設けた。
+- `cursor`: `{SlotLauncher: true, OSSandbox: "workspace", ToolGate: "preToolUse-failClosed"}`
+- `antigravity`: `{SlotLauncher: false, OSSandbox: "none", ToolGate: "none"}`（願望ではなく実装の事実を記録）
+- spec の `backend.isolation` をバックエンド能力が満たさない場合、`apply` / `plan` は fail-closed で直ちに停止し、「どの層が、どのバックエンドで、なぜ足りないか」を明示する。
+- 安全装置を迂回する `--force` や `--skip-capability-check` フラグは一切提供しない。
+
+**3. リリース成果物から独立したバイナリコンパイル済み `productionMinimum`**
+- 本番環境（`environment: "production"`、省略時の既定値）における下限 `productionMinimum` を `gdg` バイナリ内にコンパイルされた不変値として定義した。
+- spec 側で `isolation` を下げても、`productionMinimum` を下回る場合は `apply` / `plan` が拒絶される。
+- 下限の緩和は `environment: "development"`（Lima やローカル検証環境用）でのみ許容され、かつ development spec はリリース CI（`ValidateSpecForRelease`）によって本番リリース成果物から機械的に排除される。
+
+**4. re-exec 穴の二重防御**
+- `pins.gdgCli` による自己 re-exec の前に、現行の信頼されたバイナリ自身が spec の `environment` と `backend.isolation` を現行の `productionMinimum` で検証し、違反があればダウンロードや re-exec を行わずに落とす。
+- `pins.gdgCli` の SHA-256 チェックサムをバイナリ内の承認済みリリース allowlist（`approvedGdgCliDigests`）と照合し、未知のバイナリへの re-exec を遮断する。
+
+**5. ポリシーバンドルのバックエンド別分離**
+- `agent-host/config/` 直下に混在していた cursor 固有設定を `agent-host/config/backends/cursor/` に移動し、`backends/antigravity/` を予約した。
+- 収束エンジンは選択中のバックエンドのバンドルのみを配置する。
+- バンドル内のファイル構造（`hooks.json` の `failClosed: true`、`cli-config.json` の `sandbox.mode: "enabled"`、`sandbox.json.in` のスロットパスと `.config` 非公開、sudoers の `spawn-slot-N`）に対する構造的不変条件検査を `backend.go` 内に集約した。
+
+### Alternatives Considered
+
+- **spec のバリデーションのみで制御する**: spec はリポジトリの commit/push で書き換え可能であるため、自動リリース（Stage 10）と組み合わさると人間が差分を見ないまま 3 層防御が外れる事故を防げない。バイナリコンパイル済みの `productionMinimum` が不可欠。
+- **re-exec 後に新バイナリで下限を検査する**: 悪意のある、または下限の緩い旧バージョン CLI へ re-exec された時点で検査が無力化されるため、現行バイナリによる事前検証と digest allowlist の組み合わせを採用した。
+- **`--force` フラグの提供**: 信頼境界の強制が目的であるため、迂回路を作ると安全装置として破綻する。下限変更は CLI バイナリの更新（コードレビューとリリース）を伴うべきである。
+
+### Consequences
+
+- `backend.name` を `antigravity` に設定した spec は、Stage 12(uid/slot 分離)および Stage 14(pre-tool gate / sandbox)が実装されるまで、機械的に本番適用が拒絶される。
+- 本番の 3 層防御が spec の記述ミスや意図しないダウングレードによって外れるリスクが構造的に排除された。
+- Stage 10 のリリース CI に必要な `backend.isolation` 検査、`productionMinimum` 検査、`environment` ゲートの基盤が確立された。
+
+## ADR-030: Tier 2 署名リリースと pull 型適用、ロールバック
+
+### Status
+
+Accepted
+
+### Date
+
+2026-09-05
+
+### Context
+
+全体方針の要求 3(「リポジトリの HEAD が本番ホストの構成と一致していることが、常に機械的に検証されている」)を満たすため、Stage 09 が Tier 1(`agent-host/workspace/**`)向けに確立した署名基盤(`cli/internal/agenthost/signing.go`、detached Ed25519 マニフェスト、defensive extraction)を、spec・config・systemd unit・パッケージ全体を扱う Tier 2 に拡張する必要があった。ブラスト半径が Tier 1 より桁違いに大きいため、機構は共有しつつ適用対象と世代管理・ロールバックだけを分離する。
+
+このステージで新たに生じた設計上の決定点が 7 つあった(括弧内は、初回実装のレビューで発見され、本 ADR の版で修正した項目):
+
+1. Tier 2 は「最新版を検出する」ためのポインタ機構が要る(GitHub Releases に固定名アセットが無い)。
+2. workspace/ を含むリリースを、Tier 1 の mutex・crash recovery・journal を再実装せずに委譲する方法が要る。
+3. verify 失敗時の自動ロールバックが「ロールバック先が存在しない」場合に黙って続行しない設計が要る。
+4. 収束後、次回以降の `apply`/`verify`/`sync-workspace` がどの spec を見るかを決める「ライブ spec」の置き場所が要る。
+5. (レビュー起因)`config/` はリリースに含めるだけでなく実際に収束エンジンへ反映されなければならない。
+6. (レビュー起因)`pins.gdgCli` を変更するリリースは、適用前に self re-exec しなければ古いバイナリがそのまま適用してしまう。
+7. (レビュー起因)apply 自体の失敗(verify 失敗より前)も自動ロールバックの対象でなければならず、drift チェックと dry-run は破壊的であってはならず、未検証の spec を live spec として公開してはならない。
+
+### Decision
+
+**1. `latest.txt` によるバージョンポインタ + 固定 URL 構成での fetch**
+- CI(`scripts/build-agent-host-release.mjs`)が `agent-host-release-<version>.{tar.gz,manifest.json,manifest.json.sig}` に加えて `latest.txt`(バージョン文字列のみ)を生成し、同一の `agent-host-release-latest` GitHub Release に `--clobber` で上書きアップロードする。
+- ホスト側(`cli/internal/agenthost/release.go` の `fetchAndVerifyReleaseArtifacts`)は `latest.txt` を読んでバージョンを特定し、そのバージョン名のマニフェスト・署名・アーカイブを個別に取得する。**署名検証はアーカイブに触れる前に完了する**(マニフェスト+署名を取得・検証 → `env.Version` が `latest.txt` の値と一致することを確認 → その後にのみアーカイブを取得)。アーカイブのダウンロード自体も署名済みマニフェストの `archive.size` で上限を切り、サイズ不一致は即座に部分ファイルを削除して失敗する(改竄されたアップストリームがディスクを食い潰す前に遮断する)。
+- `file://` スキームも同じ関数でサポートし、テストがネットワーク無しで fetch/verify/apply 全体を検証できるようにした(署名検証テスト、アーカイブ改竄検出テストなど)。
+
+**2. `workspace/` は共有トランザクション関数 `ApplyWorkspaceFiles` に委譲し、`plan.go` が構造的に強制する**
+- `cli/internal/agenthost/workspace.go` を、mutex 取得+crash recovery(`withWorkspaceMutexAndRecovery`)と、検証済みファイル群を実際に収束させる部分(`ApplyWorkspaceFiles`)に分割した。Tier 1(`SyncWorkspace`)と Tier 2(`release.go` の `applyReleaseGeneration`)は両方ともこの共有関数を呼ぶ。**mutex 取得とファイル取得の順序は元の Tier 1 の挙動を厳密に保持する**(`TestSyncWorkspace_WikiMutexYield`/`TestSyncWorkspace_CrashRecoveryModeB` が要求する順序: mutex 取得 → crash recovery → fetch/apply)。署名は 2 つ存在しない(Stage 09 の `signing.go` を再利用するのみ)。
+- `plan.go` の `BuildPlan` は `ValidateWorkspaceDelegation` を呼び、`paths.workspace` の**内側**を対象とする file/dir リソースが 1 つでもあれば即座にエラーにする(ワークスペースのルートディレクトリ自体の mode/owner 管理は例外)。これにより Tier 2 の収束エンジンが `workspace/` を汎用リソースとして書く経路を作ろうとしても、`BuildPlan` の時点で構造的に拒否される。
+
+**3. 自動ロールバックは「apply 失敗」と「verify 失敗」の両方から同じ経路に入り、target が無い・同一の場合は黙って続行しない**
+- 初版では verify 失敗のみが自動ロールバックの引き金だったが、レビューにより「apply(収束)そのものの失敗はどうなるのか」が指摘された。修正後は `applyReleaseGeneration` の失敗と、その後の `VerifyHost` の失敗の両方が同一の `rollbackOrFail` を通る。
+- `currentVersion == ""`(初回リリース)の場合は、ロールバックを試みずに直ちにエラーを返す(戻る先が無い)。
+- ロールバック自体が失敗する、またはロールバック後も verify が通らない場合も、その旨を明示したエラーを返す。`gdg agent-host rollback` コマンド(`--to` 省略時は current の直前世代)も同じ `applyReleaseGeneration`+`VerifyHost`+`setCurrentRelease`(+ 下記 4 の `publishLiveSpec`)の経路を再利用する。
+
+**4. ライブ spec と `current` ポインタは verify 成功後にのみ更新する**
+- 初版では `publishLiveSpec` が `applyReleaseGeneration` の内側、つまり `VerifyHost` より前に呼ばれていた。これは検証に失敗した候補が `current` にならないまま `/etc/gdg-agent/agent-host.json` に残ってしまうバグで、レビューで発覚した。修正後は `publishLiveSpec` と `setCurrentRelease` を `applyReleaseGeneration` から呼び出し側(`ApplyRelease` の成功パス、および `rollbackOrFail`/`Rollback` のロールバック成功パス)に移し、**verify を通過した世代についてのみ**呼ぶ。
+- `cli/internal/command/agent_host.go` の `resolveSpecPath` が `--spec` → `GDG_SPEC` → このライブ spec パス → (埋め込み既定 spec)の順で解決する。
+- `/var/lib/agent-host/releases/<version>/` にリリース世代を保持し、`current` シンボリックリンクで現在の世代を指す。このディレクトリと `/etc/gdg-agent` はいずれも `root:root` で、slot uid(`gdgagent-run-<N>`)や `gdgagent-svc` からもアクセスできない(自己改変経路の遮断)。
+
+**5. drift チェックと dry-run は非破壊にし、`current` と同一バージョンは常に report-only にする**
+- 初版は `--dry-run` の判定より前にアーカイブを `releasesRoot/<version>` へ直接展開しており、これは (a) `current` と同じバージョンを再フェッチしただけで、稼働中の世代ディレクトリ(将来のロールバック先)を消して作り直してしまう、(b) `--dry-run` という「読み取り専用」であるべき操作がディスクの永続状態を書き換える、という 2 つの問題を持っていた。レビューでどちらも指摘された。
+- 修正後は常に **使い捨てのステージング領域**(`stagingRoot/extracted`)へ展開し、実際に収束させて verify が通った後にのみ `releasesRoot/<version>` へ `os.Rename` で昇格させる。`--dry-run` はステージングに対してのみ `apply --dry-run --diff` を実行し、何も永続化しない。
+- 取得したバージョンが **既に `current` と同じ**場合は、`--dry-run` の指定に関わらず常に report-only の drift チェックのみを行う(`current` が指す既存の展開先に対して dry-run するだけで、再展開すらしない)。これは全体方針の「3. 現在適用中のリリースと同じなら dry-run だけ実行し、差分があれば非ゼロ」という要求そのものであり、初版がここを「同一バージョンでも実際に再適用してドリフトを修復する」という異なる(そして黙って修復してしまう)挙動にしていたのは設計からの逸脱だった。周期的なタイマーが変更のないリリースを検知するたびに黙って収束させてしまうと、ホストへの意図しない改変が「通常の収束」として隠れてしまう。
+
+**6. `pins.gdgCli` の変更は、適用前に検証済み spec を根拠に self re-exec する**
+- 初版は `release apply` から `CheckAndReexecSelf`(Stage 04/07 で確立済み、`apply` コマンドはすでに呼んでいた)を一切呼んでいなかった。これは `pins.gdgCli` を変更するリリースが、それを解釈すべき新しい `gdg` バイナリではなく、現在動いている古いバイナリによって処理されてしまうことを意味していた。
+- 修正後は、ステージングへの展開・署名検証が終わった**認証済みの** extracted spec を使って、host/workspace への変更を一切加える前に `CheckAndReexecSelf` を呼ぶ。実際に re-exec が発生する場合は `syscall.Exec` でプロセスイメージが置き換わり、同じ argv で `release apply` が最初からやり直される(再フェッチは冪等)。
+
+**7. `config/` は Tier 2 の収束エンジンに実際に反映する(埋め込みへのフォールバック付き)**
+- 初版は `config/` をリリースに含めながら、`BuildPlan` は常に `gdg` バイナリに `go:embed` された設定を読んでいた。これはレビューで発見された、Stage 10 の核心である「HEAD = ホスト構成」を破る欠陥だった(config のみの変更が publish されても決して反映されない)。
+- 修正として `cli/internal/agenthost/assets.go` に `withConfigOverrideRoot` を追加した。プロセス全体スコープの(goroutine 非対応、`gdg` は 1 プロセスにつき 1 操作を直列実行する前提の)オーバーライドで、`configBytes`/`backendConfigBytes` はまずオーバーライドされたディレクトリを見て、無ければ埋め込みのデフォルトにフォールバックする。`applyReleaseGeneration` は spec のロード(`ValidateBundleInvariants` を経由するため)から `BuildPlan`/`ApplyPlan` まで全体をこのオーバーライドで包む。関数引数として全 `configBytes` 呼び出し箇所(`ValidateBundleInvariants` は spec 解析そのものの内部から呼ばれ、経路上に paths が存在しない)に配線するのはこの段階では大規模すぎるため、意図的にこの形を選んだ。
+
+### Alternatives Considered
+
+- **push 型(GitHub Actions から ssh、または self-hosted runner)**: `docs/agents-local-mvp/adr.md` の既存方針どおり、public リポジトリでの self-hosted runner は fork PR からのコード実行経路になり、ssh デプロイは CI に root 相当の資格情報を持たせる。pull 型を維持した。
+- **`current` を経由せず、常に `latest.txt` の内容を信頼してロールバック判定する**: ネットワーク到達性がロールバックの前提になってしまい、「ロールバックはネットワークの問題そのものによってブロックされてはならない」という要件に反する。ロールバックは常にローカルにすでに展開済みの世代のみを対象にする設計にした。
+- **`config/` を読むために `configBytes`/`backendConfigBytes` の全呼び出し箇所へ config root パラメータを配線する**: 最も「正しい」形だが、`ValidateBundleInvariants` が spec 解析(`parseSpecBytes`)の内部から呼ばれているため、呼び出しチェーンの非常に深いところまでパラメータを通す必要があり、Tier 2 のスコープを大きく超える。プロセススコープのオーバーライド(決定 7)を採用した。
+- **同一バージョン再フェッチでも実際に再適用してドリフトを修復する**(初版の挙動): 「変更の無いリリースの再適用」と「実際の新規リリース適用」を区別できなくなり、ホストへの意図しない改変が通常の収束ログに埋もれてしまう。全体方針の要求(dry-run のみ・差分があれば非ゼロ)どおり report-only に統一した。
+
+### Consequences
+
+- spec の `backend.model`・`discord.*`・`pins.*` に加えて **`config/` のテンプレート内容変更(hooks.json、sandbox.json.in 等)** も、CI 経由で署名付きリリースが publish されれば `agent-host-apply.timer`(既定 1 時間毎)が取得・検証・収束・再検証し、失敗時は自動的に直前世代へロールバックする。`gdg` バイナリの再ビルドを要するのは `configBytes` が読まない新しい構造(コード変更を要する変更)に限られる。
+- `pins.gdgCli` を変更するリリースは、ホストが古いバイナリで動いていても、次の `agent-host-apply.timer` 発火で self re-exec を経由して新しいバイナリに切り替わってから収束する。
+- branch protection・署名コミット・リリース署名鍵(`AGENT_HOST_SIGNING_KEY`)の管理方針・GitHub Environment protection rule によるゲートの要否は、リポジトリ設定(GitHub 側)の変更を伴うため本 ADR の記録のみに留め、実際の設定変更は別途人間の承認を要する。
+- Lima VM 上での `useradd`/systemd/apparmor/sudo を実際に動かす統合テストは、本ステージの時点では CI に配線されておらず、今後の課題として残る。
+
+## ADR-031: `@gdgjp/gdg-lib` の ACL 評価器のみを GitHub Packages へ publish する（Stage 13 producer package スライス）
+
+### Status
+
+Accepted（Stage 13 プロデューサースライス。consumer・ホストの完全移行は後続作業）
+
+### Date
+
+2026-09-05
+
+### Context
+
+xangi（本番 Discord エージェント。当時 `Harineko0/xangi`、後に `gdg-jp/xangi` へ移管）は
+`@gdgjp/gdg-lib` を `devDependencies` の `file:../gdgjp/gdg-lib` として参照している。この
+sibling 参照ゆえに:
+
+- xangi のホスト上 `npm ci` に `/opt/gdgjp`（monorepo 全体の checkout）が要る。
+- `dist/` をビルドしても `@gdgjp/gdg-lib` の TypeScript ソースを解決できず、
+  systemd unit は `tsx` で `src/index.ts` を直接動かす暫定運用のままになっている
+  （`agent-host/ENVIRONMENT.md:184-187`、ADR-022 が求める「tsx を使わない」に反する）。
+- xangi の CI は `gdg-jp/gdgjp` を sibling checkout する回避策を要る。
+
+`gdg-lib` は React/Radix/Cloudflare Workers（D1 型）に依存する RP 認証コードと、
+純粋関数のみの ACL 評価器（`src/acl/**`、ADR-007）を同居させている。外部から実際に
+使われるのは後者だけである。xangi は `@gdgjp/gdg-lib/acl` から `isSourceVisibility`、
+`sourceAudienceKey`、`SourceAudienceKey`、および `SourceVisibility` を import していた。
+従来 `agent.ts` は `SourceVisibility`（型）を再エクスポートしていなかったが、
+公開面を `./acl` 全体に広げるのではなく、**`agent.ts` に `export type { SourceVisibility }` を
+追加することで、プランの「narrow な `./acl/agent` 面のみを公開する」という制約を維持する**。
+xangi 側の import 指定子も `@gdgjp/gdg-lib/acl` から `@gdgjp/gdg-lib/acl/agent`（最終的には
+`@gdg-jp/gdg-lib/acl/agent`）へ移行する。`agents-index/src/authz.ts:3` も `@gdgjp/gdg-lib/acl/agent`
+を参照しており、両者が同一の狭い再エクスポート面に統一される。
+
+### Decision
+
+**1. publish するのは `src/acl/agent.ts` の narrow な面（subpath `./acl/agent`）だけ。パッケージ全体や `./acl` 全体ではない。**
+- `gdg-lib/tsconfig.build.json` で `rootDir: "src/acl"` を指定し、React/Radix/Workers 型に
+  一切触れない範囲だけを `tsc` でコンパイルする。
+- `gdg-lib/scripts/build-publish-package.mjs`（`pnpm --filter @gdgjp/gdg-lib build`）が
+  コンパイル後、`gdg-lib/dist/` に**独立した** `package.json` を書き出す。ワークスペース用の
+  `private`・`devDependencies`・peerDependencies・`exports` の src 参照は一切引き継がない。
+  `exports` には `./acl/agent` のみを定義し、`./acl` やルートは一切公開しない。
+- 相対 import のモジュール指定子には `.js` 拡張子が無い
+  （リポジトリ全体が `moduleResolution: "Bundler"` のため）。`tsc` はこれをそのまま出力するが、
+  素の Node ESM は拡張子を要求するため、同スクリプトが `dist/` 生成後に機械的に付与する。
+- `npm publish` は `gdg-lib/dist/` を cwd として実行する（`.github/workflows/gdg-lib-publish.yml`）。
+  ワークスペース側 `gdg-lib/package.json` 自体を publish 対象にはしない。
+
+**2. publish 先は GitHub Packages（`gdg-jp` org スコープ）。npm public registry は不採用。**
+- ユーザー判断により、private のまま配れる GitHub Packages を選択した
+  （npm public も「機密は無い」という理由で候補にあったが、org スコープの GitHub Packages を優先）。
+- GitHub Packages は publish するパッケージ名のスコープが所有 org と一致することを要求する。
+  そのため **publish 名は `@gdg-jp/gdg-lib` とし、ワークスペース内部の呼称 `@gdgjp/gdg-lib`
+  とは異なる**。モノレポ内の既存インポート（`agents-index/src/authz.ts` を含む）は
+  ワークスペース参照のままなので影響しない。xangi 側だけが新しい名前
+  `@gdg-jp/gdg-lib` でインポートし直す必要がある。
+- 認証は CI の既定 `GITHUB_TOKEN`（`packages: write`）で足り、専用トークンの発行は不要。
+
+**3. `build:acl`（`cli/internal/wiki/hooks/acl.ts` 向け esbuild バンドル、Stage 05）とは
+完全に独立させる。**
+- 出力先・スクリプト名・実行タイミングのいずれも共有しない。`pnpm --filter @gdgjp/gdg-lib test`
+  が両方の経路を回帰として固定する（`scripts/build-publish-package.test.ts`）。
+
+### Alternatives Considered
+
+- **`package.json` の `publishConfig.exports`/`main`/`types` で src → dist を上書きする**:
+  実装して `npm pack --dry-run` で検証したところ、手元の npm 11.16 ではこれらのフィールドは
+  publish 時に一切マージされず（`publishConfig` オブジェクトがネストされたまま残るだけ）、
+  `files: ["dist"]` と組み合わせると `main` が存在しないファイルを指す壊れたパッケージが
+  出来た。ドキュメントで見た挙動が実際には確認できなかったため採用しなかった。
+  `dist/` に独立した `package.json` を書き出す方式は同じ目的を確実な形で達成する。
+- **`gdg-lib` パッケージ全体を publish する**: React/Radix/Cloudflare Workers 依存を
+  未検証のまま外部（xangi は素の Node、ブラウザでも Cloudflare Workers でもない）に
+  持ち出すことになり、「publish するのは既存の narrow な面だけ」という制約に反する。
+- **npm public registry**: 最も単純だが、org スコープを外部に公開する判断を伴う。
+  ユーザーは GitHub Packages（private のまま配れる）を選んだ。
+
+### Consequences
+
+- **本コミットは Stage 13 のプロデューサーパッケージ準備スライスであり、Stage 13 の完了ではない。**
+  Stage 13 の完全な完了（`docs/agents-local-refactoring/13-xangi-packaging.md` の完了条件）には
+  以下の後続タスクが必要である:
+  1. `Harineko0/xangi` から `gdg-jp/xangi` への GitHub リポジトリ移管。
+  2. GitHub Packages への `@gdg-jp/gdg-lib` の初回 publish（CI workflow 実行）。
+  3. xangi 側の `package.json` で `@gdg-jp/gdg-lib` を `devDependencies` の `file:../gdgjp/gdg-lib` から
+     `dependencies` の GitHub Packages 版へ切り替え、import を `@gdg-jp/gdg-lib/acl/agent` へ移行。
+  4. xangi CI の sibling symlink 回避策（`.github/workflows/ci.yml`）の削除。
+  5. xangi が `dist/` をビルドし、ホストの systemd unit `ExecStart` を
+     `/usr/bin/node /opt/xangi/dist/index.js`（`tsx` なし）に切り替え。
+  6. `agent-host/agent-host.json` の `pins.xangi.repo` を `gdg-jp/xangi` に更新。
+  7. xangi、agents-index（Stage 08）、langfuse-forwarder（Stage 07）の 3 つすべてが自己完結した成果物
+     になったことを確認したうえで、ホストプロビジョニングから `/opt/gdgjp` clone を完全撤去。
+- xangi 側は本スライスの時点で先行して `@gdgjp/gdg-lib/acl/agent`（narrow 面）への import 移行を
+  完了しており、publish 後の変更はパッケージ名のスコープ（`@gdgjp` → `@gdg-jp`）とレジストリ設定のみで済む。
+
+### Update: 残タスク 1〜6 完了、Stage 13 完了（2026-09-05）
+
+上記 7 項目のうち、1〜6 を完了した。
+
+1. **リポジトリ移管**: `Harineko0/xangi` → `gdg-jp/xangi`（ユーザーが実施）。合わせて
+   `gdgjp` モノレポに `./xangi` として submodule 追加した。`~/proj/xangi` の
+   スタンドアロン clone は廃止し、以後の xangi 側変更は submodule 経由で行う。
+2. **`@gdg-jp/gdg-lib@0.1.0` の初回 publish**: `gdg-lib-publish.yml` を
+   `workflow_dispatch` で実行し成功（`npm notice + @gdg-jp/gdg-lib@0.1.0`
+   をログで確認）。パッケージは `visibility: private`、`gdgjp` リポに紐づく。
+3. **xangi 側の依存切替**: `package.json` の `@gdgjp/gdg-lib` を
+   `devDependencies` の `file:../gdgjp/gdg-lib` から `dependencies` の
+   `@gdg-jp/gdg-lib": "^0.1.0"` へ変更し、8 ファイルの import 指定子を
+   `@gdgjp/gdg-lib/acl/agent` → `@gdg-jp/gdg-lib/acl/agent` へ変更した。
+   `tsc --noEmit`・`npm run build`・移行対象 8 ファイルのテスト（83 件）を
+   ローカルで確認済み。
+4. **xangi CI の sibling checkout 回避策の削除**: `.github/workflows/ci.yml`
+   から `gdg-jp/gdgjp` の sibling checkout と symlink 手順を削除し、
+   `permissions: packages: read` を付けた `GITHUB_TOKEN` で
+   `npm.pkg.github.com` から直接installするよう変更した。
+   **想定外だった点**: 同一 org 内であっても、`gdg-lib` パッケージが
+   private かつ `gdgjp` リポに紐づく限り、`xangi` リポの `GITHUB_TOKEN` は
+   自動的には読めない（`403 permission_denied: read_package`）。
+   `gdg-lib` パッケージの Package settings → Manage Actions access に
+   `gdg-jp/xangi` を追加してもらうことで解消した（ユーザー操作）。
+   将来 gdg-lib の消費者が増える場合は、都度この一覧に追加するか、
+   visibility を `internal` に変える判断が要る。
+5. **本番ホストの GitHub Packages 認証**: 生産ホストの `npm.pkg.github.com`
+   読み取りは、xangi CI と異なり同一 org の `GITHUB_TOKEN` に相当するものが
+   無い（GitHub Actions 外の Ubuntu ホストのため）。そのため個人アカウントの
+   `GITHUB_TOKEN` に頼らず、Discord/Langfuse と同じパターンで
+   `gdg agent-host secrets set npm-registry` を新設し、
+   `/home/gdgagent-svc/.config/xangi/secrets.json` の `NPM_READ_TOKEN` に
+   `read:packages` PAT を保存する形にした。`plan.go` はこの値を
+   `npm-ci:/opt/xangi` の `ExecResource.Env` に `NODE_AUTH_TOKEN=...` として
+   注入し、`/opt/xangi/.npmrc`（`@gdg-jp` スコープのレジストリ指定のみ、
+   トークンは `${NODE_AUTH_TOKEN}` 展開でファイルには残らない）と組み合わせて
+   解決する。`ExecResource` に汎用の `Env` フィールドを追加し、
+   `npm run build`（`npm-build:/opt/xangi`、watch は `.git/HEAD`）を新設、
+   `xangi.service` の `ExecStart` を `tsx` 経由の `src/index.ts` から
+   `node dist/index.js` に切り替えた（ADR-022 の要求どおり）。
+6. **`pins.xangi.repo`/`ref` の更新**: `gdg-jp/xangi` と、依存切替後の最新
+   commit（`f69572739f46931cff1d3edbe7c34409a9f329ee`）に更新した。
+
+**残タスク 7（`/opt/gdgjp` の完全撤去）について**: コード上の前提はすべて
+揃った——xangi（本更新）・agents-index（Stage 08、`agentsindex.go` が
+`/opt/agents-index` から自己完結で動く設計であることを明記済み）・
+langfuse-forwarder（Stage 07、go:embed 済み）のいずれも、現在の
+`buildDesiredResources` は `/opt/gdgjp` を作る収束リソースを一切持たない
+（新規ホストでは最初から作られない）。ただし稼働中の `mincra-srv` に
+過去の `install.sh` が作った `/opt/gdgjp` の実体が残っている可能性があり、
+その物理的な削除確認は本セッションの範囲外（ホストへの適用は
+`--dry-run --diff` のレビューを経て operator が行う）。
+
+---
+
+## ADR-032: Stage 14 ブロッキング調査 — Antigravity (`agy`) の実際の能力
+
+### Status
+
+Accepted（調査のみ。実装は継続判断待ち — 下記 Consequences 参照）
+
+### Date
+
+2026-09-05
+
+### Context
+
+Stage 14（`docs/agents-local-refactoring/14-antigravity-backend.md`）は実装前に
+「`agy` に fail-closed なプログラム的 pre-tool フックがあるか」を確認し、無ければ
+実装者が独断で進めてはならないと定める。ADR-029 は当時の理解として
+「Antigravity（`agy` CLI）には同等のプログラム的 pre-tool フックが存在しない」と
+記録していたが、これは xangi 側のソース（`antigravity-cli.ts` が素の `spawn()` を
+使っていること）からの推論であり、`agy` 自体の能力を実地検証したものではなかった。
+
+この開発機に `agy` 1.1.3（`/Users/hari/.local/bin/agy`、Google の Antigravity CLI）が
+実際にインストールされていたため、`agy --help`、バイナリに埋め込まれた
+Markdown 形式のドキュメント文字列（`strings` で抽出。hooks.json の完全な仕様書が
+バイナリ内に埋め込まれている）、実機での `agy -p`（print/headless モード）実行、
+および `~/.gemini/config/hooks.json` ・ `~/.gemini/antigravity-cli/settings.json` という
+既存の実運用設定（Orca が同じフック機構を使って自身の hook を登録済み）を根拠に、
+調査 1〜4 を実地で行った。
+
+### Findings
+
+**調査 1（fail-closed なプログラム的 pre-tool フック）: 「有り」— ADR-029 の記録は誤りだった**
+
+- `agy` は `<workspace>/.agents/hooks.json`（バイナリ埋め込みドキュメントに明記。
+  changelog にも「Fixed workspace-local hooks defined in `<workspace>/.agents/hooks.json`
+  not loading after trusting a folder」という記述があり実在が二重に裏付けられる）に
+  `PreToolUse` / `PostToolUse` / `PreInvocation` / `PostInvocation` / `Stop` の
+  5 イベントのフックを定義できる。構造は Cursor の `hooks.json` とほぼ同型
+  （`matcher` 正規表現 + `hooks` 配列 + `type: "command"` + `timeout`）。
+- `PreToolUse` の出力 JSON は `decision` フィールドを持ち、値は
+  `allow` / `deny` / `ask` / `force_ask` / `deny_unless_prior_grant` の 5 種類
+  （バイナリ内の protojson スキーマ記述: `enum=allow,enum=deny,enum=ask,enum=force_ask,enum=deny_unless_prior_grant`）。
+  ドキュメントは `"deny"` を「Hard block the execution immediately」と明記しており、
+  Cursor の `failClosed: true` と機能的に同等かそれ以上（`overwrite` によるツール引数の
+  書き換えなど Cursor には無い機能もある）。
+- **ヘッドレス（`-p`）モードは既定で fail-closed。** 実機テストで、`.agents/hooks.json` を
+  一切置かない状態でも `run_command` ツールは自動的に拒否された
+  （`jetski: no output produced — a tool required the "command" permission that headless
+  mode cannot prompt for, so it was auto-denied.`）。バイナリ内の changelog にも
+  「Fixed headless (`-p`) runs hanging or silently auto-approving tools that require a
+  permission confirmation, so the CLI now soft-denies such tools」と明記されており、
+  過去のバージョンでは fail-open（サイレント自動承認）だった欠陥が修正済みであることが
+  分かる。**ピン留めするバージョンがこの修正を含むこと（後述のバージョン注意点）を
+  確認する必要がある。**
+- `~/.gemini/config/hooks.json` は本機で実際に使われている実データであり、
+  Orca がこの機構に自身の `PreToolUse` フック（`orca-status`）を登録している。
+  これは調査対象システムの外部の実運用証跡であり、フック機構が「ドキュメント上の
+  仕様」ではなく実際に動作しているものであることの独立した裏付けになる。
+- 結論: `acl-gate.ts` は Cursor と同じ判定ロジックのまま、起動経路（Cursor は
+  `hooks.json` の `command` から Cursor 固有のペイロード形状で呼ばれる／antigravity は
+  同じく `command` から `toolCall.name` / `toolCall.args.CommandLine` という
+  camelCase ペイロードで呼ばれる）だけを antigravity 用に薄いアダプタで吸収すれば
+  再利用できる。**代替 A・代替 B（PATH 制限や採用見送り）は不要。**
+
+**調査 2（OS サンドボックス相当）: 「部分的に有り、境界の等価性は未検証」**
+
+- `agy --help` に `--sandbox`（「Run in a sandbox with terminal restrictions
+  enabled」）というフラグが存在し、`~/.gemini/config/config.json` の
+  `userSettings.enableTerminalSandbox` という設定項目も実在する（本機では `false`）。
+  つまり「サンドボックス」という概念自体は存在する。
+- ただし、これが Cursor の `sandbox.mode: "enabled"` + `readBoundary: "workspace"`
+  と同じ意味論（ワークスペース外の読み取りを拒否する）を持つのか、単に「ターミナルの
+  一部機能制限」（例えばインタラクティブ端末機能の無効化）に過ぎないのかは、
+  本調査では確認できていない。`--sandbox` を有効にした状態での実際のファイル
+  アクセス境界テスト（ワークスペース外のファイルを読ませて拒否されるか）は未実施。
+- **結論: `OSSandbox` を `"workspace"` として能力レジストリに true と書くのは時期尚早。**
+  実装フェーズでは `OSSandbox: "none"` を維持し、境界の実地検証（Lima VM 上で
+  `--sandbox` を有効にしたプロセスからワークスペース外のファイルを読ませる等）を
+  別途行うまで安全側に倒す。
+
+**調査 3（allowlist 型の権限モデル）: 「有り、ただし Cursor とは構造が異なる」**
+
+- `agy` は独自の allowlist を持つ。`settings.json`（本機では
+  `~/.gemini/antigravity-cli/settings.json`）の `permissions.allow` と、
+  `~/.gemini/config/config.json` の `userSettings.globalPermissionGrants.allow` に
+  `"command(<cmd>)"` / `"mcp(<url>)"` / `"unsandboxed(<cmd>)"` 形式のエントリを
+  書くことで、ヘッドレスモードでも該当ツール呼び出しを事前承認できる。
+- **これは Cursor の `~/.cursor/permissions.json`（gwsAllowlist 形式のフラットな
+  JSON ファイルをワークスペース/スロットごとに配置する方式）とは構造が異なり、
+  「パスをバックエンド非依存にする」という Stage 14 Design #3 の前提が
+  そのままでは成立しない。** antigravity では allowlist はユーザー単位の
+  中央集権的な `settings.json` であり、cursor のようにスロットごとの
+  ワークスペース相対パスに配置する設計ではない可能性が高い（ワークスペース単位の
+  trust 状態は `trustedWorkspaces` という別の中央リストで管理されている形跡がある）。
+  ワークスペース局所スコープの allowlist が別途存在するかは未確認。
+- **`--dangerously-skip-permissions` と `PreToolUse` の `"deny"` の優先順位は
+  未検証。** ドキュメント文字列は「`--dangerously-skip-permissions` で全ツール
+  自動承認」と書かれているが、これが `"ask"` の自動昇格（人間確認の省略）のみを
+  指すのか、フックが明示的に返す `"deny"` すら上書きするのかは、実機テストで
+  切り分けようとしたところ、**この Claude Code セッション自身の安全機構
+  （auto mode classifier）が `--dangerously-skip-permissions` を渡すコマンドの
+  実行を拒否したため、確認できなかった。** これは重大な未解決点であり、
+  Stage 14 の実装（特に「production では `--dangerously-skip-permissions` を
+  一切渡さない」という設計判断）の前提として、別途（このセッションの制約を
+  受けない環境で）検証が必要。**現時点の設計方針としては、production バンドルは
+  そもそも `--dangerously-skip-permissions` を渡さず、`permissions.allow` に
+  `wk` / `gws` 相当の許可だけを明示するアプローチを採り、この未検証の
+  優先順位に依存しない設計にする（xangi 側 `antigravity-cli.ts:137` の
+  `--dangerously-skip-permissions` 経路そのものを production では使わない）。**
+
+**調査 4（構造化出力によるツール呼び出しの観測）: 「バージョン依存、本機では未確認」**
+
+- `docs/design.md:308` が言及する「Agy 1.1.8 以降の JSON/stream-json」に対し、
+  本機にインストールされている `agy` は **1.1.3** であり、`agy --help` の出力にも
+  `--output-format` フラグは現れなかった（`stream-json` を要求するとエラーになる
+  文字列 `--json-schema can only be used when --output-format is 'json' or
+  'stream-json'` はバイナリ内に存在するため、機能自体はコードベースにはあるが、
+  このバージョンの `--help` には出ていない＝ CLI 引数パーサ側で無効化されているか
+  ドキュメント漏れの可能性がある）。**pin する `agy` のバージョンは 1.1.8 以降を
+  明示的に選定し、そのバージョンで `--output-format stream-json` の実地確認を
+  改めて行うこと。**
+
+### Decision
+
+ADR-029 の「Antigravity にはプログラム的 pre-tool フックが存在しない」という記述を
+本 ADR により訂正する。実地検証の結果、**調査 1 は「有り」であり、Stage 14 の
+分かれ道は代替 A/B ではなく「`acl-gate.ts` を antigravity 用の薄いアダプタ経由で
+再利用する」の本流に進める。**
+
+ただし、調査 2（OS サンドボックス境界の等価性）と調査 3 後半（`--dangerously-skip-permissions`
+と hook `deny` の優先順位）は本セッションの制約下では確認しきれなかった。
+**Stage 14 の制約「3 層を保てないまま能力レジストリを `true` にしない」に従い、
+これらが実地検証されるまで `OSSandbox` は `"none"` のまま false 側に倒す。**
+`ToolGate` は調査 1 の結果に基づき実装を進めてよい。
+
+### Consequences
+
+- `cli/internal/agenthost/backend.go` の `antigravityPolicy.Capabilities()` は
+  `ToolGate: "preToolUse-failClosed"` を実装対象にできるが、`OSSandbox` は
+  `"none"` のまま維持する。**この状態では `productionMinimum`（`osSandbox: "workspace"`
+  必須）を満たせないため、`environment: "production"` の antigravity spec は
+  引き続き機械的に拒否される。これは ADR-029 の設計どおりの正しい挙動であり、
+  OS サンドボックスの等価性が別途確認されるまで意図的に維持する。**
+- xangi（`Harineko0/xangi`、`~/proj/xangi` にチェックアウト済みと判明。
+  Stage 13 完了後は `gdg-jp/xangi`）を実際に読んだ結果、**toolGate 層の実装に
+  xangi 側の変更は不要だった**: antigravity は `agy` 起動時の cwd
+  （`AntigravityRunner` の `this.workdir` = `WORKSPACE_PATH`）から
+  `.agents/hooks.json` を自力で発見する。この cwd は Stage 09 のワークスペース同期
+  で配布される `agent-host/workspace/` そのものなので、hooks 定義はコード変更ではなく
+  ワークスペースコンテンツ（後述）として追加すれば済んだ。`--dangerously-skip-permissions`
+  は `src/antigravity-cli.ts:137` に経路として残るが、`skipPermissions` は
+  `SKIP_PERMISSIONS` 環境変数（既定 false）でのみ有効化され、
+  `agent-host/config/` のいずれにも設定されていないことを確認した
+  （cursor の `CURSOR_FORCE`/`--force` と同型の、明示 opt-in のみのオペレータ
+  用エスケープハッチであり、既定で安全）。よってこの経路は変更しなかった。
+- **本セッションで実装した内容**（toolGate 層、上記の理由で xangi 側変更なし）:
+  - `cli/internal/wiki/hooks/acl-gate.ts` — Antigravity の `{"toolCall":{"name","args"}}`
+    ペイロードを Cursor と同じ内部形状に正規化し、`decision:"allow"/"deny"` 形式で
+    出力する薄いアダプタを追加（判定ロジック本体は無変更）。
+  - `cli/internal/wiki/hooks/shell-allowlist.ts` — `loadGwsAllowlist()` に
+    `GDG_GWS_ALLOWLIST_PATH` 環境変数オーバーライドを追加（cursor の既定パスは無変更）。
+  - `agent-host/config/backends/antigravity/permissions.json`（新規） —
+    antigravity 用 gwsAllowlist。
+  - `agent-host/config/backends/antigravity/hooks.json` / `settings.json`（新規） —
+    `PreToolUse` を `acl-gate.ts` に接続し、converger が slot ごとの root 所有
+    `~/.gemini/` 配下へ配置する。workspace 同期物は全 slot uid から可書きなので採用しない。
+  - `cli/internal/agenthost/backend.go` — bundle の構造的不変条件と slot 配置を実装し、
+    `/opt/gdg-agent/lib/antigravity-permissions.json` も配置する。mechanism は実装済みだが、
+    pin 済み `agy` に対する E2E が完了するまで capability の `ToolGate` は `"none"`、
+    `OSSandbox` も `"none"` のまま安全側に倒す。
+  - テスト: `cli/internal/wiki/acl_gate_test.go`、
+    `cli/internal/agenthost/backend_test.go`、golden fixture 更新。
+    shipped `hooks.json` の command から実 `acl-gate.ts` まで実行する Go 回帰テストを含む。
+    `go test ./internal/agenthost/... ./internal/wiki/...` と `pnpm typecheck:node-scripts` で確認済み
+    （`pnpm ci:quick`/`ci:full` は未実行 — コミット前に実行すること）。
+- 残タスク（本 ADR の対象外、実装継続時に別途行う）:
+  1. `--sandbox` / `enableTerminalSandbox` の境界を Lima VM 実機で検証
+     （ワークスペース外ファイル読み取りが実際に拒否されるか）。確認できたら
+     `backend.go` の `OSSandbox` を `"workspace"` に、
+     `agent-host/config/backends/antigravity/` にサンドボックス設定を追加する。
+  2. `--dangerously-skip-permissions` と hook `deny` の優先順位を、この
+     セッションの制約を受けない環境で確認
+  3. `agy` の pin バージョンを 1.1.8 以降に確定し、`--output-format
+     stream-json` を再確認したうえで `agent-host/agent-host.json` の
+     `pins.antigravity` に実際の version + sha256 を追加する
+     （本 ADR は検証していないバージョン/ハッシュを書かない）
+  4. `normalizeAntigravityPayload()` の `run_command` 以外（`view_file` /
+     `grep_search` 等）の引数フィールド名は未確認の推測。実ペイロードで
+     確認し、必要なら候補リストを修正する
+  5. `osSandbox` 実装（残タスク 1）が固まった段階で、xangi 側に
+     sandbox フラグ配線が必要か再判断する（toolGate 層は xangi 側変更なしで
+     完了したが、osSandbox 層は `agy --sandbox` の起動フラグ配線が要る可能性がある）
+
+### Update: コードレビュー対応（3 件の P1）
+
+上記の初版実装に対して、以下 3 件の P1（ブロッキング）指摘を受けた。いずれも実地で
+検証したうえで修正した。
+
+**P1-1: `.agents/hooks.json` を Tier 1 ワークスペース同期物として配置していた。**
+指摘: ワークスペース（`paths.WikiRoot`）は `gdgagent-svc:gdgwiki` 所有・モード
+`0o2770`（ディレクトリ）/ `0o660`（ファイル）で、`gdgagent-run-*` は全スロットが
+`gdgwiki` グループに属する（`plan.go` で確認）。つまりゲート対象のスロットプロセス
+自身がゲート定義を書き換え・削除できてしまい、境界として機能しない。
+
+`agy` のドキュメント文字列を再確認したところ、customization root は実は 2 種類ある
+ことが分かった: **Workspace Customizations Root**（`.agents/`、ワークスペース相対
+— 今回使っていたもの）と **Global Customizations Root**（`$HOME` 相対、実機では
+`~/.gemini/config/`）。後者はスロットユーザーのホーム配下であり、Cursor の
+`~/.cursor/hooks.json` と全く同じ形（root 所有・sticky bit 付き group-writable な
+ディレクトリの中に、個別に root 所有 mode 0444 のファイルを置く）で保護できる。
+
+`agent-host/workspace/.agents/hooks.json` を削除し、`agent-host/config/backends/antigravity/hooks.json`
+（新規ポリシーバンドル）を `backend.go` の `BuildSlotDirectories`/`BuildSlotResources`
+から `<slotHome>/.gemini/config/hooks.json` へ root 所有 mode 0444 で配置するよう
+変更した。`ValidateBundleInvariants` にも構造的検査を追加（matcher が `"*"` か、
+command が `acl-gate.ts` と `ACL_GATE_BACKEND=antigravity` を含むか、timeout が
+正か）。
+
+**P1-2: `outputMode` をペイロード形状から推測していた。**
+指摘: 壊れた JSON や `toolCall` が無い/壊れた形の入力に対して、`outputMode` が
+`"cursor"` のままフォールスルーし、`{"permission":"deny",...}` を返してしまう。
+Antigravity 側の exit-code ベースの fail-closed 挙動は未検証（調査 1 の残課題）
+なので、これは「安全なフォールバック」ではなく「未検証の fail-open リスク」である。
+レビューが実際に手動再現して確認した。
+
+`acl-gate.ts` を修正し、`process.env.ACL_GATE_BACKEND === "antigravity"` を
+**stdin を読む前に** チェックしてモードを確定するようにした。ペイロード形状には
+一切依存しない。`ACL_GATE_BACKEND=antigravity` はデプロイされる `hooks.json` の
+`command` 文字列にインラインで設定する（`GDG_GWS_ALLOWLIST_PATH` と同じ要領）。
+モードが antigravity に確定した後は、`toolCall` が無い/壊れていれば直ちに
+`decision:"deny"` を返す（cursor 形式へのフォールスルーは無くなった）。
+`cli/internal/wiki/acl_gate_test.go` に壊れた JSON・空文字列・`toolCall` 抜けを
+含む網羅的なテストを追加し、いずれも antigravity 形式で deny を返すことを確認した。
+
+**P1-3: `ToolGate: "preToolUse-failClosed"` を宣言していたが、実バイナリでの
+end-to-end 検証が無かった。**
+指摘: ADR-032 自体が「旧 `agy` にはヘッドレス fail-open の欠陥があった」と書いており、
+検証機のバージョンは unpinned の 1.1.3、しかも `acl-gate.ts` 単体のユニットテストは
+していても、実際の `hooks.json` → `agy` → `acl-gate.ts` → deny という経路を
+本物のバイナリで通したことは無かった。
+
+`backend.go` の `Capabilities().ToolGate` を `"none"` に戻した（実装・検証済みの
+機構ではあるが、pin されていない開発機での成功は「本番が実行するもの」と同じ保証
+ではないため）。そのうえで、実機での end-to-end 検証を行った:
+
+1. 本機の `agy` は検証開始時点から自動更新されており **1.1.27**（当初確認した 1.1.3
+   ではない）になっていた。
+2. 実際の `~/.gemini/config/hooks.json`（ユーザーの日常利用中の設定。Orca 自身の
+   `orca-status` フックが既に登録されている）に、**別キー**として一時的に
+   `acl-gate.ts` を指すフックを追加した（複数の named hook は event ごとにマージ
+   される、というドキュメント記載どおり、既存の `orca-status` とは独立して共存できる
+   ことも実地で確認した）。事前にバックアップを取り、テスト後に完全に元へ戻した
+   （SHA256 で一致を確認済み）。
+3. スクラッチワークスペースから `agy -p` で「`cat /etc/hostname` を実行して」と
+   依頼したところ、**実際に拒否され**、理由文言（`shell-allowlist.ts` の
+   `inspectWkScript()` が返す「every simple command must start with wk」）が
+   ユーザーに向けてそのまま表示された。これは (a) `normalizeAntigravityPayload()`
+   が仮定した `toolCall.args.CommandLine` という実ペイロード形状が正しいこと、
+   (b) `decision:"deny"` が実際にツール呼び出しを止めることの両方を実地で証明する。
+4. **新発見**: 同じ手順で `wk ls pages/`（フェイクの `wk` 実行可能ファイルを用意）を
+   allow させようとしたところ、フックは `decision:"allow"` を返しているにも
+   関わらず、`jetski: no output produced — a tool required the "command"
+   permission that headless mode cannot prompt for, so it was auto-denied` で
+   ブロックされた。これは PreToolUse フックとは**別の、独立した権限ゲート**が
+   `"command"` 種別のツールに存在することを意味する。`~/.gemini/antigravity-cli/settings.json`
+   の `permissions.allow` に `"command(wk)"` を一時的に追加したところ許可された
+   （これもテスト後に完全復元・SHA256 で確認済み）。
+5. この発見を受けて `agent-host/config/backends/antigravity/settings.json`
+   （新規）を追加し、`{"permissions":{"allow":["command(wk)","command(gws)"]}}`
+   を `<slotHome>/.gemini/antigravity-cli/settings.json` へ同じく root 所有
+   mode 0444 で配置するようにした。`ValidateBundleInvariants` にもこのファイルの
+   構造検査を追加した。**この発見が無ければ、toolGate 層は「安全だが使い物にならない」
+   状態のまま出荷するところだった**（deny は機能するが、正規の wk/gws 呼び出しまで
+   ヘッドレスモードで機械的に拒否され続ける）。
+6. 生きた `agy` バイナリと OAuth 認証への依存を避けるため、恒久的な回帰テスト
+   （`TestAntigravityShippedHookDeniesDisallowedCommand`、`cli/internal/agenthost/backend_test.go`）
+   も追加した。これは出荷される `hooks.json` の `command` 文字列を実際にパースして
+   `node` + 実 `acl-gate.ts` を実行し、`decision:"deny"` が返ることを CI で
+   毎回確認する。手動の実機確認（上記 1〜4）とは独立に、この Go テストが
+   `go test ./internal/agenthost/...` で継続的に守る。
+
+**Consequences（更新）**: `ToolGate` は引き続き `"none"` のまま
+（残タスク 3 の pin 完了と、pin 済みバイナリに対する同等の E2E が前提）。ただし
+今回の実機検証により、機構そのものが実際に機能すること（deny 側は完全に、allow 側は
+settings.json の追加込みで）は高い確度で確認された。残る不確実性は
+「pin する具体的なバージョンでも同じか」という一点に絞られた。
