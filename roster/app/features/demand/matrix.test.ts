@@ -176,7 +176,11 @@ describe("buildPhaseRows", () => {
 });
 
 describe("timeSlotIdsForTarget", () => {
-  const slots = [slot("slot_1", 0, "phase_1"), slot("slot_2", 1, "phase_1"), slot("slot_3", 2, null)];
+  const slots = [
+    slot("slot_1", 0, "phase_1"),
+    slot("slot_2", 1, "phase_1"),
+    slot("slot_3", 2, null),
+  ];
 
   it("returns just the one slot id in slot mode", () => {
     expect(timeSlotIdsForTarget("slot", "slot_2", slots)).toEqual(["slot_2"]);

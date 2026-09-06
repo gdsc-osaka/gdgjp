@@ -39,9 +39,7 @@ function demandValue(d: Demand | undefined): DemandValue {
 }
 
 function sameValue(a: DemandValue, b: DemandValue): boolean {
-  return (
-    a.min === b.min && a.ideal === b.ideal && a.leadMin === b.leadMin && a.newMax === b.newMax
-  );
+  return a.min === b.min && a.ideal === b.ideal && a.leadMin === b.leadMin && a.newMax === b.newMax;
 }
 
 export type MatrixCell =
