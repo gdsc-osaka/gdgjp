@@ -12,7 +12,14 @@ describe("toPhase", () => {
         to_time: "10:00",
         sort_order: 0,
       }),
-    ).toEqual({ id: "phase_1", eventId: "evt_1", name: "開場前", from: "09:00", to: "10:00", sortOrder: 0 });
+    ).toEqual({
+      id: "phase_1",
+      eventId: "evt_1",
+      name: "開場前",
+      from: "09:00",
+      to: "10:00",
+      sortOrder: 0,
+    });
   });
 });
 
@@ -27,7 +34,14 @@ describe("toTimeSlot", () => {
         end_time: "13:00",
         phase_id: null,
       }),
-    ).toEqual({ id: "slot_1", eventId: "evt_1", idx: 3, start: "12:00", end: "13:00", phaseId: null });
+    ).toEqual({
+      id: "slot_1",
+      eventId: "evt_1",
+      idx: 3,
+      start: "12:00",
+      end: "13:00",
+      phaseId: null,
+    });
   });
 
   it("passes through a non-null phase_id", () => {

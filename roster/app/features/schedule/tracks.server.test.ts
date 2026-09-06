@@ -4,8 +4,22 @@ import { toRole, toTrack } from "./tracks.server";
 describe("toTrack", () => {
   it("maps snake_case columns to camelCase, converting shared to a boolean", () => {
     expect(
-      toTrack({ id: "trk_1", event_id: "evt_1", name: "全体", color: "#4285f4", shared: 1, sort_order: 0 }),
-    ).toEqual({ id: "trk_1", eventId: "evt_1", name: "全体", color: "#4285f4", shared: true, sortOrder: 0 });
+      toTrack({
+        id: "trk_1",
+        event_id: "evt_1",
+        name: "全体",
+        color: "#4285f4",
+        shared: 1,
+        sort_order: 0,
+      }),
+    ).toEqual({
+      id: "trk_1",
+      eventId: "evt_1",
+      name: "全体",
+      color: "#4285f4",
+      shared: true,
+      sortOrder: 0,
+    });
   });
 
   it("maps shared=0 to false", () => {

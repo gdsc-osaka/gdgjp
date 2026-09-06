@@ -53,7 +53,14 @@ const PHASE_COLS = "id, event_id, name, from_time, to_time, sort_order";
 const TIME_SLOT_COLS = "id, event_id, idx, start_time, end_time, phase_id";
 
 export function toPhase(r: PhaseRow): Phase {
-  return { id: r.id, eventId: r.event_id, name: r.name, from: r.from_time, to: r.to_time, sortOrder: r.sort_order };
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    name: r.name,
+    from: r.from_time,
+    to: r.to_time,
+    sortOrder: r.sort_order,
+  };
 }
 
 export function toTimeSlot(r: TimeSlotRow): TimeSlot {
@@ -161,7 +168,9 @@ export async function regenerateTimeSlots(
 
   if (remove.length > 0) {
     const placeholders = remove.map(() => "?").join(", ");
-    statements.push(db.prepare(`DELETE FROM time_slots WHERE id IN (${placeholders})`).bind(...remove));
+    statements.push(
+      db.prepare(`DELETE FROM time_slots WHERE id IN (${placeholders})`).bind(...remove),
+    );
   }
 
   for (const slot of next) {

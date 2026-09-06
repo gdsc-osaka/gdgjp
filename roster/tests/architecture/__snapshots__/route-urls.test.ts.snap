@@ -7,6 +7,8 @@ exports[`routes.ts URL surface > exposes a stable set of URLs 1`] = `
   "/auth/signout",
   "/dev/login",
   "/dev/seed",
+  "/e/:id/design",
+  "/events/new",
   "/no-chapter",
   "/signin",
 ]

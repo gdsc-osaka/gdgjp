@@ -96,14 +96,18 @@ export async function reorderTracks(
 ): Promise<void> {
   if (orderedIds.length === 0) return;
   const statements = orderedIds.map((id, i) =>
-    db.prepare("UPDATE tracks SET sort_order = ? WHERE id = ? AND event_id = ?").bind(i, id, eventId),
+    db
+      .prepare("UPDATE tracks SET sort_order = ? WHERE id = ? AND event_id = ?")
+      .bind(i, id, eventId),
   );
   await db.batch(statements);
 }
 
 /** All 6 system-seeded roles (ADR-007), sorted for display. No write path — see Non-Goal. */
 export async function listRoles(db: D1Database): Promise<Role[]> {
-  const { results } = await db.prepare(`SELECT ${ROLE_COLS} FROM roles ORDER BY sort_order`).all<RoleRow>();
+  const { results } = await db
+    .prepare(`SELECT ${ROLE_COLS} FROM roles ORDER BY sort_order`)
+    .all<RoleRow>();
   return (results ?? []).map(toRole);
 }
 
