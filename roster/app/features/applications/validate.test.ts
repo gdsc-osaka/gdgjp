@@ -39,21 +39,21 @@ describe("validateApplyForm", () => {
   });
 
   it("rejects a role id outside the event's event_roles", () => {
-    const input = {
+    const input: ApplyFormInput = {
       ...validInput(),
       skills: [{ roleId: "stream", level: "new", pref: 2 }],
-    } as const;
+    };
     expect(validateApplyForm(input, ctx)).toContain("担当できる役割に不明な値が含まれています。");
   });
 
   it("rejects a duplicate role", () => {
-    const input = {
+    const input: ApplyFormInput = {
       ...validInput(),
       skills: [
         { roleId: "reception", level: "new", pref: 1 },
         { roleId: "reception", level: "exp", pref: 2 },
       ],
-    } as const;
+    };
     expect(validateApplyForm(input, ctx)).toContain("同じ役割が重複して指定されています。");
   });
 

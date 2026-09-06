@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { toEvent } from "./events.server";
+import { asD1, createTestD1 } from "../../../tests/helpers/sqlite-d1";
+import { getEventByApplyToken, toEvent } from "./events.server";
 
 const ROW = {
   id: "evt_1",
@@ -79,5 +81,53 @@ describe("deleted_at filtering", () => {
     for (const select of selects) {
       expect(select).toMatch(/deleted_at IS NULL/);
     }
+  });
+});
+
+/**
+ * docs/roster/04-applications.md "Design" §5: `/apply/:applyToken` resolves
+ * an event by `apply_token` alone, never by id. Real-SQLite (not just the
+ * mapper) because getting this lookup wrong either 404s a live registration
+ * link or — far worse — would need to leak the event id into the URL.
+ */
+describe("getEventByApplyToken (real SQLite)", () => {
+  const MIGRATIONS = [
+    fileURLToPath(new URL("../../../migrations/0002_domain.sql", import.meta.url)),
+  ];
+
+  function seedDb() {
+    const testDb = createTestD1(MIGRATIONS);
+    const now = new Date().toISOString();
+    testDb
+      .prepare(
+        `INSERT INTO events (id, chapter_id, name, date, start_time, end_time, seed, apply_token, view_token, created_at, updated_at, deleted_at)
+         VALUES ('evt_live', 1, 'Live', '2026-11-07', '09:00', '19:00', 1, 'apply-live', 'view-live', ?, ?, NULL)`,
+      )
+      .bind(now, now)
+      .run();
+    testDb
+      .prepare(
+        `INSERT INTO events (id, chapter_id, name, date, start_time, end_time, seed, apply_token, view_token, created_at, updated_at, deleted_at)
+         VALUES ('evt_deleted', 1, 'Deleted', '2026-11-07', '09:00', '19:00', 1, 'apply-deleted', 'view-deleted', ?, ?, ?)`,
+      )
+      .bind(now, now, now)
+      .run();
+    return asD1(testDb);
+  }
+
+  it("finds the event by its apply_token", async () => {
+    const db = seedDb();
+    const event = await getEventByApplyToken(db, "apply-live");
+    expect(event?.id).toBe("evt_live");
+  });
+
+  it("returns null for an unknown token", async () => {
+    const db = seedDb();
+    expect(await getEventByApplyToken(db, "no-such-token")).toBeNull();
+  });
+
+  it("returns null for a soft-deleted event's token", async () => {
+    const db = seedDb();
+    expect(await getEventByApplyToken(db, "apply-deleted")).toBeNull();
   });
 });

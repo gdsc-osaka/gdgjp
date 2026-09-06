@@ -1,4 +1,5 @@
 import type { UserChapter } from "@gdgjp/gdg-lib";
+import type { ApplicationRecord } from "~/features/applications/types";
 import type { EventRecord } from "~/features/events/events.server";
 
 /**
@@ -25,4 +26,24 @@ export type PermissionEvent = Pick<EventRecord, "chapterId">;
  */
 export function canManageEvent(chapters: readonly UserChapter[], event: PermissionEvent): boolean {
   return chapters.some((chapter) => chapter.chapterId === event.chapterId);
+}
+
+/** The subset of an application's fields permission checks need. */
+export type PermissionApplication = Pick<ApplicationRecord, "userId">;
+
+/**
+ * Can `viewer` edit this application (docs/roster/04-applications.md
+ * "Design" §4 "権限")? Either the caller manages the owning event (any
+ * chapter member, per `canManageEvent` — proxy-add, overwrite, reflecting a
+ * withdrawal), or the application is the viewer's own. `viewer` is `null`
+ * for an unauthenticated visitor, who can never edit anything here.
+ */
+export function canEditApplication(
+  viewer: { userId: string } | null,
+  chapters: readonly UserChapter[],
+  event: PermissionEvent,
+  application: PermissionApplication,
+): boolean {
+  if (canManageEvent(chapters, event)) return true;
+  return viewer !== null && application.userId === viewer.userId;
 }
