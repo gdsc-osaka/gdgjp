@@ -15,8 +15,10 @@ Entry points:
   `leadMin > ideal` — an unmet `leadMin` would sit at rank 1 of the solver's scarcity ordering
   forever (index.md §5.2) and starve every other slot's fill order.
 - `impact.ts` — pure `demandLossOnSlotChange`, reusing Stage 02's `reconcileSlotKeys` (not
-  reimplemented) to report how many demand rows a time-slot grid regeneration would delete, for
-  the "N件の需要が失われます" warning on a step-size change.
+  reimplemented) to report how many demand rows a time-slot grid regeneration would delete, and
+  `demandLossByStepMinOption`, which precomputes that count for each candidate step-size option
+  so `~/features/events/components/EventSettingsForm`'s real stepMin select can warn
+  ("N件の需要が失われます") before its own submit goes through, via a `confirm()` gate.
 - `matrix.ts` — pure row/column assembly for the demand matrix UI: `buildColumns` (only the
   (track, role) pairs with real demand), `buildPhaseRows`/`buildSlotRows` (phase-wide vs.
   per-slot rows, with the phase row's `uniform` flag driving the UI's `*` marker), and
@@ -27,7 +29,6 @@ Entry points:
   every caller.
 - `components/` — `DemandMatrix` (the `/e/:id/design` card: mode toggle, "役割を追加", the
   table), `DemandCell` (one cell button), `DemandDrawer` (the min/ideal/leadMin/newMax editor +
-  bulk-copy-to-other-tracks/-phases form), `StepMinImpactWarning` (a standalone step-size preview
-  using `impact.ts`, independent of the real settings form).
+  bulk-copy-to-other-tracks/-phases form).
 
 Time slots, phases, tracks, and roles themselves are a separate feature: `~/features/schedule/`.
