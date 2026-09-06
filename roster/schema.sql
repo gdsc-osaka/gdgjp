@@ -91,3 +91,15 @@ CREATE TABLE event_roles (
   role_id  TEXT NOT NULL REFERENCES roles(id),
   PRIMARY KEY (event_id, role_id)
 );
+CREATE TABLE demands (
+  event_id     TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  time_slot_id TEXT NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
+  track_id     TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  role_id      TEXT NOT NULL REFERENCES roles(id),
+  min_count    INTEGER NOT NULL DEFAULT 0,
+  ideal_count  INTEGER NOT NULL DEFAULT 0,
+  lead_min     INTEGER NOT NULL DEFAULT 0,
+  new_max      INTEGER NOT NULL DEFAULT 99,
+  PRIMARY KEY (time_slot_id, track_id, role_id)
+);
+CREATE INDEX demands_event_idx ON demands (event_id);

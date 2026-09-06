@@ -16,8 +16,9 @@ events, the time-slot grid, tracks, and the seeded role master — see `README.m
 - `/events/new` — create an event (name, date, start/end, step size). Also creates the initial
   time-slot grid and a shared "全体" track.
 - `/e/:id/design` — event settings, phases + the derived time-slot grid, tracks
-  (add/reorder/delete), and role selection. Chapter-gated via `canManageEvent`; 403 for a
-  different chapter.
+  (add/reorder/delete), role selection, and the demand matrix (Stage 03: `min`/`ideal`/`leadMin`/
+  `newMax` per time-slot x track x role, phase-wide or per-slot). Chapter-gated via
+  `canManageEvent`; 403 for a different chapter.
 - `/signin`, `/api/auth/*`, `/auth/signout` — gdg-lib relying-party plumbing (`cookiePrefix
   gdgjp-roster`, `ACCOUNTS` service binding).
 - `/no-chapter` — shown when the user has no GDG chapter.
@@ -26,13 +27,15 @@ events, the time-slot grid, tracks, and the seeded role master — see `README.m
 ## Data
 
 - **D1 (`DB`)** — `user` + `oidc_session` (gdg-lib), plus `events`, `phases`, `time_slots`,
-  `tracks`, `roles` (seeded, ADR-007), `event_roles` (Stage 02). Migrations in `migrations/`;
-  `schema.sql` is generated (`pnpm migrate:local`) — never hand-edit it.
+  `tracks`, `roles` (seeded, ADR-007), `event_roles` (Stage 02), `demands` (Stage 03). Migrations
+  in `migrations/`; `schema.sql` is generated (`pnpm migrate:local`) — never hand-edit it.
 - No ORM. Every feature's `*.server.ts` hand-writes D1 (`*Row` type → `to*()` mapper →
   column-list constant → `RETURNING`, following `scheduler/app/lib/db.ts`'s pattern):
   `app/features/events/events.server.ts` (events CRUD),
   `app/features/schedule/schedule.server.ts` (phases + time-slot regeneration),
-  `app/features/schedule/tracks.server.ts` (tracks, the roles master, event_roles).
+  `app/features/schedule/tracks.server.ts` (tracks, the roles master, event_roles),
+  `app/features/demand/demand.server.ts` (the demand matrix's D1 access — `ideal_count = 0` reads
+  and writes identically to the row not existing at all).
 - `time_slots.idx` is 0-based and contiguous per event — the solver's "previous slot" check and
   the public view's contiguous-range grouping both depend on this. Regenerating the grid
   (`schedule.server.ts#regenerateTimeSlots`) keeps the `id` of any slot whose `(start_time,
@@ -42,8 +45,8 @@ events, the time-slot grid, tracks, and the seeded role master — see `README.m
 ## Layout (ADR-003 — feature-first from day one)
 
 - Domain code goes in `app/features/<domain>/` (server + client + UI + colocated tests). Auth,
-  events, schedule, and the solver are the features so far:
-  `app/features/{auth,events,schedule,solver}/`.
+  events, schedule, demand, and the solver are the features so far:
+  `app/features/{auth,events,schedule,demand,solver}/`.
 - `app/lib/` holds **only** cross-cutting primitives with no domain: `return-to.ts` and
   `db.server.ts` (a D1 handle accessor, no queries — Stage 02). Do not add another file here —
   `tests/architecture/layering.test.ts` whitelists the exact set and fails on any addition. A
