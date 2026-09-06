@@ -18,7 +18,7 @@
 | Auth (RP session, chapter ACL, sign-in redirect, permission judgment) | `app/features/auth/` |
 | Cross-cutting primitives with no domain (`safeReturnTo`, D1 handle accessor) | `app/lib/` — 2 files only, see "Placement rules" |
 | App shell UI | doesn't exist yet — no shared chrome, no local `ui/` (ADR-001: UI primitives come from `@gdgjp/gdg-lib`) |
-| Solver (Stage 06) | will be `app/features/solver/` — pure TS, no D1/React |
+| Solver (greedy fill + local search + OJT swap, Stage 06) | `app/features/solver/` — pure TS, no D1/React/fetch/window (ADR-004) |
 | Events (`events` table CRUD, status lifecycle) | `app/features/events/` |
 | Schedule (phases, the time-slot grid + its regenerate/reconcile logic, tracks, roles, event_roles) | `app/features/schedule/` |
 | Staff registration (applications, application_skills, availabilities; proxy-registration claim; apply-form validation) | `app/features/applications/` (README) |

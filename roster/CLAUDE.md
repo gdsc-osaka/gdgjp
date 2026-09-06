@@ -65,8 +65,8 @@ current code map.
 ## Layout (ADR-003 — feature-first from day one)
 
 - Domain code goes in `app/features/<domain>/` (server + client + UI + colocated tests). Auth,
-  events, schedule, and applications are the features so far:
-  `app/features/{auth,events,schedule,applications}/`.
+  events, schedule, applications, and the solver are the features so far:
+  `app/features/{auth,events,schedule,applications,solver}/`.
 - `app/lib/` holds **only** cross-cutting primitives with no domain: `return-to.ts` and
   `db.server.ts` (a D1 handle accessor, no queries — Stage 02). Do not add another file here —
   `tests/architecture/layering.test.ts` whitelists the exact set and fails on any addition. A
@@ -74,8 +74,13 @@ current code map.
 - `app/components/` doesn't exist yet — there's no shared app shell and, per ADR-001, no local
   `ui/` primitives (UI primitives come from `@gdgjp/gdg-lib`). If a later stage adds shell chrome,
   update the layering test's allowlist in the same change.
-- The solver (Stage 06, `app/features/solver/`) must stay a pure TS module — no D1, no React,
-  no `fetch`. This is what makes it unit-testable and reproducible (ADR-004).
+- The solver (`app/features/solver/`, Stage 06) is a pure TS module — no D1, no React, no
+  `fetch`, no `window`. This is what makes it unit-testable and reproducible (ADR-004). It
+  defines its own `SolverInput`/`SolverApplication`/`Assignments`/`Report` types in `types.ts`
+  rather than importing from `~/features/demand` or `~/features/applications` (Stage 03/04) —
+  Stage 07's Worker action is what will map real D1 rows onto these plain types. See
+  `app/features/solver/README.md` for the file-by-file breakdown of the 7-step generation flow
+  (docs/roster/index.md §5.2).
 
 ## Architecture tests (`tests/architecture/`, ported from `wiki/`)
 
