@@ -46,6 +46,12 @@
     "node": {
       "major": 22,
       "minMinor": 18
+    },
+    "antigravity": {
+      "version": "1.1.27",
+      "sha256": {
+        "x86_64": "93eb2118b778a4005700b54cdd7e08b896fbe665d5ff338e38e9e53da9a091ea"
+      }
     }
   },
   "paths": {
