@@ -19,8 +19,9 @@ current code map.
 - `/events/new` — create an event (name, date, start/end, step size). Also creates the initial
   time-slot grid and a shared "全体" track.
 - `/e/:id/design` — event settings, phases + the derived time-slot grid, tracks
-  (add/reorder/delete), and role selection. Chapter-gated via `canManageEvent`; 403 for a
-  different chapter.
+  (add/reorder/delete), role selection, and the demand matrix (Stage 03: `min`/`ideal`/`leadMin`/
+  `newMax` per time-slot x track x role, phase-wide or per-slot). Chapter-gated via
+  `canManageEvent`; 403 for a different chapter.
 - `/e/:id/staff` — the public apply URL to share, and `ProxyAddDialog` (owner-side proxy
   registration by email, ADR-008). Chapter-gated like `/e/:id/design`. The staff list /
   supply-demand view is Stage 05's job — this stage builds only the entry point.
@@ -36,14 +37,16 @@ current code map.
 ## Data
 
 - **D1 (`DB`)** — `user` + `oidc_session` (gdg-lib), `events`, `phases`, `time_slots`, `tracks`,
-  `roles` (seeded, ADR-007), `event_roles` (Stage 02), plus `applications`, `application_skills`,
-  `availabilities` (Stage 04). Migrations in `migrations/`; `schema.sql` is generated
-  (`pnpm migrate:local`) — never hand-edit it.
+  `roles` (seeded, ADR-007), `event_roles` (Stage 02), `demands` (Stage 03), plus `applications`,
+  `application_skills`, `availabilities` (Stage 04). Migrations in `migrations/`; `schema.sql` is
+  generated (`pnpm migrate:local`) — never hand-edit it.
 - No ORM. Every feature's `*.server.ts` hand-writes D1 (`*Row` type → `to*()` mapper →
   column-list constant → `RETURNING`, following `scheduler/app/lib/db.ts`'s pattern):
   `app/features/events/events.server.ts` (events CRUD, incl. `getEventByApplyToken`),
   `app/features/schedule/schedule.server.ts` (phases + time-slot regeneration),
   `app/features/schedule/tracks.server.ts` (tracks, the roles master, event_roles),
+  `app/features/demand/demand.server.ts` (the demand matrix's D1 access — `ideal_count = 0` reads
+  and writes identically to the row not existing at all),
   `app/features/applications/applications.server.ts` (applications CRUD, claim, dedup),
   `app/features/applications/{skills,availability}.server.ts` (application_skills,
   availabilities — both delete-all-then-insert on every save).
@@ -65,8 +68,8 @@ current code map.
 ## Layout (ADR-003 — feature-first from day one)
 
 - Domain code goes in `app/features/<domain>/` (server + client + UI + colocated tests). Auth,
-  events, schedule, applications, and the solver are the features so far:
-  `app/features/{auth,events,schedule,applications,solver}/`.
+  events, schedule, demand, applications, and the solver are the features so far:
+  `app/features/{auth,events,schedule,demand,applications,solver}/`.
 - `app/lib/` holds **only** cross-cutting primitives with no domain: `return-to.ts` and
   `db.server.ts` (a D1 handle accessor, no queries — Stage 02). Do not add another file here —
   `tests/architecture/layering.test.ts` whitelists the exact set and fails on any addition. A
