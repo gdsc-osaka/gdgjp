@@ -273,7 +273,7 @@ describe("restoreRevision", () => {
 
     const result = await restoreRevision(asD1(testDb), EVENT_ID, 1, OWNER);
 
-    expect(result.droppedCount).toBe(0);
+    expect(result).toEqual({ droppedCount: 0 });
     expect(await getCursor(testDb)).toBe(1);
     expect(await listRevisionRows(testDb)).toHaveLength(rowsBefore.length); // no new row
     expect(await readAssignmentRows(testDb)).toEqual([
@@ -318,7 +318,7 @@ describe("restoreRevision", () => {
 
     const result = await restoreRevision(asD1(testDb), EVENT_ID, 1, OWNER);
 
-    expect(result.droppedCount).toBe(1);
+    expect(result).toEqual({ droppedCount: 1 });
     const rows = await readAssignmentRows(testDb);
     expect(rows.map((r) => r.application_id)).toEqual(["app_1"]);
   });
@@ -333,7 +333,7 @@ describe("restoreRevision", () => {
 
     const result = await restoreRevision(asD1(testDb), EVENT_ID, 1, OWNER);
 
-    expect(result.droppedCount).toBe(1);
+    expect(result).toEqual({ droppedCount: 1 });
     expect(await readAssignmentRows(testDb)).toEqual([]);
   });
 
@@ -351,12 +351,12 @@ describe("restoreRevision", () => {
 
     const result = await restoreRevision(asD1(testDb), EVENT_ID, 1, OWNER);
 
-    expect(result.droppedCount).toBe(2);
+    expect(result).toEqual({ droppedCount: 2 });
     expect(await readAssignmentRows(testDb)).toEqual([]);
   });
 
-  it("throws for a seq that has no revision", async () => {
-    await expect(restoreRevision(asD1(testDb), EVENT_ID, 999, OWNER)).rejects.toThrow();
+  it("returns null (rather than throwing) for a seq that has no revision", async () => {
+    expect(await restoreRevision(asD1(testDb), EVENT_ID, 999, OWNER)).toBeNull();
   });
 });
 

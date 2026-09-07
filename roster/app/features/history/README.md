@@ -28,12 +28,14 @@ Entry points:
   future-truncation and retention eviction all in one `db.batch` — the truncation runs on BOTH the
   merge and the insert path, since a rewound cursor can land on a mergeable `edit` head too),
   `restoreRevision` (snapshot -> `writeAssignments`, cursor move, stale-id filtering with a
-  reported count — never creates a revision), `tryRestoreRevision` (the route's `restore` intent
-  wrapper: a client-submitted `seq` can go stale between page load and click, e.g. retention
-  evicted it, so this catches `restoreRevision`'s "not found" throw and returns `{ found: false }`
-  instead of letting it 500), `undoRevision`/`redoRevision` (look up an adjacent `seq` themselves
-  and call `restoreRevision` directly — never stale, so no wrapper needed), and `getHistoryState`
-  (the panel's + buttons' entire data need, newest-`seq`-first).
+  reported count — never creates a revision; returns `null`, not a throw, when `seq` itself
+  doesn't exist), `tryRestoreRevision` (the route's `restore` intent wrapper: a client-submitted
+  `seq` can go stale between page load and click, e.g. retention evicted it, so this checks
+  `restoreRevision`'s `null` return for exactly that condition and returns `{ found: false }`
+  instead of letting the route 500 — an unrelated error still propagates as a real error, rather
+  than a broad `catch` mislabeling it "not found"), `undoRevision`/`redoRevision` (look up an
+  adjacent `seq` themselves and call `restoreRevision` directly — never stale, so no wrapper
+  needed), and `getHistoryState` (the panel's + buttons' entire data need, newest-`seq`-first).
 - `components/HistoryPanel.tsx` — the newest-first revision list below the shift table: label,
   time, actor, kind, and each row's own `evaluate()` metrics (never re-derived), the current
   cursor marked, and a "戻す" button on every OTHER row.

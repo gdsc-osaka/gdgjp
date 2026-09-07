@@ -188,6 +188,12 @@ export async function recordRevision(db: D1Database, input: RecordRevisionInput)
  * schedule regeneration since the snapshot was taken — docs/roster/
  * 08-history.md "Design" §5), reporting the dropped count instead of
  * throwing or letting a foreign-key violation reach the caller.
+ *
+ * Returns `null` — rather than throwing — when `seq` itself doesn't name a
+ * revision for this event, so `tryRestoreRevision` (below) can distinguish
+ * "this specific, expected condition" from any other unrelated failure
+ * (a D1 error, a corrupt snapshot, ...) without a broad `catch` that would
+ * risk mislabeling those as "not found" too.
  */
 export async function restoreRevision(
   db: D1Database,
@@ -197,9 +203,9 @@ export async function restoreRevision(
   // writes no row anywhere that would record who performed it — kept for the
   // `kind: 'restore'` branch-recording use the stage doc reserves (Design §5).
   _actor: Actor,
-): Promise<RestoreResult> {
+): Promise<RestoreResult | null> {
   const row = await getRevisionBySeq(db, eventId, seq);
-  if (!row) throw new Error(`No revision at event ${eventId}, seq ${seq}`);
+  if (!row) return null;
 
   const snapshotAssignments = parseSnapshot(row.snapshot);
 
@@ -235,10 +241,13 @@ export type RestoreOutcome = { found: true; droppedCount: number } | { found: fa
  * from this module's own lookup (the route's `restore` intent): the `seq` in
  * a submitted form can go stale between page load and click — e.g. another
  * owner's edit evicted it via the 50-entry retention cap in the meantime —
- * which is a real, reachable input error, not a 500-worthy bug. `undoRevision`/
- * `redoRevision` don't need this wrapper: they look up an adjacent `seq`
- * themselves immediately before calling `restoreRevision`, so it can't be
- * stale by the time they use it.
+ * which is a real, reachable input error, not a 500-worthy bug. Checks
+ * `restoreRevision`'s `null` return for exactly that condition rather than a
+ * broad `catch`, so an unrelated failure (a D1 error, a corrupt snapshot)
+ * still propagates as a real error instead of being mislabeled "not found."
+ * `undoRevision`/`redoRevision` don't need this wrapper: they look up an
+ * adjacent `seq` themselves immediately before calling `restoreRevision`, so
+ * it can't be stale by the time they use it.
  */
 export async function tryRestoreRevision(
   db: D1Database,
@@ -246,12 +255,9 @@ export async function tryRestoreRevision(
   seq: number,
   actor: Actor,
 ): Promise<RestoreOutcome> {
-  try {
-    const { droppedCount } = await restoreRevision(db, eventId, seq, actor);
-    return { found: true, droppedCount };
-  } catch {
-    return { found: false };
-  }
+  const result = await restoreRevision(db, eventId, seq, actor);
+  if (!result) return { found: false };
+  return { found: true, droppedCount: result.droppedCount };
 }
 
 /** Moves the cursor one step toward `seq 1` and restores that snapshot, or
