@@ -138,16 +138,24 @@ function newcomerAllowed(
   currentSize: number,
   target: number,
 ): boolean {
-  if (currentSize >= cell.newMax) return false;
+  const members = state.cellMembers.get(demandKey(cell.slotId, cell.trackId, cell.roleId));
+  const levelsInCell = members
+    ? [...members].map((id) => state.appsById.get(id)?.skills[cell.roleId]?.level)
+    : [];
+
+  // Bug fix: this must count only "new"-level members already in the cell,
+  // not `currentSize` (every member regardless of level). Comparing against
+  // `currentSize` made any cell with `leadMin >= 1` block newcomers as soon
+  // as the required lead was placed, even with zero newcomers seated —
+  // exactly the leadMin+newMax combination index.md §5.2 illustrates as the
+  // primary example ("受付は常時1名以上のリード経験者" + "初参加者は1名まで").
+  // `local-search.ts#countLevel` / `ojt-swap.ts#countLevelIn` already count
+  // this correctly; this brings `newcomerAllowed` in line with them.
+  const currentNewCount = levelsInCell.filter((level) => level === "new").length;
+  if (currentNewCount >= cell.newMax) return false;
   if (!state.input.options.noSoloNewcomer) return true;
 
-  const members = state.cellMembers.get(demandKey(cell.slotId, cell.trackId, cell.roleId));
-  const hasExperienced = members
-    ? [...members].some((id) => {
-        const level = state.appsById.get(id)?.skills[cell.roleId]?.level;
-        return level === "exp" || level === "lead";
-      })
-    : false;
+  const hasExperienced = levelsInCell.some((level) => level === "exp" || level === "lead");
   if (hasExperienced) return true;
   return currentSize !== target - 1;
 }

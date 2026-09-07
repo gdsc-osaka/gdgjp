@@ -166,4 +166,42 @@ describe("solve", () => {
       expect(second.assignments).toEqual(first.assignments);
     });
   });
+
+  // Regression for a bug found via manual QA (not by any existing fixture):
+  // `newcomerAllowed` compared the cell's TOTAL headcount against `newMax`
+  // instead of the count of "new"-level members. Any cell with `leadMin >= 1`
+  // hit `newMax` the instant its required lead was placed — with zero actual
+  // newcomers seated — permanently blocking the newcomer half of its own
+  // demand. This is index.md §5.2's own illustrative example ("受付は常時1名
+  // 以上のリード経験者" + "初参加者は1名まで"), so it is not an edge case.
+  it("fills a cell's newcomer seat even when leadMin already put an experienced member in it", () => {
+    const input: SolverInput = {
+      slots: [{ id: "slot-0", idx: 0 }],
+      tracks: [{ id: "track-0" }],
+      roles: [{ id: "role-0" }],
+      demands: new Map([["slot-0|track-0|role-0", { min: 2, ideal: 2, leadMin: 1, newMax: 1 }]]),
+      applications: [
+        {
+          id: "lead-1",
+          withdrawn: false,
+          skills: { "role-0": { level: "lead", pref: 2 } },
+          availability: { "slot-0": "o" },
+        },
+        {
+          id: "new-1",
+          withdrawn: false,
+          skills: { "role-0": { level: "new", pref: 2 } },
+          availability: { "slot-0": "o" },
+        },
+      ],
+      options: { noSoloNewcomer: true, maxConsecutive: 4, seed: 1 },
+    };
+
+    const { assignments, report } = solve(input);
+
+    expect(assignments.size).toBe(2);
+    expect(assignments.has("lead-1|slot-0")).toBe(true);
+    expect(assignments.has("new-1|slot-0")).toBe(true);
+    expect(report.metrics.minShortage).toBe(0);
+  });
 });
