@@ -35,7 +35,7 @@ export function RoleSkillRow({
   onPrefChange: (pref: Pref) => void;
 }) {
   return (
-    <li className="rounded-xl border-2 border-black bg-white p-3">
+    <li className="rounded-lg border border-border bg-card p-3">
       <label className="flex items-center gap-2">
         <input
           type="checkbox"

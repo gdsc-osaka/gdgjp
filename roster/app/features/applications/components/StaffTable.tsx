@@ -45,7 +45,7 @@ export function StaffTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-[1.5rem] border-2 border-black bg-white">
+    <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <table className="w-full min-w-[720px] border-collapse text-left text-sm">
         <thead>
           <tr className="border-b-2 border-black">

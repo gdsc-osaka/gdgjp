@@ -22,7 +22,7 @@ function locationLabel(
 
 function Column({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="space-y-2 rounded-xl border-2 border-black bg-white p-3">
+    <div className="space-y-2 rounded-lg border border-border bg-card p-3">
       <h3 className="font-bold">{title}</h3>
       {children}
     </div>
@@ -78,10 +78,6 @@ export function ShortageReport({ report, ...maps }: { report: Report } & NameMap
               <p>
                 {locationLabel(s, maps)} — {s.amount}名不足
               </p>
-              <p className="text-xs text-neutral-500">
-                → 募集告知に反映する:『{maps.roleNameById.get(s.roleId) ?? s.roleId}
-                の経験者を募集中』
-              </p>
             </li>
           ))}
         </ul>
@@ -96,11 +92,6 @@ export function ShortageReport({ report, ...maps }: { report: Report } & NameMap
               <p>
                 {locationLabel(v, maps)} — {VIOLATION_LABELS[v.kind]}
               </p>
-              {v.kind === "soloNewcomer" ? (
-                <p className="text-xs text-neutral-500">
-                  → 同時間帯に回せる経験者がいないため入れ替えられなかった枠
-                </p>
-              ) : null}
             </li>
           ))}
         </ul>

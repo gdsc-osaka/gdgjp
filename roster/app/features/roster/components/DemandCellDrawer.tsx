@@ -49,6 +49,7 @@ const CATEGORY_LABELS: Record<SuggestionCategory, string> = {
  */
 export function DemandCellDrawer({
   selection,
+  demand,
   currentOccupants,
   suggestions,
   error,
@@ -57,7 +58,7 @@ export function DemandCellDrawer({
 }: {
   selection: DemandCellSelection | null;
   demand: Demand | null;
-  currentOccupants: readonly { applicationId: string; name: string }[];
+  currentOccupants: readonly { applicationId: string; name: string; level?: Level }[];
   suggestions: readonly DemandSuggestion[];
   error?: string;
   /** A fresh truthy value only on a successful assign/unassign — see `StaffDrawer`'s identical contract. */
@@ -78,14 +79,15 @@ export function DemandCellDrawer({
     <dialog
       ref={dialogRef}
       onClose={onClose}
-      className="w-full max-w-lg rounded-[1.5rem] border-2 border-black p-0 backdrop:bg-black/40"
+      aria-labelledby="demand-cell-drawer-title"
+      className="roster-drawer"
     >
       {selection ? (
         <div className="max-h-[85vh] space-y-4 overflow-y-auto p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-neutral-500">{selection.label}</p>
-              <h3 className="text-lg font-bold">
+              <h3 id="demand-cell-drawer-title" className="text-lg font-bold">
                 {selection.trackName} / {selection.roleName}
               </h3>
               {selection.slotIds.length > 1 ? (
@@ -107,6 +109,26 @@ export function DemandCellDrawer({
             <p role="alert" className="text-sm font-medium text-gdg-red">
               {error}
             </p>
+          ) : null}
+
+          {demand ? (
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-muted px-2.5 py-1 font-semibold">
+                人数 {currentOccupants.length} / 理想 {demand.ideal}（最小 {demand.min}）
+              </span>
+              {demand.leadMin > 0 ? (
+                <span className="rounded-full bg-muted px-2.5 py-1 font-semibold">
+                  リード {currentOccupants.filter((person) => person.level === "lead").length} /{" "}
+                  {demand.leadMin}
+                </span>
+              ) : null}
+              {demand.newMax < 99 ? (
+                <span className="rounded-full bg-muted px-2.5 py-1 font-semibold">
+                  初参加 {currentOccupants.filter((person) => person.level === "new").length} / 上限{" "}
+                  {demand.newMax}
+                </span>
+              ) : null}
+            </div>
           ) : null}
 
           <div className="space-y-2">

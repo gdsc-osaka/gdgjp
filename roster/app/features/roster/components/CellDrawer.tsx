@@ -58,14 +58,17 @@ export function CellDrawer({
     <dialog
       ref={dialogRef}
       onClose={onClose}
-      className="w-full max-w-lg rounded-[1.5rem] border-2 border-black p-0 backdrop:bg-black/40"
+      aria-labelledby="cell-drawer-title"
+      className="roster-drawer"
     >
       {selection ? (
         <div className="max-h-[85vh] space-y-4 overflow-y-auto p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-neutral-500">{selection.slotLabel}</p>
-              <h3 className="text-lg font-bold">{selection.applicationName}</h3>
+              <h3 id="cell-drawer-title" className="text-lg font-bold">
+                {selection.applicationName}
+              </h3>
             </div>
             <button
               type="button"

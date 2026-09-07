@@ -108,8 +108,15 @@ export function useRosterDrawers({
       groupAssignmentsByCell(assignments).get(
         demandKey(demandSelection.slotIds[0], demandSelection.trackId, demandSelection.roleId),
       ) ?? [];
-    return ids.map((id) => ({ applicationId: id, name: applicationNameById[id] ?? id }));
-  }, [assignments, demandSelection, applicationNameById]);
+    const appsById = new Map(
+      input.applications.map((application) => [application.id, application]),
+    );
+    return ids.map((id) => ({
+      applicationId: id,
+      name: applicationNameById[id] ?? id,
+      level: appsById.get(id)?.skills[demandSelection.roleId]?.level,
+    }));
+  }, [assignments, demandSelection, applicationNameById, input.applications]);
 
   const demandSuggestions = useMemo((): DemandSuggestion[] => {
     if (!demandSelection) return [];

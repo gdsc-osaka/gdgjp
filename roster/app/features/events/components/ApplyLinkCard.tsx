@@ -30,11 +30,17 @@ export function ApplyLinkCard({
   const [copied, setCopied] = useState(false);
 
   return (
-    <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
-      <h2 className="font-bold">公開登録 URL</h2>
-      <p className="text-sm text-neutral-600">
-        このURLを共有すると、Chapterに所属していない人でもスタッフとして登録できます。
-      </p>
+    <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold">スタッフ登録URL</h2>
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+            canApplyNow ? "bg-gdg-green/15 text-gdg-green" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {canApplyNow ? "募集中" : "受付停止中"}
+        </span>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <code className="block flex-1 break-all rounded-xl bg-neutral-100 p-3 text-sm">
@@ -57,11 +63,19 @@ export function ApplyLinkCard({
         >
           {copied ? "コピーしました" : "コピー"}
         </button>
+        <a
+          href={applyUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-md border border-border px-4 py-2 text-sm font-semibold hover:bg-muted"
+        >
+          登録画面を開く
+        </a>
       </div>
 
       {!canApplyNow ? (
-        <p className="rounded-xl border-2 border-black bg-neutral-100 p-3 text-sm font-medium">
-          このURLは現在無効です。ステータスを「{STATUS_LABELS.open}」にすると有効になります。
+        <p className="rounded-lg border border-border bg-muted p-3 text-sm font-medium">
+          ステータスを「{STATUS_LABELS.open}」にすると登録できます。
         </p>
       ) : null}
 

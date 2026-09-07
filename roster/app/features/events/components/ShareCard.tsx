@@ -36,18 +36,18 @@ export function ShareCard({ viewUrl, status }: { viewUrl: string; status: EventS
   const isPublished = canView(status);
 
   return (
-    <section className="space-y-4 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
-      <h2 className="font-bold">閲覧専用 URL</h2>
+    <section className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+      <h2 className="font-semibold">閲覧専用URL</h2>
       <p className="text-sm text-neutral-600">
         現在のステータス: <span className="font-bold">{STATUS_LABELS[status]}</span>
       </p>
 
       {isPublished ? (
-        <p className="rounded-xl border-2 border-black bg-neutral-100 p-3 text-sm font-medium">
+        <p className="rounded-lg border border-border bg-muted p-3 text-sm font-medium">
           公開中です。このURLを共有すると、誰でもサインインなしでシフト表を閲覧できます。
         </p>
       ) : (
-        <p className="rounded-xl border-2 border-black bg-neutral-100 p-3 text-sm font-medium">
+        <p className="rounded-lg border border-border bg-muted p-3 text-sm font-medium">
           まだ公開されていません。ステータスを「{STATUS_LABELS.published}」にすると、このURLで
           誰でもシフト表を閲覧できるようになります。
         </p>

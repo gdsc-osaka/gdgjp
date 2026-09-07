@@ -1,4 +1,5 @@
 import { redirect } from "react-router";
+import { PublicShell } from "~/components/PublicShell";
 import { getAuth } from "~/features/auth/auth.server";
 import { ClaimsUnavailableError, fetchChapterForUser } from "~/features/auth/chapter.server";
 import type { Route } from "./+types/no-chapter";
@@ -23,8 +24,8 @@ export async function loader(args: Route.LoaderArgs) {
 
 export default function NoChapter({ loaderData }: Route.ComponentProps) {
   return (
-    <main className="grid min-h-dvh place-items-center p-6">
-      <div className="w-full max-w-md space-y-6 rounded-[2rem] border-2 border-black bg-white p-8 text-center sm:p-10">
+    <PublicShell>
+      <div className="space-y-5 rounded-xl border border-border bg-card p-6 text-center sm:p-8">
         <h1 className="text-2xl font-bold sm:text-3xl">GDG チャプターへの参加が必要です</h1>
         <p className="text-base text-neutral-600">
           roster の管理画面は GDG / GDG on Campus チャプターのメンバーが利用できます。
@@ -37,6 +38,6 @@ export default function NoChapter({ loaderData }: Route.ComponentProps) {
           チャプターに参加する
         </a>
       </div>
-    </main>
+    </PublicShell>
   );
 }

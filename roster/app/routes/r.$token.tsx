@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { PublicShell } from "~/components/PublicShell";
 import { getEventByViewToken } from "~/features/events/events.server";
 import { PartyList } from "~/features/public-roster/components/PartyList";
 import { PersonTimeline } from "~/features/public-roster/components/PersonTimeline";
@@ -100,12 +101,14 @@ export default function PublicRosterPage({ loaderData }: Route.ComponentProps) {
 
   if (!loaderData.published) {
     return (
-      <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-6 p-6 lg:p-10">
-        <h1 className="text-2xl font-bold">{loaderData.event.name}</h1>
-        <p className="rounded-[2rem] border-2 border-black bg-white p-6 font-medium">
+      <PublicShell>
+        <div className="page-heading">
+          <h1>{loaderData.event.name}</h1>
+        </div>
+        <p className="rounded-xl border border-border bg-card p-5 font-medium">
           シフト表はまだ公開されていません。
         </p>
-      </main>
+      </PublicShell>
     );
   }
 
@@ -122,12 +125,14 @@ export default function PublicRosterPage({ loaderData }: Route.ComponentProps) {
     .map((s) => ({ id: s.id, name: s.name }));
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-6 p-6 lg:p-10">
-      <div>
-        <h1 className="text-2xl font-bold">{event.name}</h1>
-        <p className="text-sm text-neutral-600">
-          {event.date} {event.startTime}–{event.endTime}
-        </p>
+    <PublicShell wide>
+      <div className="page-heading">
+        <div>
+          <h1>{event.name}</h1>
+          <p>
+            {event.date} {event.startTime}–{event.endTime}
+          </p>
+        </div>
       </div>
 
       <div className="inline-flex w-fit flex-wrap rounded-full border-2 border-black bg-white p-1">
@@ -177,6 +182,6 @@ export default function PublicRosterPage({ loaderData }: Route.ComponentProps) {
         />
       ) : null}
       {view === "party" && event.hasParty ? <PartyList staff={staff} /> : null}
-    </main>
+    </PublicShell>
   );
 }

@@ -13,20 +13,26 @@ const STATUS_BADGE_COLOR: Record<EventRecord["status"], string> = {
 /** One event's summary row in the `/` list (docs/roster/02-domain-schema.md "Design" §6). */
 export function EventCard({ event }: { event: EventRecord }) {
   return (
-    <li className="rounded-2xl border-2 border-black bg-white p-4 sm:p-5">
+    <li className="rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link to={`/e/${event.id}/design`} className="text-lg font-bold text-gdg-blue underline">
+        <Link to={`/e/${event.id}/design`} className="font-semibold hover:text-gdg-blue">
           {event.name}
         </Link>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-bold ${STATUS_BADGE_COLOR[event.status]}`}
-        >
-          {STATUS_LABELS[event.status]}
-        </span>
+        <EventStatusBadge status={event.status} />
       </div>
       <p className="mt-1 text-sm text-neutral-600">
         {event.date} {event.startTime}–{event.endTime}
       </p>
     </li>
+  );
+}
+
+export function EventStatusBadge({ status }: { status: EventRecord["status"] }) {
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE_COLOR[status]}`}
+    >
+      {STATUS_LABELS[status]}
+    </span>
   );
 }

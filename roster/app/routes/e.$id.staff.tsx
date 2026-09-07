@@ -306,11 +306,20 @@ export default function StaffPage({ loaderData, actionData }: Route.ComponentPro
   const selectedDetail = selectedId ? (staffDetails[selectedId] ?? null) : null;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-6 p-6 lg:p-10">
-      <div>
-        <h1 className="text-2xl font-bold">{event.name}</h1>
-        <p className="text-sm text-neutral-600">募集・スタッフ</p>
+    <main className="admin-page">
+      <div className="page-heading">
+        <div>
+          <h1>スタッフ</h1>
+          <p>{event.name} · 募集と登録状況</p>
+        </div>
       </div>
+
+      <ApplyLinkCard
+        applyUrl={applyUrl}
+        status={event.status}
+        canApplyNow={canApplyNow}
+        error={statusError}
+      />
 
       <ShortageSummary
         registeredCount={registeredCount}
@@ -318,8 +327,8 @@ export default function StaffPage({ loaderData, actionData }: Route.ComponentPro
         roleNameById={roleNameById}
       />
 
-      <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
-        <h2 className="font-bold">需給ビュー</h2>
+      <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+        <h2 className="font-semibold">時間帯別の需給</h2>
         <ul className="space-y-2">
           {supplyRows.map((row) => (
             <SupplyDemandRow
@@ -333,8 +342,17 @@ export default function StaffPage({ loaderData, actionData }: Route.ComponentPro
         </ul>
       </section>
 
-      <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
-        <h2 className="font-bold">スタッフ一覧</h2>
+      <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-semibold">登録スタッフ</h2>
+          <ProxyAddDialog
+            hasParty={event.hasParty}
+            roles={roles}
+            timeSlots={timeSlots}
+            error={proxyError}
+            succeeded={proxySucceeded}
+          />
+        </div>
         <StaffTable rows={staff} hasParty={event.hasParty} onSelect={setSelectedId} />
       </section>
 
@@ -346,28 +364,6 @@ export default function StaffPage({ loaderData, actionData }: Route.ComponentPro
         succeeded={staffSucceeded}
         onClose={() => setSelectedId(null)}
       />
-
-      <ApplyLinkCard
-        applyUrl={applyUrl}
-        status={event.status}
-        canApplyNow={canApplyNow}
-        error={statusError}
-      />
-
-      <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
-        <h2 className="font-bold">代理登録</h2>
-        <p className="text-sm text-neutral-600">
-          口頭やその場で参加を伝えてきた人を、メールアドレスを指定して登録します。本人が同じ
-          メールアドレスでサインインすると、この登録を引き継げます。
-        </p>
-        <ProxyAddDialog
-          hasParty={event.hasParty}
-          roles={roles}
-          timeSlots={timeSlots}
-          error={proxyError}
-          succeeded={proxySucceeded}
-        />
-      </section>
     </main>
   );
 }

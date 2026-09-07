@@ -1,3 +1,4 @@
+import { PublicShell } from "~/components/PublicShell";
 import {
   createApplication,
   resolveOwnApplication,
@@ -232,20 +233,22 @@ export default function ApplyPage({ loaderData, actionData }: Route.ComponentPro
   const error = actionData && "error" in actionData ? actionData.error : undefined;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 p-6 lg:p-10">
-      <div>
-        <h1 className="text-2xl font-bold">{event.name}</h1>
-        <p className="text-sm text-neutral-600">
-          {event.date} {event.startTime}–{event.endTime}
-        </p>
+    <PublicShell>
+      <div className="page-heading">
+        <div>
+          <h1>{event.name}</h1>
+          <p>
+            {event.date} {event.startTime}–{event.endTime}
+          </p>
+        </div>
       </div>
 
       {!canApplyNow ? (
-        <p className="rounded-[2rem] border-2 border-black bg-white p-6 font-medium">
+        <p className="rounded-xl border border-border bg-card p-5 font-medium">
           募集は終了しました。
         </p>
       ) : !viewer ? (
-        <section className="space-y-4 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
+        <section className="space-y-4 rounded-xl border border-border bg-card p-5">
           <p>このイベントはスタッフを募集しています。登録するにはサインインしてください。</p>
           {roles.length > 0 ? (
             <div>
@@ -270,18 +273,17 @@ export default function ApplyPage({ loaderData, actionData }: Route.ComponentPro
           </a>
         </section>
       ) : (
-        <section className="space-y-4 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
+        <section className="space-y-4 rounded-xl border border-border bg-card p-5">
           <ApplyForm
             hasParty={event.hasParty}
             roles={roles}
             timeSlots={timeSlots}
             own={own}
             defaultName={viewer.name}
-            accountEmail={viewer.email}
             error={error}
           />
         </section>
       )}
-    </main>
+    </PublicShell>
   );
 }

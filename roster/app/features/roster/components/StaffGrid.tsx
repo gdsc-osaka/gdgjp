@@ -51,85 +51,99 @@ export function StaffGrid({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border-2 border-black">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className="sticky left-0 border-b-2 border-black bg-neutral-50 p-2 text-left">
-              時間枠
-            </th>
-            {columns.map((col) => (
-              <th
-                key={col.applicationId}
-                className="border-b-2 border-black bg-neutral-50 p-2 text-left align-top font-medium"
-              >
-                <div className={col.withdrawn ? "text-gdg-red line-through" : undefined}>
-                  {col.name}
-                  {col.withdrawn ? "（辞退）" : ""}
-                </div>
-                {col.skills.length > 0 ? (
-                  <ul className="mt-1 flex flex-wrap gap-1">
-                    {col.skills.map((s) => (
-                      <li
-                        key={s.roleName}
-                        className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-bold text-neutral-600"
-                      >
-                        {s.roleName}:{LEVEL_LABELS[s.level]}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground" aria-label="トラック凡例">
+        {[...trackById.values()].map((track) => (
+          <span key={track.name} className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden="true"
+              className="size-2.5 rounded-sm border border-border"
+              style={{ backgroundColor: `${track.color}40` }}
+            />
+            {track.name}
+          </span>
+        ))}
+      </div>
+      <div className="data-grid-wrap">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="sticky left-0 border-b-2 border-black bg-neutral-50 p-2 text-left">
+                時間枠
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {timeSlots.map((slot) => (
-            <tr key={slot.id} className="border-b border-neutral-200 last:border-0">
-              <th scope="row" className="sticky left-0 bg-white p-2 text-left font-medium">
-                {slot.start}–{slot.end}
-              </th>
-              {columns.map((col) => {
-                const value = byAppSlot.get(assignmentKey(col.applicationId, slot.id));
-                const availability = col.availability[slot.id] ?? "x";
-                const softUsed = Boolean(value) && availability === "d";
-                const violation = Boolean(value) && availability === "x";
-                const track = value ? trackById.get(value.trackId) : undefined;
-                const roleName = value ? (roleNameById.get(value.roleId) ?? value.roleId) : "";
-                return (
-                  <td key={col.applicationId} className="p-1">
-                    <button
-                      type="button"
-                      onClick={() => onCellClick(col.applicationId, slot.id)}
-                      aria-label={`${col.name} / ${slot.start}–${slot.end}${
-                        track ? `：${track.name} ${roleName}` : "：空き"
-                      }`}
-                      className={`flex h-full min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-lg border p-1 text-center transition hover:brightness-95 ${
-                        violation
-                          ? "border-2 border-gdg-red"
-                          : softUsed
-                            ? "border-2 border-dashed border-neutral-500"
-                            : "border-neutral-200"
-                      }`}
-                      style={track ? { backgroundColor: `${track.color}26` } : undefined}
-                    >
-                      {track ? (
-                        <>
-                          <span className="text-xs font-bold">{roleName}</span>
-                          <span className="text-[10px] text-neutral-600">{track.name}</span>
-                        </>
-                      ) : null}
-                      {violation ? (
-                        <span className="text-[10px] font-bold text-gdg-red">稼働×</span>
-                      ) : null}
-                    </button>
-                  </td>
-                );
-              })}
+              {columns.map((col) => (
+                <th
+                  key={col.applicationId}
+                  className="border-b-2 border-black bg-neutral-50 p-2 text-left align-top font-medium"
+                >
+                  <div className={col.withdrawn ? "text-gdg-red line-through" : undefined}>
+                    {col.name}
+                    {col.withdrawn ? "（辞退）" : ""}
+                  </div>
+                  {col.skills.length > 0 ? (
+                    <ul className="mt-1 flex flex-wrap gap-1">
+                      {col.skills.map((s) => (
+                        <li
+                          key={s.roleName}
+                          className="rounded-full bg-neutral-100 px-1.5 text-[10px] font-bold text-neutral-600"
+                        >
+                          {s.roleName}:{LEVEL_LABELS[s.level]}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {timeSlots.map((slot) => (
+              <tr key={slot.id} className="border-b border-neutral-200 last:border-0">
+                <th scope="row" className="sticky left-0 bg-white p-2 text-left font-medium">
+                  {slot.start}–{slot.end}
+                </th>
+                {columns.map((col) => {
+                  const value = byAppSlot.get(assignmentKey(col.applicationId, slot.id));
+                  const availability = col.availability[slot.id] ?? "x";
+                  const softUsed = Boolean(value) && availability === "d";
+                  const violation = Boolean(value) && availability === "x";
+                  const track = value ? trackById.get(value.trackId) : undefined;
+                  const roleName = value ? (roleNameById.get(value.roleId) ?? value.roleId) : "";
+                  return (
+                    <td key={col.applicationId} className="p-1">
+                      <button
+                        type="button"
+                        onClick={() => onCellClick(col.applicationId, slot.id)}
+                        aria-label={`${col.name} / ${slot.start}–${slot.end}${
+                          track ? `：${track.name} ${roleName}` : "：空き"
+                        }`}
+                        className={`flex h-full min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-lg border p-1 text-center transition hover:brightness-95 ${
+                          violation
+                            ? "border-2 border-gdg-red"
+                            : softUsed
+                              ? "border-2 border-dashed border-neutral-500"
+                              : "border-neutral-200"
+                        }`}
+                        style={track ? { backgroundColor: `${track.color}26` } : undefined}
+                      >
+                        {track ? (
+                          <>
+                            <span className="text-xs font-bold">{roleName}</span>
+                            <span className="text-[10px] text-neutral-600">{track.name}</span>
+                          </>
+                        ) : null}
+                        {violation ? (
+                          <span className="text-[10px] font-bold text-gdg-red">稼働×</span>
+                        ) : null}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

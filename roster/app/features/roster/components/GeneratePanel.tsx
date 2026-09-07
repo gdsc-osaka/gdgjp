@@ -26,17 +26,13 @@ export function GeneratePanel({
     navigation.state === "submitting" && navigation.formData?.get("intent") === "generate";
 
   return (
-    <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
+    <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-bold">シフト生成</h2>
-          {hasAssignments ? (
-            <p className="text-sm text-neutral-600">
-              条件を変えずに再生成すると同じ結果になります。
-            </p>
-          ) : (
-            <p className="text-sm text-neutral-600">まだ生成していません。</p>
-          )}
+          <p className="text-sm text-neutral-600">
+            {hasAssignments ? "現在の条件でシフトを作り直します。" : "まだ生成していません。"}
+          </p>
         </div>
         <Form method="post" className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="intent" value="generate" />

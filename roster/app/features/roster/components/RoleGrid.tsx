@@ -70,89 +70,108 @@ export function RoleGrid({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border-2 border-black">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className="sticky left-0 border-b-2 border-black bg-neutral-50 p-2 text-left">
-              時間枠
-            </th>
-            {columns.map((col) => {
-              const track = trackById.get(col.trackId);
-              return (
-                <th
-                  key={gridColumnKey(col.trackId, col.roleId)}
-                  className="border-b-2 border-black bg-neutral-50 p-2 text-left font-medium"
-                >
-                  <div>{roleById.get(col.roleId)?.name ?? col.roleId}</div>
-                  <div className="text-xs font-normal text-neutral-500">
-                    {track?.name ?? col.trackId}
-                  </div>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {timeSlots.map((slot, rowIdx) => (
-            <tr key={slot.id} className="border-b border-neutral-200 last:border-0">
-              <th scope="row" className="sticky left-0 bg-white p-2 text-left font-medium">
-                {slot.start}–{slot.end}
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground" aria-label="トラック凡例">
+        {tracks.map((track) => (
+          <span key={track.id} className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden="true"
+              className="size-2.5 rounded-sm border border-border"
+              style={{ backgroundColor: `${track.color}40` }}
+            />
+            {track.name}
+          </span>
+        ))}
+      </div>
+      <div className="data-grid-wrap">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="sticky left-0 border-b-2 border-black bg-neutral-50 p-2 text-left">
+                時間枠
               </th>
               {columns.map((col) => {
-                const colKey = gridColumnKey(col.trackId, col.roleId);
-                const cell = columnCells.get(colKey)?.[rowIdx];
-                if (!cell || cell.kind === "continued") return null;
-                const rangeSlotIds = timeSlots.slice(rowIdx, rowIdx + cell.span).map((s) => s.id);
-                const label =
-                  cell.span > 1
-                    ? `${slot.start}–${timeSlots[rowIdx + cell.span - 1].end}`
-                    : `${slot.start}–${slot.end}`;
-                const ariaLabel = `${label} / ${trackById.get(col.trackId)?.name ?? col.trackId} / ${
-                  roleById.get(col.roleId)?.name ?? col.roleId
-                }`;
-                const cellBody = (
-                  <>
-                    {!readOnly ? (
-                      <span className="text-xs font-bold text-neutral-500">
-                        {cell.demand ? `${cell.memberIds.length}/${cell.demand.ideal}` : "需要なし"}
-                      </span>
-                    ) : null}
-                    <ul className="space-y-0.5">
-                      {cell.memberIds.length === 0 ? (
-                        <li className="text-neutral-400">空き</li>
-                      ) : (
-                        cell.memberIds.map((id) => <li key={id}>{nameById.get(id) ?? id}</li>)
-                      )}
-                    </ul>
-                  </>
-                );
+                const track = trackById.get(col.trackId);
                 return (
-                  <td key={colKey} rowSpan={cell.span} className="p-1 align-top">
-                    {readOnly ? (
-                      <div
-                        aria-label={ariaLabel}
-                        className="flex h-full w-full min-h-12 flex-col items-start gap-1 rounded-lg border-2 border-black bg-white p-2 text-left"
-                      >
-                        {cellBody}
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onSelectCell?.(col.trackId, col.roleId, rangeSlotIds)}
-                        aria-label={ariaLabel}
-                        className="flex h-full w-full min-h-12 flex-col items-start gap-1 rounded-lg border-2 border-black bg-white p-2 text-left transition hover:bg-neutral-50"
-                      >
-                        {cellBody}
-                      </button>
-                    )}
-                  </td>
+                  <th
+                    key={gridColumnKey(col.trackId, col.roleId)}
+                    className="border-b-2 border-black bg-neutral-50 p-2 text-left font-medium"
+                  >
+                    <div>{roleById.get(col.roleId)?.name ?? col.roleId}</div>
+                    <div className="text-xs font-normal text-neutral-500">
+                      {track?.name ?? col.trackId}
+                    </div>
+                  </th>
                 );
               })}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {timeSlots.map((slot, rowIdx) => (
+              <tr key={slot.id} className="border-b border-neutral-200 last:border-0">
+                <th scope="row" className="sticky left-0 bg-white p-2 text-left font-medium">
+                  {slot.start}–{slot.end}
+                </th>
+                {columns.map((col) => {
+                  const colKey = gridColumnKey(col.trackId, col.roleId);
+                  const cell = columnCells.get(colKey)?.[rowIdx];
+                  if (!cell || cell.kind === "continued") return null;
+                  const rangeSlotIds = timeSlots.slice(rowIdx, rowIdx + cell.span).map((s) => s.id);
+                  const label =
+                    cell.span > 1
+                      ? `${slot.start}–${timeSlots[rowIdx + cell.span - 1].end}`
+                      : `${slot.start}–${slot.end}`;
+                  const ariaLabel = `${label} / ${trackById.get(col.trackId)?.name ?? col.trackId} / ${
+                    roleById.get(col.roleId)?.name ?? col.roleId
+                  }`;
+                  const trackColor = trackById.get(col.trackId)?.color;
+                  const cellBody = (
+                    <>
+                      {!readOnly ? (
+                        <span className="text-xs font-bold text-neutral-500">
+                          {cell.demand
+                            ? `${cell.memberIds.length}/${cell.demand.ideal}`
+                            : "需要なし"}
+                        </span>
+                      ) : null}
+                      <ul className="space-y-0.5">
+                        {cell.memberIds.length === 0 ? (
+                          <li className="text-neutral-400">空き</li>
+                        ) : (
+                          cell.memberIds.map((id) => <li key={id}>{nameById.get(id) ?? id}</li>)
+                        )}
+                      </ul>
+                    </>
+                  );
+                  return (
+                    <td key={colKey} rowSpan={cell.span} className="p-1 align-top">
+                      {readOnly ? (
+                        <div
+                          aria-label={ariaLabel}
+                          className="flex h-full w-full min-h-12 flex-col items-start gap-1 rounded-lg border-2 border-black bg-white p-2 text-left"
+                          style={trackColor ? { backgroundColor: `${trackColor}18` } : undefined}
+                        >
+                          {cellBody}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onSelectCell?.(col.trackId, col.roleId, rangeSlotIds)}
+                          aria-label={ariaLabel}
+                          className="flex h-full w-full min-h-12 flex-col items-start gap-1 rounded-lg border-2 border-black bg-white p-2 text-left transition hover:bg-neutral-50"
+                          style={trackColor ? { backgroundColor: `${trackColor}18` } : undefined}
+                        >
+                          {cellBody}
+                        </button>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

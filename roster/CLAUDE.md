@@ -186,9 +186,10 @@ code map.
   `db.server.ts` (a D1 handle accessor, no queries — Stage 02). Do not add another file here —
   `tests/architecture/layering.test.ts` whitelists the exact set and fails on any addition. A
   file that looks generic but touches one domain still belongs under `app/features/<domain>/`.
-- `app/components/` doesn't exist yet — there's no shared app shell and, per ADR-001, no local
-  `ui/` primitives (UI primitives come from `@gdgjp/gdg-lib`). If a later stage adds shell chrome,
-  update the layering test's allowlist in the same change.
+- `app/components/` holds only app chrome: authenticated `AppShell.tsx`, public
+  `PublicShell.tsx`, and their shared `RosterBrand.tsx` product lockup. Per ADR-001, there are no
+  local `ui/` primitives (UI primitives come from `@gdgjp/gdg-lib`). Keep the layering test's
+  exact allowlist in sync with shell-chrome additions.
 - The solver (`app/features/solver/`, Stage 06) is a pure TS module — no D1, no React, no
   `fetch`, no `window`. This is what makes it unit-testable and reproducible (ADR-004), and what
   lets Stage 07's manual-edit drawers call `hardViolations`/`suggestFor` directly in the browser.
@@ -228,9 +229,9 @@ file so a later move to per-role RBAC only touches it.
 
 Vite: `resolve.dedupe` for react / react-dom / react-router is load-bearing — without it
 `@gdgjp/gdg-lib` (consumed as source) leaves the client with two React copies ("invalid hook
-call" at hydration). `optimizeDeps.include` only lists what this stage actually renders; extend
-it (with `radix-ui` / `lucide-react` / `motion`) the moment a route renders a `@gdgjp/gdg-lib/ui`
-component that pulls them in — see `ost/vite.config.ts` for that fuller form.
+call" at hydration). `optimizeDeps.include` includes `radix-ui` and `lucide-react` because the
+app shell renders the shared GDG menus. Add `motion` there too if a future shared UI component
+starts pulling it in — see `ost/vite.config.ts` for that fuller form.
 
 **Dev port is 5186** (`strictPort: true`), consistently across `vite.config.ts`,
 `playwright.config.ts`, `.dev.vars.example`'s `APP_URL`, and `accounts/.dev.vars.example`'s
