@@ -23,6 +23,15 @@ CREATE TABLE applications (
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
 );
+CREATE TABLE assignments (
+  event_id       TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  application_id TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  time_slot_id   TEXT NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
+  track_id       TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  role_id        TEXT NOT NULL REFERENCES roles(id),
+  locked         INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (application_id, time_slot_id)
+);
 CREATE TABLE availabilities (
   application_id TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
   time_slot_id   TEXT NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
@@ -126,6 +135,7 @@ CREATE UNIQUE INDEX applications_event_email ON applications (event_id, email);
 CREATE INDEX applications_event_idx ON applications (event_id);
 CREATE UNIQUE INDEX applications_event_user ON applications (event_id, user_id)
   WHERE user_id IS NOT NULL;
+CREATE INDEX assignments_event_idx ON assignments (event_id);
 CREATE INDEX demands_event_idx ON demands (event_id);
 CREATE INDEX events_chapter_idx ON events (chapter_id) WHERE deleted_at IS NULL;
 CREATE INDEX oidc_session_user_idx ON oidc_session (user_id);

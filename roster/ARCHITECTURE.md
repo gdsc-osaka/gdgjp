@@ -14,11 +14,15 @@
   the public `/apply/:applyToken` form, and `/e/:id/staff`'s proxy-add entry point (ADR-008).
 - **Stage 06** (built in parallel, merged separately) added the solver — a pure TS module, not yet
   wired into any route.
-- **Stage 05 (this PR)** cross-checks Stage 03's demand against Stage 04's applications
+- **Stage 05** cross-checks Stage 03's demand against Stage 04's applications
   (`app/features/supply/`), distinguishing a headcount shortage from an experience (`lead`)
   shortage, and adds the rest of `/e/:id/staff`: the staff list (`StaffTable`), an
   owner-correction drawer (`StaffDrawer`), and the apply-link/status card (`ApplyLinkCard`). No
   new table, no new route.
+- **Stage 07 (this PR)** adds the `assignments` table and `app/features/roster/`: assembling a
+  real `SolverInput` from D1 (`solver-input.server.ts`), the single `writeAssignments` write path
+  (`roster.server.ts`), pure grid-assembly logic (`grid.ts`), and the new `/e/:id/roster` route —
+  the 3-view shift table (staff/role/coverage) plus the 2 manual-edit drawers.
 
 ## Code map
 
@@ -33,7 +37,8 @@
 | Demand (`demands` table: min/ideal/leadMin/newMax per time_slot x track x role; matrix row/column assembly; the `/e/:id/design` demand card) | `app/features/demand/` |
 | Staff registration (applications, application_skills, availabilities; proxy-registration claim; apply-form validation; owner-correction writes; the staff list `/` correction drawer) | `app/features/applications/` (README) |
 | Supply-demand cross-check (headcount vs. experience shortage per time slot/role; event-wide shortage summary) | `app/features/supply/` (README) |
-| Domain schema not yet built (assignments, revisions) | Stage 07/08 onward, see `docs/roster/index.md` §4 |
+| Roster/shift table (`assignments` table; `SolverInput` assembly from D1; the single `writeAssignments` write path; grid/drawer view logic; `/e/:id/roster`) | `app/features/roster/` (README) |
+| Domain schema not yet built (revisions) | Stage 08, see `docs/roster/index.md` §4 |
 
 ## Route surface
 
@@ -46,6 +51,8 @@ app/routes/
   e.$id.design.tsx    "/e/:id/design" — event settings, phases/time slots, tracks, roles, demand
   e.$id.staff.tsx     "/e/:id/staff" — staff list + owner-correction drawer, supply-demand view,
                       apply URL/status card, proxy-add entry point (auth + chapter)
+  e.$id.roster.tsx    "/e/:id/roster" — shift table: generate, 3 views, 2 manual-edit drawers
+                      (auth + chapter)
   apply.$token.tsx    "/apply/:token" — public staff registration (sign-in only, no Chapter)
   signin.tsx         "/signin" — redirects into the gdg-lib auth flow
   no-chapter.tsx      "/no-chapter"

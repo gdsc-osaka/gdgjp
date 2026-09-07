@@ -5,17 +5,17 @@ self-register through a public link, a solver auto-generates a draft schedule, o
 and publish. Full plan: `docs/roster/index.md`. Design decisions: `docs/roster/adr.md`. Read both
 before touching this app — every stage file assumes their domain model and solver spec.
 
-**Stage 05 of 9** (Stages 01, 02, 03, 04, 06 merged). Stage 01 was auth/chapter gate only; Stage 02
-added the domain schema (events, the time-slot grid, tracks, the seeded role master); Stage 03
-added demand input (the `demands` table, the `/e/:id/design` demand matrix); Stage 04 added staff
-registration (`applications`/`application_skills`/`availabilities`, the public
-`/apply/:applyToken` form, `/e/:id/staff`'s proxy-add entry point); Stage 06 (the solver) is a
-pure TS module built in parallel, not yet wired into any route. **This stage** cross-checks Stage
-03's demand against Stage 04's applications (`app/features/supply/`: headcount vs. experience
-shortage, kept as two distinct kinds — see "Data" below), adds the staff list (`StaffTable`) and
-an owner-correction drawer (`StaffDrawer`) to `/e/:id/staff`, and adds the apply-link/status card
-(`ApplyLinkCard`). No new route, no new migration — see `README.md` "Status" and `ARCHITECTURE.md`
-for the current code map.
+**Stage 07 of 9** (Stages 01–06 merged). Stage 01 was auth/chapter gate only; Stage 02 added the
+domain schema (events, the time-slot grid, tracks, the seeded role master); Stage 03 added demand
+input (the `demands` table, the `/e/:id/design` demand matrix); Stage 04 added staff registration
+(`applications`/`application_skills`/`availabilities`, the public `/apply/:applyToken` form,
+`/e/:id/staff`'s proxy-add entry point); Stage 05 cross-checked demand against applications
+(`app/features/supply/`) and added the staff list/owner-correction drawer to `/e/:id/staff`; Stage
+06 built the solver as a pure TS module, not yet wired into any route. **This stage** is where
+those all come together: the `assignments` table, `app/features/roster/` (assembling a real
+`SolverInput` from D1, the single `writeAssignments` write path, and the 3-view grid + manual-edit
+drawers), and the new `/e/:id/roster` route — see `README.md` and `ARCHITECTURE.md` for the
+current code map.
 
 ## Routes (`app/routes.ts`, config mode)
 
@@ -31,6 +31,12 @@ for the current code map.
   owner-correction drawer (`StaffDrawer`), the supply-vs-demand view (`SupplyDemandRow`/
   `ShortageSummary`), the apply-URL/status card (`ApplyLinkCard`), and `ProxyAddDialog`
   (owner-side proxy registration by email, ADR-008).
+- `/e/:id/roster` — chapter-gated like `/e/:id/design`/`/e/:id/staff`. The shift table: the
+  `GeneratePanel` (自動生成/再生成, seed input), `MetricsRow`/`ShortageReport` (rendered from
+  `evaluate()`'s `Report`, never a separate tally), 3 views (`StaffGrid`/`RoleGrid`/
+  `DemandCoverageGrid`) selected by a segmented control, and 2 manual-edit dialogs (`CellDrawer`,
+  `DemandCellDrawer`) — both warn-and-allow, never blocking, per index.md §5.1's deliberate
+  asymmetry with auto-generation.
 - `/apply/:token` — **public** staff self-registration. `getOptionalUser`, never
   `requireUserWithChapter` — Chapter membership must not be required to register as staff. Event
   lookup is by `apply_token` alone (`getEventByApplyToken`); the event id never appears in the
@@ -43,9 +49,11 @@ for the current code map.
 ## Data
 
 - **D1 (`DB`)** — `user` + `oidc_session` (gdg-lib), `events`, `phases`, `time_slots`, `tracks`,
-  `roles` (seeded, ADR-007), `event_roles` (Stage 02), `demands` (Stage 03), plus `applications`,
-  `application_skills`, `availabilities` (Stage 04). Migrations in `migrations/`; `schema.sql` is
-  generated (`pnpm migrate:local`) — never hand-edit it.
+  `roles` (seeded, ADR-007), `event_roles` (Stage 02), `demands` (Stage 03), `applications`,
+  `application_skills`, `availabilities` (Stage 04), plus `assignments` (Stage 07 — the current
+  shift table; `PRIMARY KEY (application_id, time_slot_id)`, not a surrogate id, is what makes
+  "never assign the same staff member to the same slot twice" structurally impossible). Migrations
+  in `migrations/`; `schema.sql` is generated (`pnpm migrate:local`) — never hand-edit it.
 - No ORM. Every feature's `*.server.ts` hand-writes D1 (`*Row` type → `to*()` mapper →
   column-list constant → `RETURNING`, following `scheduler/app/lib/db.ts`'s pattern):
   `app/features/events/events.server.ts` (events CRUD, incl. `getEventByApplyToken`),
@@ -58,7 +66,15 @@ for the current code map.
   `app/features/applications/{skills,availability}.server.ts` (application_skills,
   availabilities — both delete-all-then-insert on every save),
   `app/features/supply/supply.server.ts` (Stage 05 — orchestrates the above plus
-  `demand.server.ts`'s reads into the per-time-slot supply-vs-demand snapshot; writes nothing).
+  `demand.server.ts`'s reads into the per-time-slot supply-vs-demand snapshot; writes nothing),
+  `app/features/roster/roster.server.ts` (Stage 07 — `readAssignments`/`readAssignmentsMap` and
+  `writeAssignments`, the **only** function that writes to `assignments`: always a full
+  delete-then-reinsert via `db.batch`, never a partial patch).
+- `app/features/roster/solver-input.server.ts` (Stage 07) is the only place D1 rows are mapped
+  onto the solver's plain `SolverInput` type (ADR-004) — reuses `demand`/`applications`/
+  `schedule`'s reads verbatim, filters out withdrawn applicants entirely, and explicitly re-sorts
+  applications by id / demand entries by key so the generate action's determinism doesn't
+  silently depend on D1's row return order.
 - `time_slots.idx` is 0-based and contiguous per event — the solver's "previous slot" check and
   the public view's contiguous-range grouping both depend on this. Regenerating the grid
   (`schedule.server.ts#regenerateTimeSlots`) keeps the `id` of any slot whose `(start_time,
@@ -77,8 +93,12 @@ for the current code map.
 ## Layout (ADR-003 — feature-first from day one)
 
 - Domain code goes in `app/features/<domain>/` (server + client + UI + colocated tests). Auth,
-  events, schedule, demand, applications, the solver, and supply are the features so far:
-  `app/features/{auth,events,schedule,demand,applications,solver,supply}/`.
+  events, schedule, demand, applications, the solver, supply, and roster are the features so far:
+  `app/features/{auth,events,schedule,demand,applications,solver,supply,roster}/`.
+- `roster/` (Stage 07) assembles the solver's `SolverInput` from D1 and owns the single
+  `assignments` write path (`roster.server.ts#writeAssignments`) and the `/e/:id/roster` grid/
+  drawer components. It imports from `demand/`, `applications/`, `schedule/`, and `solver/` —
+  none of those import back. See `app/features/roster/README.md`.
 - `supply/` (Stage 05) is the demand-vs-applications cross-check: it imports from both `demand/`
   and `applications/` — the only sanctioned direction. Neither of those two may import from
   `supply/`; `applications/staff-view.ts` deliberately takes a structurally-`supply/`-compatible
@@ -91,12 +111,13 @@ for the current code map.
   `ui/` primitives (UI primitives come from `@gdgjp/gdg-lib`). If a later stage adds shell chrome,
   update the layering test's allowlist in the same change.
 - The solver (`app/features/solver/`, Stage 06) is a pure TS module — no D1, no React, no
-  `fetch`, no `window`. This is what makes it unit-testable and reproducible (ADR-004). It
-  defines its own `SolverInput`/`SolverApplication`/`Assignments`/`Report` types in `types.ts`
+  `fetch`, no `window`. This is what makes it unit-testable and reproducible (ADR-004), and what
+  lets Stage 07's manual-edit drawers call `hardViolations`/`suggestFor` directly in the browser.
+  It defines its own `SolverInput`/`SolverApplication`/`Assignments`/`Report` types in `types.ts`
   rather than importing from `~/features/demand` or `~/features/applications` (Stage 03/04) —
-  Stage 07's Worker action is what will map real D1 rows onto these plain types. See
-  `app/features/solver/README.md` for the file-by-file breakdown of the 7-step generation flow
-  (docs/roster/index.md §5.2).
+  `app/features/roster/solver-input.server.ts` (Stage 07) is what maps real D1 rows onto these
+  plain types. See `app/features/solver/README.md` for the file-by-file breakdown of the 7-step
+  generation flow (docs/roster/index.md §5.2).
 
 ## Architecture tests (`tests/architecture/`, ported from `wiki/`)
 
