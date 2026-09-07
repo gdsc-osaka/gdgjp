@@ -157,14 +157,18 @@ test("public roster: not-published message, no PII/experience leakage once publi
   await page.getByRole("button", { name: "役割別" }).click();
   await expect(page.locator("table")).toBeVisible();
 
-  // Individual view: rosterx has an explicit break at the marked slot and a
-  // companion ("一緒に: ...") everywhere rostery is also present; rostery's
-  // whole-day block (no gap of their own) still lists rosterx as a companion
-  // via the range-wide union even though rosterx is absent for one sub-slot.
+  // Individual view: rosterx has an explicit break at the marked slot,
+  // splitting their day into 2 merged "assigned" blocks (before/after the
+  // gap) that both list rostery as a companion — hence .first() below, the
+  // same "appears more than once for a legitimate reason" pattern
+  // roster.spec.ts uses for its own duplicate-text assertion. rostery's own
+  // single whole-day block (no gap of their own) still lists rosterx as a
+  // companion via the range-wide union even though rosterx is absent for one
+  // sub-slot in the middle of that range.
   await page.getByRole("button", { name: "個人" }).click();
   await page.selectOption("select", { label: "rosterx (dev)" });
   await expect(page.getByText("休憩 / 担当なし")).toBeVisible();
-  await expect(page.getByText(/一緒に:.*rostery/)).toBeVisible();
+  await expect(page.getByText(/一緒に:.*rostery/).first()).toBeVisible();
 
   await page.selectOption("select", { label: "rostery (dev)" });
   await expect(page.getByText(/一緒に:.*rosterx/)).toBeVisible();
