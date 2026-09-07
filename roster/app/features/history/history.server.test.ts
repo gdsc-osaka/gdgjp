@@ -7,6 +7,7 @@ import {
   recordRevision,
   redoRevision,
   restoreRevision,
+  tryRestoreRevision,
   undoRevision,
 } from "./history.server";
 import type { Actor } from "./types";
@@ -224,6 +225,32 @@ describe("recordRevision", () => {
     expect(rows.map((r) => r.label)).toEqual(["gen1", "edit after rewind"]);
     expect(await getCursor(testDb)).toBe(2);
   });
+
+  /**
+   * Regression: the merge-into-head branch used to `return` immediately
+   * after its `UPDATE`, skipping the "discard the redo branch" truncation
+   * that only ran on the insert path. So rewinding to a revision that
+   * happens to be a mergeable `edit` head, then making a matching edit,
+   * merged the new content into that head's row but left any revisions
+   * PAST the (now-stale) redo branch alive and reachable via redo — exactly
+   * the multi-branch history docs/roster/08-history.md "制約" forbids.
+   */
+  it("truncates future revisions even when the new edit merges into the rewound-to head", async () => {
+    await record(testDb, { label: "gen1" }); // seq 1
+    await record(testDb, { kind: "edit", groupKey: "u1", label: "edit2" }); // seq 2 (edit head)
+    await record(testDb, { label: "gen3" }); // seq 3 (generate — always a new row)
+
+    // Rewind the cursor to seq 2, an "edit" head that a same-actor,
+    // same-window edit is eligible to merge into.
+    await testDb.prepare("UPDATE events SET revision_cursor = 2 WHERE id = ?").bind(EVENT_ID).run();
+
+    await record(testDb, { kind: "edit", groupKey: "u1", label: "edit2 (merged)" });
+
+    const rows = await listRevisionRows(testDb);
+    expect(rows.map((r) => r.seq)).toEqual([1, 2]); // seq 3 must be gone, not just unreachable
+    expect(rows.map((r) => r.label)).toEqual(["gen1", "edit2 (merged)"]); // merged in place, not a new row
+    expect(await getCursor(testDb)).toBe(2);
+  });
 });
 
 describe("restoreRevision", () => {
@@ -330,6 +357,33 @@ describe("restoreRevision", () => {
 
   it("throws for a seq that has no revision", async () => {
     await expect(restoreRevision(asD1(testDb), EVENT_ID, 999, OWNER)).rejects.toThrow();
+  });
+});
+
+describe("tryRestoreRevision", () => {
+  let testDb: TestD1Database;
+
+  beforeEach(async () => {
+    testDb = createTestD1(MIGRATIONS);
+    await seedEvent(testDb);
+    await seedTrack(testDb, "trk_1");
+    await seedSlot(testDb, "slot_1", 0);
+    await seedApplication(testDb, "app_1");
+  });
+
+  it("returns found:true with the dropped count on a valid seq", async () => {
+    const snapshot: Assignments = new Map([
+      [assignmentKey("app_1", "slot_1"), { trackId: "trk_1", roleId: "reception", locked: false }],
+    ]);
+    await record(testDb, { assignments: snapshot });
+
+    const outcome = await tryRestoreRevision(asD1(testDb), EVENT_ID, 1, OWNER);
+    expect(outcome).toEqual({ found: true, droppedCount: 0 });
+  });
+
+  it("returns found:false instead of throwing for a seq that no longer exists", async () => {
+    const outcome = await tryRestoreRevision(asD1(testDb), EVENT_ID, 999, OWNER);
+    expect(outcome).toEqual({ found: false });
   });
 });
 

@@ -512,6 +512,24 @@ describe("e.$id.roster action — undo / redo / restore (Stage 08)", () => {
     expect(await readAssignmentRows(testDb)).toEqual(before);
   });
 
+  /**
+   * A `seq` that was valid when the page loaded can go stale by the time the
+   * request lands (e.g. retention evicted it) — this must return a friendly
+   * error, not throw/500, and must not touch `assignments`.
+   */
+  it("rejects a restore for a seq that no longer exists, without touching assignments", async () => {
+    await callAction(buildRequest({ intent: "generate", seed: "1" }), "evt_1", asD1(testDb));
+    const before = await readAssignmentRows(testDb);
+
+    const result = await callAction(
+      buildRequest({ intent: "restore", seq: "999" }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ error: "復元先の履歴が見つかりませんでした。", intent: "restore" });
+    expect(await readAssignmentRows(testDb)).toEqual(before);
+  });
+
   it("undo/redo are harmless no-ops (droppedCount 0, unchanged) at the history boundary", async () => {
     await callAction(buildRequest({ intent: "generate", seed: "1" }), "evt_1", asD1(testDb));
     const only = await readAssignmentRows(testDb);

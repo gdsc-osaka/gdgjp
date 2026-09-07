@@ -82,11 +82,14 @@ export type RecordRevisionInput = {
 /**
  * Inserts a new revision, OR — when the merge conditions in `grouping.ts`
  * hold — overwrites the current head row in place (docs/roster/08-history.md
- * "Design" §3). Also truncates any "future" (redo) revisions past the
- * current cursor before inserting a new one (§2: rewinding then editing
- * discards the branch, it does not fork), and evicts the oldest revision(s)
- * once the 50-entry cap is exceeded (§4), all inside one `db.batch` so the
- * insert, truncation, and eviction are atomic together.
+ * "Design" §3). Truncates any "future" (redo) revisions past the current
+ * cursor BEFORE either of those (§2: rewinding then editing discards the
+ * branch, it does not fork) — this runs on both paths, since the cursor can
+ * be rewound onto a revision that is itself a mergeable `edit` head, and
+ * evicts the oldest revision(s) once the 50-entry cap is exceeded (§4, insert
+ * path only — nothing is added on a merge, so there is nothing new to evict).
+ * Every path is one `db.batch` call, so truncation/update-or-insert/eviction
+ * land atomically together.
  */
 export async function recordRevision(db: D1Database, input: RecordRevisionInput): Promise<void> {
   const cursor = await getEventCursor(db, input.eventId);
@@ -96,6 +99,24 @@ export async function recordRevision(db: D1Database, input: RecordRevisionInput)
   const snapshot = serializeSnapshot(input.assignments);
   const metricsJson = JSON.stringify(input.metrics);
 
+  // Rewound-then-edited: discard any redo branch before doing anything else
+  // (docs/roster/08-history.md "Design" §2 — no multi-branch history). This
+  // must run on BOTH paths below, not just the insert-a-new-row path: if the
+  // cursor was rewound to a revision that happens to be a mergeable `edit`
+  // head, merging into it must still truncate the redo branch — otherwise
+  // stale "future" rows stay reachable via redo after the head's content has
+  // changed underneath them (a real bug caught in review: this delete used
+  // to run only on the insert path, so restore -> merge-eligible edit left
+  // the old redo branch alive).
+  const statements: D1PreparedStatement[] = [];
+  if (cursor !== null) {
+    statements.push(
+      db
+        .prepare("DELETE FROM revisions WHERE event_id = ? AND seq > ?")
+        .bind(input.eventId, cursor),
+    );
+  }
+
   if (
     head &&
     shouldMergeIntoHead(
@@ -104,27 +125,18 @@ export async function recordRevision(db: D1Database, input: RecordRevisionInput)
       now,
     )
   ) {
-    await db
-      .prepare(
-        "UPDATE revisions SET label = ?, snapshot = ?, metrics = ?, created_at = ? WHERE event_id = ? AND seq = ?",
-      )
-      .bind(input.label, snapshot, metricsJson, now.toISOString(), input.eventId, head.seq)
-      .run();
+    statements.push(
+      db
+        .prepare(
+          "UPDATE revisions SET label = ?, snapshot = ?, metrics = ?, created_at = ? WHERE event_id = ? AND seq = ?",
+        )
+        .bind(input.label, snapshot, metricsJson, now.toISOString(), input.eventId, head.seq),
+    );
+    await db.batch(statements);
     return;
   }
 
   const newSeq = (cursor ?? 0) + 1;
-  const statements: D1PreparedStatement[] = [];
-
-  // Rewound-then-edited: discard the redo branch before inserting the new
-  // head (docs/roster/08-history.md "Design" §2 — no multi-branch history).
-  if (cursor !== null) {
-    statements.push(
-      db
-        .prepare("DELETE FROM revisions WHERE event_id = ? AND seq > ?")
-        .bind(input.eventId, cursor),
-    );
-  }
 
   statements.push(
     db
@@ -214,6 +226,32 @@ export async function restoreRevision(
   await db.prepare("UPDATE events SET revision_cursor = ? WHERE id = ?").bind(seq, eventId).run();
 
   return { droppedCount };
+}
+
+export type RestoreOutcome = { found: true; droppedCount: number } | { found: false };
+
+/**
+ * `restoreRevision`, but for a `seq` that came from a request rather than
+ * from this module's own lookup (the route's `restore` intent): the `seq` in
+ * a submitted form can go stale between page load and click — e.g. another
+ * owner's edit evicted it via the 50-entry retention cap in the meantime —
+ * which is a real, reachable input error, not a 500-worthy bug. `undoRevision`/
+ * `redoRevision` don't need this wrapper: they look up an adjacent `seq`
+ * themselves immediately before calling `restoreRevision`, so it can't be
+ * stale by the time they use it.
+ */
+export async function tryRestoreRevision(
+  db: D1Database,
+  eventId: string,
+  seq: number,
+  actor: Actor,
+): Promise<RestoreOutcome> {
+  try {
+    const { droppedCount } = await restoreRevision(db, eventId, seq, actor);
+    return { found: true, droppedCount };
+  } catch {
+    return { found: false };
+  }
 }
 
 /** Moves the cursor one step toward `seq 1` and restores that snapshot, or
