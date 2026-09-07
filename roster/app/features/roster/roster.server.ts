@@ -1,5 +1,7 @@
+import type { EventRecord } from "~/features/events/events.server";
 import { recordRevision } from "~/features/history/history.server";
 import type { Actor } from "~/features/history/types";
+import { evaluate } from "~/features/solver/evaluate";
 import {
   type AssignmentValue,
   type Assignments,
@@ -7,6 +9,7 @@ import {
   assignmentKey,
   parseAssignmentKey,
 } from "~/features/solver/types";
+import { buildSolverInput } from "./solver-input.server";
 import type { AssignmentRecord } from "./types";
 
 /**
@@ -157,4 +160,32 @@ export async function writeAssignments(
       groupKey: revision.groupKey,
     });
   }
+}
+
+/**
+ * The `assign`/`unassign` intents' shared tail (docs/roster/08-history.md
+ * "Design" §3): both produce a full replacement `Assignments` map and need
+ * the identical revision recorded afterward — re-evaluate against the
+ * event's current `SolverInput` and write through with `kind: "edit"`,
+ * using the acting user's id as the merge `groupKey` so consecutive edits by
+ * the SAME person collapse per `grouping.ts`'s 5-minute window. Lives here
+ * (not in the route) per this app's placement rule: logic beyond "read the
+ * request, call a feature, shape the response" belongs in a feature's
+ * `*.server.ts`, not `app/routes/`.
+ */
+export async function writeManualEdit(
+  db: D1Database,
+  event: EventRecord,
+  actor: Actor,
+  next: Assignments,
+): Promise<void> {
+  const input = await buildSolverInput(db, event, event.seed);
+  const { metrics } = evaluate(input, next);
+  await writeAssignments(db, event.id, next, {
+    metrics,
+    label: "手動編集",
+    actor,
+    kind: "edit",
+    groupKey: actor.id,
+  });
 }

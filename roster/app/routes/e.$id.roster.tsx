@@ -3,6 +3,16 @@ import { listApplicationsForEvent } from "~/features/applications/applications.s
 import { requireUserWithChapter } from "~/features/auth/auth-redirect.server";
 import { canManageEvent } from "~/features/auth/permissions";
 import { getEvent, setEventSeed } from "~/features/events/events.server";
+import { HistoryPanel } from "~/features/history/components/HistoryPanel";
+import { UndoRedoButtons } from "~/features/history/components/UndoRedoButtons";
+import { canRedo, canUndo } from "~/features/history/cursor";
+import {
+  getHistoryState,
+  redoRevision,
+  restoreRevision,
+  undoRevision,
+} from "~/features/history/history.server";
+import type { Actor } from "~/features/history/types";
 import { CellDrawer } from "~/features/roster/components/CellDrawer";
 import { DemandCellDrawer } from "~/features/roster/components/DemandCellDrawer";
 import { DemandCoverageGrid } from "~/features/roster/components/DemandCoverageGrid";
@@ -12,7 +22,11 @@ import { RoleGrid } from "~/features/roster/components/RoleGrid";
 import { ShortageReport } from "~/features/roster/components/ShortageReport";
 import { StaffGrid } from "~/features/roster/components/StaffGrid";
 import { buildStaffColumns } from "~/features/roster/grid";
-import { readAssignmentsMap, writeAssignments } from "~/features/roster/roster.server";
+import {
+  readAssignmentsMap,
+  writeAssignments,
+  writeManualEdit,
+} from "~/features/roster/roster.server";
 import { buildSolverInput } from "~/features/roster/solver-input.server";
 import { ROSTER_VIEWS, ROSTER_VIEW_LABELS, type RosterView } from "~/features/roster/types";
 import { useRosterDrawers } from "~/features/roster/use-roster-drawers";
@@ -25,26 +39,33 @@ import { getDb } from "~/lib/db.server";
 import type { Route } from "./+types/e.$id.roster";
 
 /**
- * `/e/:id/roster` (docs/roster/07-roster-manual-edit.md): the shift table.
- * "自動生成" runs the Stage 06 solver inside this action (ADR-004) and
- * writes through `roster.server.ts#writeAssignments` — the ONLY write path.
- * Manual editing (`assign`/`unassign`) funnels through the exact same
- * function. `evaluate()`/`hardViolations()`/`suggestFor()` are called here
- * (via `grid.ts`) and, for the live drawers, directly in the browser —
- * they're plain functions with no D1/window dependency (ADR-004), so
- * shipping the assembled `SolverInput` down as loader data and calling them
- * client-side keeps the numbers the drawers show byte-identical to what
- * `evaluate()` reports above them, without a second server round trip per
- * click.
+ * `/e/:id/roster` (docs/roster/07-roster-manual-edit.md, docs/roster/
+ * 08-history.md): the shift table. "自動生成" runs the Stage 06 solver inside
+ * this action (ADR-004) and writes through `roster.server.ts#writeAssignments`
+ * — the ONLY write path. Manual editing (`assign`/`unassign`) funnels through
+ * the same function via `roster.server.ts#writeManualEdit`, now with a
+ * `revision` argument so Stage 08's history records every generate/edit
+ * automatically (see `roster.server.ts`'s module doc). `undo`/`redo`/
+ * `restore` (Stage 08) move `events.revision_cursor` instead — they never
+ * call `writeAssignments` with a `revision` argument, which is what keeps
+ * them from creating new history entries.
+ *
+ * `evaluate()`/`hardViolations()`/`suggestFor()` are called here (via
+ * `grid.ts`) and, for the live drawers, directly in the browser — they're
+ * plain functions with no D1/window dependency (ADR-004), so shipping the
+ * assembled `SolverInput` down as loader data and calling them client-side
+ * keeps the numbers the drawers show byte-identical to what `evaluate()`
+ * reports above them, without a second server round trip per click.
  */
 
 async function requireRosterAccess(env: Env, request: Request, id: string | undefined) {
-  const { chapters } = await requireUserWithChapter(env, request);
+  const { user, chapters } = await requireUserWithChapter(env, request);
   if (!id) throw new Response(null, { status: 404 });
   const event = await getEvent(getDb(env), id);
   if (!event) throw new Response(null, { status: 404 });
   if (!canManageEvent(chapters, event)) throw new Response("Forbidden", { status: 403 });
-  return { event };
+  const actor: Actor = { id: user.id, name: user.name };
+  return { event, actor };
 }
 
 export function meta({ data }: Route.MetaArgs) {
@@ -56,7 +77,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const { event } = await requireRosterAccess(env, request, params.id);
   const db = getDb(env);
 
-  const [timeSlots, tracks, eventRoleIds, allRoles, applications, input, assignments] =
+  const [timeSlots, tracks, eventRoleIds, allRoles, applications, input, assignments, history] =
     await Promise.all([
       listTimeSlots(db, event.id),
       listTracks(db, event.id),
@@ -65,6 +86,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
       listApplicationsForEvent(db, event.id),
       buildSolverInput(db, event, event.seed),
       readAssignmentsMap(db, event.id),
+      getHistoryState(db, event.id),
     ]);
 
   const roleIdSet = new Set(eventRoleIds);
@@ -91,12 +113,13 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
     assignmentEntries: [...assignments],
     report,
     hasAssignments: assignments.size > 0,
+    history,
   };
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
   const env = context.cloudflare.env;
-  const { event } = await requireRosterAccess(env, request, params.id);
+  const { event, actor } = await requireRosterAccess(env, request, params.id);
   const db = getDb(env);
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");
@@ -106,9 +129,14 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     const seed = Number.isFinite(rawSeed) ? Math.trunc(rawSeed) : event.seed;
     const input = await buildSolverInput(db, event, seed);
     const start = Date.now();
-    const { assignments } = solve(input);
+    const { assignments, report } = solve(input);
     const ms = Date.now() - start;
-    await writeAssignments(db, event.id, assignments);
+    await writeAssignments(db, event.id, assignments, {
+      metrics: report.metrics,
+      label: `自動生成（シード ${seed}）`,
+      actor,
+      kind: "generate",
+    });
     if (seed !== event.seed) await setEventSeed(db, event.id, seed);
     return { ok: true as const, intent: "generate" as const, ms, seed };
   }
@@ -128,7 +156,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     for (const slotId of slotIds) {
       current.set(assignmentKey(applicationId, slotId), { trackId, roleId, locked: false });
     }
-    await writeAssignments(db, event.id, current);
+    await writeManualEdit(db, event, actor, current);
     return { ok: true as const, intent: "assign" as const };
   }
 
@@ -140,8 +168,27 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     }
     const current = await readAssignmentsMap(db, event.id);
     for (const slotId of slotIds) current.delete(assignmentKey(applicationId, slotId));
-    await writeAssignments(db, event.id, current);
+    await writeManualEdit(db, event, actor, current);
     return { ok: true as const, intent: "unassign" as const };
+  }
+
+  if (intent === "undo") {
+    const result = await undoRevision(db, event.id, actor);
+    return { ok: true as const, intent: "undo" as const, droppedCount: result?.droppedCount ?? 0 };
+  }
+
+  if (intent === "redo") {
+    const result = await redoRevision(db, event.id, actor);
+    return { ok: true as const, intent: "redo" as const, droppedCount: result?.droppedCount ?? 0 };
+  }
+
+  if (intent === "restore") {
+    const seq = Number(form.get("seq"));
+    if (!Number.isFinite(seq)) {
+      return { error: "復元先が不正です。", intent: "restore" as const };
+    }
+    const result = await restoreRevision(db, event.id, Math.trunc(seq), actor);
+    return { ok: true as const, intent: "restore" as const, droppedCount: result.droppedCount };
   }
 
   return { error: "不明な操作です。", intent: "unknown" as const };
@@ -157,6 +204,7 @@ export default function RosterPage({ loaderData, actionData }: Route.ComponentPr
     applicationNameById,
     report,
     hasAssignments,
+    history,
   } = loaderData;
 
   const input: SolverInput = useMemo(
@@ -202,6 +250,22 @@ export default function RosterPage({ loaderData, actionData }: Route.ComponentPr
   const cellError =
     actionIntent === "assign" || actionIntent === "unassign" ? actionError : undefined;
 
+  // docs/roster/08-history.md "Design" §5: a restore/undo/redo that dropped
+  // stale snapshot entries (a withdrawn applicant, a regenerated schedule)
+  // must say so, not silently return fewer assignments than expected.
+  // Narrows on `actionData.intent` (a literal discriminant unique to each
+  // `ok: true` variant) rather than a structural `"droppedCount" in ...`
+  // check, which TS can't fully narrow across a 6-member union.
+  const droppedCount =
+    actionData &&
+    "ok" in actionData &&
+    actionData.ok &&
+    (actionData.intent === "undo" ||
+      actionData.intent === "redo" ||
+      actionData.intent === "restore")
+      ? actionData.droppedCount
+      : 0;
+
   const drawers = useRosterDrawers({
     input,
     assignments,
@@ -235,6 +299,15 @@ export default function RosterPage({ loaderData, actionData }: Route.ComponentPr
         lastResult={generateResult}
       />
 
+      {droppedCount > 0 ? (
+        <p
+          role="alert"
+          className="rounded-xl border-2 border-black bg-white p-3 text-sm font-medium"
+        >
+          {droppedCount}件の割当は対象が存在しないため復元されませんでした。
+        </p>
+      ) : null}
+
       {hasAssignments ? (
         <>
           <MetricsRow metrics={report.metrics} />
@@ -245,20 +318,23 @@ export default function RosterPage({ loaderData, actionData }: Route.ComponentPr
             roleNameById={roleNameById}
           />
 
-          <div className="inline-flex w-fit rounded-full border-2 border-black bg-white p-1">
-            {ROSTER_VIEWS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setView(v)}
-                aria-pressed={view === v}
-                className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
-                  view === v ? "bg-gdg-blue text-white" : "text-neutral-600 hover:bg-neutral-100"
-                }`}
-              >
-                {ROSTER_VIEW_LABELS[v]}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex w-fit rounded-full border-2 border-black bg-white p-1">
+              {ROSTER_VIEWS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  aria-pressed={view === v}
+                  className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
+                    view === v ? "bg-gdg-blue text-white" : "text-neutral-600 hover:bg-neutral-100"
+                  }`}
+                >
+                  {ROSTER_VIEW_LABELS[v]}
+                </button>
+              ))}
+            </div>
+            <UndoRedoButtons canUndo={canUndo(history)} canRedo={canRedo(history)} />
           </div>
 
           {view === "staff" ? (
@@ -295,6 +371,8 @@ export default function RosterPage({ loaderData, actionData }: Route.ComponentPr
           ) : null}
         </>
       ) : null}
+
+      <HistoryPanel cursor={history.cursor} revisions={history.revisions} />
 
       <CellDrawer
         selection={drawers.staffSelection}
