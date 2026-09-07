@@ -79,10 +79,8 @@ const WORKER_INTERNALS_IMPORT_ALLOWLIST = new Set<string>();
 // same change — see docs/roster/01-workspace-scaffold.md "全ステージ共通の制約".
 const LIB_ALLOWED_FILES = new Set(["return-to.ts", "db.server.ts"]);
 
-// roster has no `app/components/` yet: no app shell, and per ADR-001 UI
-// primitives come from `@gdgjp/gdg-lib`, not a local `ui/` directory. Both
-// stay empty until a stage genuinely needs shared shell chrome.
-const COMPONENTS_SHELL_FILES = new Set<string>();
+// Shared chrome belongs here; domain UI still stays under its feature.
+const COMPONENTS_SHELL_FILES = new Set(["AppShell.tsx", "PublicShell.tsx"]);
 const COMPONENTS_ALLOWED_SUBDIRS: string[] = [];
 
 const WORKER_INTERNALS_RE = /workers\/features\/[a-z0-9-]+\/(persistence|orchestration)\//;

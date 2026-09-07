@@ -276,21 +276,19 @@ export default function RosterPage({ loaderData, actionData }: Route.ComponentPr
     closeOnSuccess: cellSucceeded,
   });
 
-  // The generate action has no failure path today (seed is always coerced
-  // to a valid number, and buildSolverInput/solve don't reject any input
-  // shape this route can produce) — GenerateResult's `ok: false` variant
-  // exists for GeneratePanel's own robustness, not because this branch can
-  // currently construct one.
+  // GeneratePanel keeps a failure variant for robustness; this action currently cannot construct it.
   let generateResult: GenerateResult | undefined;
   if (actionData?.intent === "generate" && "ok" in actionData && actionData.ok) {
     generateResult = { ok: true, ms: actionData.ms, seed: actionData.seed };
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-6xl flex-col gap-6 p-6 lg:p-10">
-      <div>
-        <h1 className="text-2xl font-bold">{event.name}</h1>
-        <p className="text-sm text-neutral-600">シフト表</p>
+    <main className="admin-page admin-page-wide">
+      <div className="page-heading">
+        <div>
+          <h1>シフト表</h1>
+          <p>{event.name}</p>
+        </div>
       </div>
 
       <GeneratePanel

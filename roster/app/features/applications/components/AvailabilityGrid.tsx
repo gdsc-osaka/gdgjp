@@ -49,15 +49,13 @@ export function AvailabilityGrid({
         />
       </div>
 
-      <p className="text-sm text-neutral-600">
-        {AVAILABILITY_LABELS.d}（{AVAILABILITY_HINT.d}）
-      </p>
+      <p className="text-xs text-neutral-600">○ 可能 / △ {AVAILABILITY_HINT.d} / × 不可</p>
 
       <ul className="space-y-2">
         {timeSlots.map((slot) => (
           <li
             key={slot.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-black bg-white p-3"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2"
           >
             <span>
               <span className="font-medium">
@@ -67,15 +65,23 @@ export function AvailabilityGrid({
                 <span className="ml-2 text-sm text-neutral-500">{slot.phaseName}</span>
               ) : null}
             </span>
-            <div className="flex gap-3">
+            <div className="inline-flex rounded-md bg-muted p-0.5">
               {AVAILABILITY_VALUES.map((value) => (
-                <label key={value} className="flex items-center gap-1 text-sm">
+                <label
+                  key={value}
+                  className={`cursor-pointer rounded-sm px-3 py-1 text-center text-sm font-semibold transition ${
+                    values[slot.id] === value
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
                   <input
                     type="radio"
                     name={`avail_${slot.id}`}
                     value={value}
                     checked={values[slot.id] === value}
                     onChange={() => onChange(slot.id, value)}
+                    className="sr-only"
                   />
                   {AVAILABILITY_LABELS[value]}
                 </label>

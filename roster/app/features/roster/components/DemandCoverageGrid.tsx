@@ -51,7 +51,7 @@ export function DemandCoverageGrid({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border-2 border-black">
+    <div className="data-grid-wrap">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr>

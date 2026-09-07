@@ -63,9 +63,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function NewEvent({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col gap-6 p-6 lg:p-10">
-      <h1 className="text-2xl font-bold">イベントを作成</h1>
-      <EventForm chapters={loaderData.chapters} error={actionData?.error} />
+    <main className="admin-page admin-page-narrow">
+      <div className="page-heading">
+        <div>
+          <h1>イベントを作成</h1>
+          <p>基本情報を入力すると、時間枠と全体トラックを自動で準備します。</p>
+        </div>
+      </div>
+      <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
+        <EventForm chapters={loaderData.chapters} error={actionData?.error} />
+      </section>
     </main>
   );
 }

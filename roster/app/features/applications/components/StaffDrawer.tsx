@@ -97,7 +97,8 @@ export function StaffDrawer({
     <dialog
       ref={dialogRef}
       onClose={onClose}
-      className="w-full max-w-lg rounded-[1.5rem] border-2 border-black p-0 backdrop:bg-black/40"
+      aria-labelledby="staff-drawer-title"
+      className="roster-drawer"
     >
       {detail ? (
         <Form method="post" className="max-h-[85vh] space-y-6 overflow-y-auto p-6">
@@ -105,7 +106,9 @@ export function StaffDrawer({
           <input type="hidden" name="applicationId" value={detail.applicationId} />
 
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold">{detail.name} の補正</h2>
+            <h2 id="staff-drawer-title" className="text-lg font-bold">
+              {detail.name} の補正
+            </h2>
             <button
               type="button"
               onClick={() => dialogRef.current?.close()}

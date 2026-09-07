@@ -44,7 +44,7 @@
 |---|---|
 | Auth (RP session, chapter ACL, sign-in redirect, permission judgment) | `app/features/auth/` |
 | Cross-cutting primitives with no domain (`safeReturnTo`, D1 handle accessor) | `app/lib/` — 2 files only, see "Placement rules" |
-| App shell UI | doesn't exist yet — no shared chrome, no local `ui/` (ADR-001: UI primitives come from `@gdgjp/gdg-lib`) |
+| App shell UI | `app/components/AppShell.tsx` (authenticated admin chrome) and `PublicShell.tsx` (public chrome); no local `ui/` (ADR-001: UI primitives come from `@gdgjp/gdg-lib`) |
 | Solver (greedy fill + local search + OJT swap, Stage 06) | `app/features/solver/` — pure TS, no D1/React/fetch/window (ADR-004) |
 | Events (`events` table CRUD, status lifecycle) | `app/features/events/` |
 | Schedule (phases, the time-slot grid + its regenerate/reconcile logic, tracks, roles, event_roles) | `app/features/schedule/` |
@@ -61,6 +61,7 @@
 
 ```
 app/routes/
+  admin.tsx         pathless authenticated layout — chapter gate + shared admin shell
   home.tsx          "/" — event list (auth + chapter required)
   events.new.tsx      "/events/new" — create an event
   e.$id.design.tsx    "/e/:id/design" — event settings, phases/time slots, tracks, roles, demand
@@ -90,8 +91,9 @@ signal that a route was added, moved, or removed — expected to fail when you a
    `db.server.ts` (a D1 handle accessor — no queries). Adding a new file here is presumed wrong —
    it almost always belongs under `app/features/<domain>/`. `layering.test.ts` whitelists the
    exact top-level set.
-3. **`app/components/` would hold only the app shell + local `ui/` primitives — neither exists.**
-   Per ADR-001, roster has no local UI primitive layer; shared UI comes from `@gdgjp/gdg-lib`.
+3. **`app/components/` holds only app shells.** `AppShell.tsx` is the authenticated admin chrome;
+   `PublicShell.tsx` is the public chrome. Per ADR-001, roster has no local UI primitive layer;
+   shared UI primitives come from `@gdgjp/gdg-lib`.
 4. **`app/routes/` holds only route modules.** Loader/action logic beyond "read the request, call
    a feature, shape the response" belongs in a feature's `*.server.ts`.
 5. **Tests sit next to the file they exercise**, named `<subject>.test.ts` (or

@@ -40,10 +40,12 @@ export default function SharePage({ loaderData }: Route.ComponentProps) {
   const { event, viewUrl } = loaderData;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-6 p-6 lg:p-10">
-      <div>
-        <h1 className="text-2xl font-bold">{event.name}</h1>
-        <p className="text-sm text-neutral-600">共有</p>
+    <main className="admin-page admin-page-narrow">
+      <div className="page-heading">
+        <div>
+          <h1>共有</h1>
+          <p>{event.name} · 閲覧専用URL</p>
+        </div>
       </div>
       <ShareCard viewUrl={viewUrl} status={event.status} />
     </main>

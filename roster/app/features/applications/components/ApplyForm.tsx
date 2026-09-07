@@ -40,7 +40,6 @@ export function ApplyForm({
   timeSlots,
   own,
   defaultName,
-  accountEmail,
   error,
 }: {
   hasParty: boolean;
@@ -48,7 +47,6 @@ export function ApplyForm({
   timeSlots: AvailabilityGridSlot[];
   own: ApplyFormOwn | null;
   defaultName: string;
-  accountEmail: string;
   error?: string;
 }) {
   const [skills, setSkills] = useState<Record<string, SkillState>>(() =>
@@ -100,7 +98,7 @@ export function ApplyForm({
         <input
           name="contact"
           defaultValue={own?.contact ?? ""}
-          placeholder={`未入力の場合は ${accountEmail} を使用します`}
+          placeholder="未入力の場合はアカウントのメールを使用します"
           className="w-full rounded-xl border-2 border-black bg-white p-3 outline-none focus:ring-4 focus:ring-gdg-blue/40"
         />
       </label>

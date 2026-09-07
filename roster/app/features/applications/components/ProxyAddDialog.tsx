@@ -90,14 +90,13 @@ export function ProxyAddDialog({
       >
         メールアドレスで代理登録
       </button>
-      <dialog
-        ref={dialogRef}
-        className="w-full max-w-lg rounded-[1.5rem] border-2 border-black p-0 backdrop:bg-black/40"
-      >
+      <dialog ref={dialogRef} aria-labelledby="proxy-add-title" className="roster-drawer">
         <Form method="post" ref={formRef} className="max-h-[85vh] space-y-6 overflow-y-auto p-6">
           <input type="hidden" name="intent" value="proxyAdd" />
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold">代理登録</h2>
+            <h2 id="proxy-add-title" className="text-lg font-bold">
+              代理登録
+            </h2>
             <button
               type="button"
               onClick={() => dialogRef.current?.close()}

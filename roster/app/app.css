@@ -1,30 +1,53 @@
 @import "tailwindcss";
 
-/* Pull in the shared account-menu / app-launcher components for class scanning. */
 @source "../../gdg-lib/src/ui";
 
-@theme {
-  --font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial,
-    "Hiragino Sans", "Noto Sans JP", sans-serif;
+@font-face {
+  font-family: "Google Sans";
+  src: url("/fonts/GoogleSans-Variable.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
 
-  --color-surface: #eeeeee;
+@font-face {
+  font-family: "Google Sans";
+  src: url("/fonts/GoogleSans-Italic-Variable.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: "Google Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP",
+    sans-serif;
+  --color-surface: var(--background);
   --color-gdg-blue: #4285f4;
   --color-gdg-red: #ea4335;
   --color-gdg-yellow: #fbbc04;
   --color-gdg-green: #34a853;
 }
 
-/* shadcn-style tokens consumed by @gdgjp/gdg-lib/ui (light only — roster has no dark mode). */
 @theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-input: var(--input);
   --color-ring: var(--ring);
-
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -33,28 +56,523 @@
 
 :root {
   --radius: 0.625rem;
-  --popover: #ffffff;
-  --popover-foreground: #171717;
-  --muted: #f5f5f5;
-  --muted-foreground: #737373;
-  --accent: #f5f5f5;
-  --accent-foreground: #171717;
-  --border: #e5e5e5;
-  --ring: #4285f4;
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.624 0.214 259.815);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.48 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.58 0.22 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.89 0 0);
+  --input: oklch(0.82 0 0);
+  --ring: oklch(0.624 0.214 259.815);
+}
+
+* {
+  border-color: var(--border);
 }
 
 html,
 body {
-  background-color: var(--color-surface);
+  min-height: 100%;
+  background: var(--background);
+  color: var(--foreground);
 }
 
-/* ost/app/app.css also defines an animate-in/animate-out utility block here
- * (a minimal tailwindcss-animate subset) for @gdgjp/gdg-lib/ui's dropdown
- * menus. Roster doesn't render any gdg-lib/ui component yet — see
- * vite.config.ts's matching optimizeDeps note — so it's omitted for now; add
- * it back (copy from ost/app/app.css) the moment a route renders one. */
+body {
+  margin: 0;
+}
 
-/* Respect the OS setting for everything that isn't already gated in JS. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+select,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--ring) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100dvh;
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  width: 216px;
+  height: 100dvh;
+  flex: 0 0 216px;
+  flex-direction: column;
+  gap: 20px;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+  padding: 18px 14px;
+}
+
+.sidebar-top {
+  display: grid;
+  gap: 18px;
+}
+
+.brand-link {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+}
+
+.brand-name,
+.brand-context {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-name {
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.brand-context {
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+
+.event-switcher {
+  display: grid;
+  gap: 5px;
+}
+
+.event-switcher select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--input);
+  border-radius: 7px;
+  background: var(--background);
+  padding: 7px 28px 7px 9px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.sidebar-nav,
+.event-nav-group {
+  display: grid;
+  gap: 4px;
+}
+
+.event-nav-group {
+  margin-top: 12px;
+}
+
+.nav-label {
+  margin: 0 0 2px;
+  color: var(--muted-foreground);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebar-link {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  border-radius: 7px;
+  padding: 7px 9px;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.sidebar-link:hover {
+  background: color-mix(in oklch, var(--accent) 70%, transparent);
+  color: var(--foreground);
+}
+
+.sidebar-link.active,
+.sidebar-link[aria-current="page"] {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.sidebar-account {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.account-name {
+  overflow: hidden;
+  margin-left: 4px;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-page {
+  display: flex;
+  width: 100%;
+  max-width: 1180px;
+  min-height: 100dvh;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 22px 26px 40px;
+}
+
+.admin-page-narrow {
+  max-width: 760px;
+}
+
+.admin-page-wide {
+  max-width: 1480px;
+}
+
+.page-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.page-heading h1 {
+  margin: 0;
+  font-size: clamp(1.45rem, 2vw, 1.9rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.page-heading p {
+  margin: 3px 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
+
+.public-page {
+  min-height: 100dvh;
+}
+
+.public-header {
+  display: flex;
+  height: 54px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--card) 92%, transparent);
+  padding: 0 18px;
+}
+
+.public-content {
+  display: flex;
+  width: 100%;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 24px 18px 44px;
+}
+
+.public-content-wide {
+  max-width: 1240px;
+}
+
+main .border-2,
+dialog.border-2 {
+  border-width: 1px;
+}
+
+main .border-black,
+dialog.border-black {
+  border-color: var(--border);
+}
+
+main .rounded-\[2rem\],
+main .rounded-\[1\.5rem\],
+dialog.rounded-\[1\.5rem\] {
+  border-radius: var(--radius);
+}
+
+main button.rounded-full,
+main a.rounded-full,
+dialog button.rounded-full {
+  border-radius: 7px;
+}
+
+main input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+main select,
+main textarea,
+dialog input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+dialog select,
+dialog textarea {
+  border-width: 1px;
+  border-color: var(--input);
+  border-radius: 7px;
+}
+
+.roster-drawer {
+  width: min(430px, 100%);
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0 0 0 auto;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--card);
+  padding: 0;
+}
+
+.roster-drawer::backdrop {
+  background: rgb(0 0 0 / 38%);
+}
+
+.roster-drawer > form,
+.roster-drawer > div {
+  max-height: 100dvh;
+}
+
+.data-grid-wrap {
+  max-height: 74vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.data-grid-wrap table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.data-grid-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--muted);
+}
+
+.data-grid-wrap tr > :first-child {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: var(--card);
+}
+
+.data-grid-wrap thead tr > :first-child {
+  z-index: 15;
+  background: var(--muted);
+}
+
+@keyframes enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+      scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), 1);
+  }
+}
+
+@keyframes exit {
+  to {
+    opacity: var(--tw-exit-opacity, 1);
+    transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0)
+      scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), 1);
+  }
+}
+
+@utility animate-in {
+  animation-name: enter;
+  animation-duration: 150ms;
+  --tw-enter-opacity: initial;
+  --tw-enter-scale: initial;
+  --tw-enter-translate-x: initial;
+  --tw-enter-translate-y: initial;
+}
+
+@utility animate-out {
+  animation-name: exit;
+  animation-duration: 150ms;
+}
+
+@utility fade-in-0 {
+  --tw-enter-opacity: 0;
+}
+
+@utility fade-out-0 {
+  --tw-enter-opacity: 0;
+}
+
+@utility zoom-in-95 {
+  --tw-enter-scale: 0.95;
+}
+
+@utility zoom-out-95 {
+  --tw-enter-scale: 0.95;
+}
+
+@utility slide-in-from-top-2 {
+  --tw-enter-translate-y: -0.5rem;
+}
+
+@utility slide-in-from-bottom-2 {
+  --tw-enter-translate-y: 0.5rem;
+}
+
+@utility slide-in-from-left-2 {
+  --tw-enter-translate-x: -0.5rem;
+}
+
+@utility slide-in-from-right-2 {
+  --tw-enter-translate-x: 0.5rem;
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    display: block;
+  }
+
+  .app-sidebar {
+    display: grid;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    flex-basis: auto;
+    gap: 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px;
+  }
+
+  .sidebar-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sidebar-top .brand-context,
+  .event-switcher .nav-label,
+  .account-name {
+    display: none;
+  }
+
+  .event-switcher {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .event-switcher select {
+    max-width: 320px;
+    margin-left: auto;
+  }
+
+  .sidebar-account {
+    grid-column: 2;
+    grid-row: 1;
+    flex: 0 0 auto;
+    margin: 0;
+    border: 0;
+    padding: 0;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    grid-column: 1 / -1;
+    overflow-x: auto;
+    gap: 3px;
+    padding-bottom: 1px;
+    scrollbar-width: thin;
+  }
+
+  .event-nav-group {
+    display: contents;
+  }
+
+  .sidebar-nav .nav-label {
+    display: none;
+  }
+
+  .sidebar-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .admin-page {
+    min-height: calc(100dvh - 104px);
+    padding: 18px 14px 34px;
+  }
+}
+
+@media (max-width: 540px) {
+  .brand-link .brand-name {
+    display: none;
+  }
+
+  .public-header .brand-name {
+    display: block;
+  }
+
+  .public-content {
+    padding: 18px 12px 34px;
+  }
+
+  .roster-drawer {
+    width: 100%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

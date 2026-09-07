@@ -253,12 +253,14 @@ export default function EventDesign({ loaderData, actionData }: Route.ComponentP
     STEP_OPTIONS,
   );
   return (
-    <main className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-8 p-6 lg:p-10">
-      <div>
-        <h1 className="text-2xl font-bold">{event.name}</h1>
-        <p className="text-sm text-neutral-600">
-          {event.date} {event.startTime}–{event.endTime}
-        </p>
+    <main className="admin-page">
+      <div className="page-heading">
+        <div>
+          <h1>設計</h1>
+          <p>
+            {event.name} · {event.date} {event.startTime}–{event.endTime}
+          </p>
+        </div>
       </div>
 
       {actionData && "error" in actionData ? (
@@ -267,18 +269,20 @@ export default function EventDesign({ loaderData, actionData }: Route.ComponentP
         </p>
       ) : null}
 
-      <Section title="イベント設定">
-        <EventSettingsForm event={event} demandLossByStepMin={demandLossByStepMin} />
-      </Section>
-      <Section title="フェーズと時間枠">
-        <PhaseList phases={phases} timeSlots={timeSlots} />
-      </Section>
-      <Section title="トラック">
-        <TrackEditor tracks={tracks} />
-      </Section>
-      <Section title="使う役割">
-        <RolePicker roles={roles} selectedRoleIds={eventRoleIds} />
-      </Section>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <Section title="イベント設定">
+          <EventSettingsForm event={event} demandLossByStepMin={demandLossByStepMin} />
+        </Section>
+        <Section title="フェーズと時間枠">
+          <PhaseList phases={phases} timeSlots={timeSlots} />
+        </Section>
+        <Section title="トラック">
+          <TrackEditor tracks={tracks} />
+        </Section>
+        <Section title="使う役割">
+          <RolePicker roles={roles} selectedRoleIds={eventRoleIds} />
+        </Section>
+      </div>
       <Section title="需要">
         <DemandMatrix
           phases={phases}
@@ -294,8 +298,8 @@ export default function EventDesign({ loaderData, actionData }: Route.ComponentP
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-4 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
-      <h2 className="text-xl font-bold">{title}</h2>
+    <section className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+      <h2 className="text-base font-semibold">{title}</h2>
       {children}
     </section>
   );

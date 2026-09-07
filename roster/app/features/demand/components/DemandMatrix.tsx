@@ -98,7 +98,7 @@ export function DemandMatrix({
           需要はまだありません。「役割を追加」から始めてください。
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border-2 border-black">
+        <div className="data-grid-wrap">
           <table className="w-full border-collapse text-sm">
             <thead>
               <TrackHeaderRow columns={columns} trackName={trackName} />

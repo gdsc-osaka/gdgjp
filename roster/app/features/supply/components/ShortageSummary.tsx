@@ -23,8 +23,8 @@ export function ShortageSummary({
   roleNameById: ReadonlyMap<string, string>;
 }) {
   return (
-    <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
-      <h2 className="font-bold">需給サマリ</h2>
+    <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+      <h2 className="font-semibold">需給サマリ</h2>
       <p>
         登録スタッフ数: <span className="font-bold">{registeredCount}</span> 名（辞退を除く）
       </p>
@@ -49,8 +49,7 @@ export function ShortageSummary({
       )}
 
       <p className="text-xs text-neutral-500">
-        ※
-        候補数は「同時に配置できる人数」ではありません。同じ人が複数の役割を担当できるため、実際に割り当てられるかはシフト生成（ソルバー）が判定します。
+        候補数は同時配置可能数ではありません。実際の配置可否はシフト生成で判定します。
       </p>
     </section>
   );

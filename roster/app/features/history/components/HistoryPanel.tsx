@@ -33,7 +33,7 @@ export function HistoryPanel({
       : null;
 
   return (
-    <section className="space-y-3 rounded-[2rem] border-2 border-black bg-white p-6 sm:p-8">
+    <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
       <h2 className="font-bold">履歴</h2>
       {revisions.length === 0 ? (
         <p className="text-sm text-neutral-600">まだ履歴がありません。</p>

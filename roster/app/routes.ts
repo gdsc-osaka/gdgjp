@@ -1,13 +1,14 @@
-import { type RouteConfig, index, route } from "@react-router/dev/routes";
+import { type RouteConfig, index, layout, route } from "@react-router/dev/routes";
 
 export default [
-  index("routes/home.tsx"), // "/" — event list (auth + chapter).
-
-  route("events/new", "routes/events.new.tsx"),
-  route("e/:id/design", "routes/e.$id.design.tsx"),
-  route("e/:id/staff", "routes/e.$id.staff.tsx"),
-  route("e/:id/roster", "routes/e.$id.roster.tsx"),
-  route("e/:id/share", "routes/e.$id.share.tsx"),
+  layout("routes/admin.tsx", { id: "admin" }, [
+    index("routes/home.tsx"), // "/" — event list (auth + chapter).
+    route("events/new", "routes/events.new.tsx"),
+    route("e/:id/design", "routes/e.$id.design.tsx"),
+    route("e/:id/staff", "routes/e.$id.staff.tsx"),
+    route("e/:id/roster", "routes/e.$id.roster.tsx"),
+    route("e/:id/share", "routes/e.$id.share.tsx"),
+  ]),
 
   route("apply/:token", "routes/apply.$token.tsx"), // public — sign-in only, no Chapter required
   route("r/:token", "routes/r.$token.tsx"), // public — no auth at all, gated only by canView(status)
