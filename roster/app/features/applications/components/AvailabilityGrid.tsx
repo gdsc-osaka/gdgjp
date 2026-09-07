@@ -69,7 +69,7 @@ export function AvailabilityGrid({
               {AVAILABILITY_VALUES.map((value) => (
                 <label
                   key={value}
-                  className={`cursor-pointer rounded-sm px-3 py-1 text-center text-sm font-semibold transition ${
+                  className={`availability-option cursor-pointer rounded-sm px-3 py-1 text-center text-sm font-semibold transition ${
                     values[slot.id] === value
                       ? "bg-card text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"

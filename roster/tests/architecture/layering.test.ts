@@ -80,7 +80,7 @@ const WORKER_INTERNALS_IMPORT_ALLOWLIST = new Set<string>();
 const LIB_ALLOWED_FILES = new Set(["return-to.ts", "db.server.ts"]);
 
 // Shared chrome belongs here; domain UI still stays under its feature.
-const COMPONENTS_SHELL_FILES = new Set(["AppShell.tsx", "PublicShell.tsx"]);
+const COMPONENTS_SHELL_FILES = new Set(["AppShell.tsx", "PublicShell.tsx", "RosterBrand.tsx"]);
 const COMPONENTS_ALLOWED_SUBDIRS: string[] = [];
 
 const WORKER_INTERNALS_RE = /workers\/features\/[a-z0-9-]+\/(persistence|orchestration)\//;

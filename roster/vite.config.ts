@@ -15,12 +15,11 @@ export default defineConfig({
   // `@gdgjp/gdg-lib` is consumed as source; without dedupe + eagerly optimizing
   // the React-dependent libs it pulls in, the client ends up with two React
   // copies → "invalid hook call" at hydration (see ost/vite.config.ts, which
-  // this block is copied from per ADR-001). Stage 01 doesn't render any
-  // `@gdgjp/gdg-lib/ui` component yet, so radix-ui / lucide-react / motion
-  // aren't roster dependencies (and aren't in this list) — add them back here
-  // if a later stage renders shared UI that pulls them in.
+  // this block is copied from per ADR-001). The app shell renders shared menu
+  // components, so their React-dependent libraries must be eagerly optimized.
+  // Add motion here too if a future shared component starts pulling it in.
   resolve: { dedupe: ["react", "react-dom", "react-router"] },
   optimizeDeps: {
-    include: ["react", "react-dom", "react-dom/client", "react-router"],
+    include: ["react", "react-dom", "react-dom/client", "react-router", "radix-ui", "lucide-react"],
   },
 });
