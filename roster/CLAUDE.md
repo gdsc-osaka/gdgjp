@@ -114,8 +114,8 @@ all), and `/e/:id/share` (the owner-side URL-copy + "what's public" card). See `
   loader call never touches `applications`/`assignments`, verified in
   `public-roster.server.test.ts` by spying on the actual SQL issued, not just on the returned
   shape. `tests/architecture/public-view-exposure.test.ts` additionally scans
-  `app/features/public-roster/` source for a reintroduced `Level`/`LEVELS`/`"lead"`/`"exp"`
-  reference.
+  `app/features/public-roster/` source AND `app/routes/r.$token.tsx` (the rendered route itself,
+  not just its feature dependency) for a reintroduced `Level`/`LEVELS`/`"lead"`/`"exp"` reference.
 
 ## Layout (ADR-003 — feature-first from day one)
 
@@ -158,9 +158,12 @@ Five tests make the rules above mechanical instead of aspirational (ADR-003): `l
 `file-size.test.ts` (400-line cap), `test-colocation.test.ts` (`<subject>.test.ts` next to its
 source), `route-urls.test.ts` (snapshot of the public URL surface — expect it to fail when you
 add a route; update the snapshot once you've confirmed the new URL is intentional), and Stage 09's
-`public-view-exposure.test.ts` (scans `app/features/public-roster/` for a reintroduced experience-
-level type/constant/literal — `Level`/`LEVELS`/`"lead"`/`"exp"` — enforcing ADR-005 mechanically
-rather than by UI review alone). **Every allowlist in these tests is shrink-only.** Adding to one
+`public-view-exposure.test.ts` (scans `app/features/public-roster/` AND `app/routes/r.$token.tsx`
+for a reintroduced experience-level type/constant/literal — `Level`/`LEVELS`/`"lead"`/`"exp"` —
+enforcing ADR-005 mechanically rather than by UI review alone; the route file is scanned
+explicitly, not just the feature directory, since it already imports from
+`~/features/solver/types` where `Level` also lives). **Every allowlist in these tests is
+shrink-only.** Adding to one
 instead of fixing the placement is not an option — see `docs/roster/index.md` §8.
 
 ## Auth / chapter ACL
