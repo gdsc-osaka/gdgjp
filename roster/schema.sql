@@ -75,7 +75,7 @@ CREATE TABLE events (
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL,
   deleted_at        TEXT
-);
+, revision_cursor INTEGER);
 CREATE TABLE oidc_session (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -97,6 +97,20 @@ CREATE TABLE phases (
   from_time  TEXT NOT NULL,
   to_time    TEXT NOT NULL,
   sort_order INTEGER NOT NULL
+);
+CREATE TABLE revisions (
+  id          TEXT PRIMARY KEY,
+  event_id    TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  seq         INTEGER NOT NULL,          -- per-event sequence, 1-based
+  label       TEXT NOT NULL,             -- "自動生成（シード 20261114）", "手動編集"
+  actor       TEXT NOT NULL,             -- display name, captured at write time
+  actor_id    TEXT,
+  kind        TEXT NOT NULL CHECK (kind IN ('generate','edit','restore')),
+  group_key   TEXT,                      -- merge key for consecutive edits; NULL = never merges
+  snapshot    TEXT NOT NULL,             -- JSON: { v: 1, items: [{ a, s, t, r, l }, ...] }
+  metrics     TEXT NOT NULL,             -- JSON: evaluate()'s Metrics, verbatim
+  created_at  TEXT NOT NULL,
+  UNIQUE (event_id, seq)
 );
 CREATE TABLE roles (
   id         TEXT PRIMARY KEY,
@@ -140,6 +154,7 @@ CREATE INDEX demands_event_idx ON demands (event_id);
 CREATE INDEX events_chapter_idx ON events (chapter_id) WHERE deleted_at IS NULL;
 CREATE INDEX oidc_session_user_idx ON oidc_session (user_id);
 CREATE INDEX phases_event_idx ON phases (event_id);
+CREATE INDEX revisions_event_seq ON revisions (event_id, seq);
 CREATE INDEX time_slots_event_idx ON time_slots (event_id);
 CREATE INDEX tracks_event_idx ON tracks (event_id);
 CREATE UNIQUE INDEX user_oidc_identity

@@ -23,12 +23,20 @@
   real `SolverInput` from D1 (`solver-input.server.ts`), the single `writeAssignments` write path
   (`roster.server.ts`), pure grid-assembly logic (`grid.ts`), and the new `/e/:id/roster` route —
   the 3-view shift table (staff/role/coverage) plus the 2 manual-edit drawers.
-- **Stage 09 (this PR)** adds `app/features/public-roster/` and the app's one fully public,
-  unauthenticated screen: `/r/:viewToken` (4 sub-views: staff/role/individual/party) and
-  `/e/:id/share` (the owner-side URL-copy + "what's public" card). No new table — reads
-  `events`/`schedule`/`applications`/`roster`'s existing accessors and reshapes the result into a
-  deliberately smaller `PublicRosterData` (ADR-005: no PII, no experience level, ever). Reuses
-  `~/features/roster/components/RoleGrid` (new `readOnly` prop) rather than forking it.
+- **Stage 08 (this PR)** adds the `revisions` table + `events.revision_cursor` and
+  `app/features/history/`: `recordRevision`/`restoreRevision` (D1 access), the pure
+  `grouping.ts`/`retention.ts`/`cursor.ts` decisions, a versioned `snapshot.ts` codec, and
+  `/e/:id/roster`'s new history panel + undo/redo buttons. `roster.server.ts#writeAssignments`
+  gains an optional `revision` argument that calls `recordRevision` — see
+  `app/features/history/README.md` for the two-way import this creates with `roster.server.ts`
+  and why it's safe. No new route (`route-urls.test.ts`'s snapshot is unchanged for this stage).
+- **Stage 09** (built in parallel, merged separately) added `app/features/public-roster/` and the
+  app's one fully public, unauthenticated screen: `/r/:viewToken` (4 sub-views:
+  staff/role/individual/party) and `/e/:id/share` (the owner-side URL-copy + "what's public"
+  card). No new table — reads `events`/`schedule`/`applications`/`roster`'s existing accessors and
+  reshapes the result into a deliberately smaller `PublicRosterData` (ADR-005: no PII, no
+  experience level, ever). Reuses `~/features/roster/components/RoleGrid` (new `readOnly` prop)
+  rather than forking it.
 
 ## Code map
 
@@ -44,8 +52,8 @@
 | Staff registration (applications, application_skills, availabilities; proxy-registration claim; apply-form validation; owner-correction writes; the staff list `/` correction drawer) | `app/features/applications/` (README) |
 | Supply-demand cross-check (headcount vs. experience shortage per time slot/role; event-wide shortage summary) | `app/features/supply/` (README) |
 | Roster/shift table (`assignments` table; `SolverInput` assembly from D1; the single `writeAssignments` write path; grid/drawer view logic; `/e/:id/roster`) | `app/features/roster/` (README) |
+| History (`revisions` table + `events.revision_cursor`; record/restore/undo/redo; consecutive-edit grouping; 50-entry retention; the history panel + undo/redo buttons) | `app/features/history/` (README) |
 | Public view (`/r/:viewToken`'s data assembly and 4 sub-views; the individual-view merge logic; `/e/:id/share`'s "what's public" card) | `app/features/public-roster/` (README) |
-| Domain schema not yet built (revisions) | Stage 08, see `docs/roster/index.md` §4 |
 
 ## Route surface
 
@@ -58,8 +66,8 @@ app/routes/
   e.$id.design.tsx    "/e/:id/design" — event settings, phases/time slots, tracks, roles, demand
   e.$id.staff.tsx     "/e/:id/staff" — staff list + owner-correction drawer, supply-demand view,
                       apply URL/status card, proxy-add entry point (auth + chapter)
-  e.$id.roster.tsx    "/e/:id/roster" — shift table: generate, 3 views, 2 manual-edit drawers
-                      (auth + chapter)
+  e.$id.roster.tsx    "/e/:id/roster" — shift table: generate, 3 views, 2 manual-edit drawers,
+                      history panel + undo/redo/restore (auth + chapter)
   e.$id.share.tsx     "/e/:id/share" — view-URL copy + "what's public" card (auth + chapter)
   apply.$token.tsx    "/apply/:token" — public staff registration (sign-in only, no Chapter)
   r.$token.tsx        "/r/:token" — public read-only shift view, NO auth at all (canView gates data)

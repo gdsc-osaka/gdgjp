@@ -17,6 +17,7 @@ const MIGRATIONS = [
   fileURLToPath(new URL("../../migrations/0003_demands.sql", import.meta.url)),
   fileURLToPath(new URL("../../migrations/0004_applications.sql", import.meta.url)),
   fileURLToPath(new URL("../../migrations/0005_assignments.sql", import.meta.url)),
+  fileURLToPath(new URL("../../migrations/0006_revisions.sql", import.meta.url)),
 ];
 
 const OWNER_CHAPTER: UserChapter = { chapterId: 1, chapterSlug: "tokyo", role: "member" };
@@ -407,5 +408,138 @@ describe("e.$id.roster loader — report consistency", () => {
     };
     const reconstructedAssignments = new Map(result.assignmentEntries);
     expect(result.report).toEqual(evaluate(reconstructedInput, reconstructedAssignments));
+  });
+
+  /**
+   * docs/roster/08-history.md "Design" §6 — the loader must expose the same
+   * `HistoryState` the history panel/undo-redo buttons render from.
+   */
+  it("exposes history state (cursor + revisions) after a generation", async () => {
+    await callAction(buildRequest({ intent: "generate", seed: "1" }), "evt_1", asD1(testDb));
+
+    const result = await callLoader(
+      new Request("http://localhost/e/evt_1/roster"),
+      "evt_1",
+      asD1(testDb),
+    );
+
+    expect(result.history.cursor).toBe(1);
+    expect(result.history.revisions).toHaveLength(1);
+    expect(result.history.revisions[0]).toMatchObject({ seq: 1, kind: "generate", actor: "Owner" });
+  });
+});
+
+describe("e.$id.roster action — undo / redo / restore (Stage 08)", () => {
+  let testDb: TestD1Database;
+
+  beforeEach(async () => {
+    vi.mocked(requireUserWithChapter).mockReset();
+    testDb = createTestD1(MIGRATIONS);
+    await seedFixture(testDb);
+    asOwner();
+  });
+
+  /**
+   * docs/roster/08-history.md "Design" §2/§5: undo/redo just move the cursor
+   * and re-expand a snapshot into `assignments` — this exercises that
+   * through the REAL route action (generate -> edit -> undo -> redo), the
+   * same "don't just unit-test history.server.ts in isolation" spirit as
+   * the Stage 07 generate/manual-edit tests above.
+   */
+  it("undo restores the pre-edit assignments; redo brings the edit back", async () => {
+    await callAction(buildRequest({ intent: "generate", seed: "1" }), "evt_1", asD1(testDb));
+    const afterGenerate = await readAssignmentRows(testDb);
+    expect(afterGenerate.length).toBeGreaterThan(0);
+
+    await callAction(
+      buildRequest({
+        intent: "assign",
+        applicationId: "app_x",
+        trackId: "trk_1",
+        roleId: "reception",
+        slotId: ["slot_1"],
+      }),
+      "evt_1",
+      asD1(testDb),
+    );
+    const afterEdit = await readAssignmentRows(testDb);
+    expect(afterEdit).not.toEqual(afterGenerate);
+
+    const undoResult = await callAction(buildRequest({ intent: "undo" }), "evt_1", asD1(testDb));
+    expect(undoResult).toEqual({ ok: true, intent: "undo", droppedCount: 0 });
+    expect(await readAssignmentRows(testDb)).toEqual(afterGenerate);
+
+    const redoResult = await callAction(buildRequest({ intent: "redo" }), "evt_1", asD1(testDb));
+    expect(redoResult).toEqual({ ok: true, intent: "redo", droppedCount: 0 });
+    expect(await readAssignmentRows(testDb)).toEqual(afterEdit);
+  });
+
+  it("restore moves directly to an arbitrary earlier seq", async () => {
+    await callAction(buildRequest({ intent: "generate", seed: "1" }), "evt_1", asD1(testDb));
+    const afterGenerate = await readAssignmentRows(testDb);
+
+    await callAction(
+      buildRequest({
+        intent: "assign",
+        applicationId: "app_x",
+        trackId: "trk_1",
+        roleId: "reception",
+        slotId: ["slot_1"],
+      }),
+      "evt_1",
+      asD1(testDb),
+    );
+
+    const result = await callAction(
+      buildRequest({ intent: "restore", seq: "1" }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ ok: true, intent: "restore", droppedCount: 0 });
+    expect(await readAssignmentRows(testDb)).toEqual(afterGenerate);
+  });
+
+  it("rejects a malformed restore seq without touching assignments", async () => {
+    await callAction(buildRequest({ intent: "generate", seed: "1" }), "evt_1", asD1(testDb));
+    const before = await readAssignmentRows(testDb);
+
+    const result = await callAction(
+      buildRequest({ intent: "restore", seq: "not-a-number" }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ error: "復元先が不正です。", intent: "restore" });
+    expect(await readAssignmentRows(testDb)).toEqual(before);
+  });
+
+  /**
+   * A `seq` that was valid when the page loaded can go stale by the time the
+   * request lands (e.g. retention evicted it) — this must return a friendly
+   * error, not throw/500, and must not touch `assignments`.
+   */
+  it("rejects a restore for a seq that no longer exists, without touching assignments", async () => {
+    await callAction(buildRequest({ intent: "generate", seed: "1" }), "evt_1", asD1(testDb));
+    const before = await readAssignmentRows(testDb);
+
+    const result = await callAction(
+      buildRequest({ intent: "restore", seq: "999" }),
+      "evt_1",
+      asD1(testDb),
+    );
+    expect(result).toEqual({ error: "復元先の履歴が見つかりませんでした。", intent: "restore" });
+    expect(await readAssignmentRows(testDb)).toEqual(before);
+  });
+
+  it("undo/redo are harmless no-ops (droppedCount 0, unchanged) at the history boundary", async () => {
+    await callAction(buildRequest({ intent: "generate", seed: "1" }), "evt_1", asD1(testDb));
+    const only = await readAssignmentRows(testDb);
+
+    const undoAtStart = await callAction(buildRequest({ intent: "undo" }), "evt_1", asD1(testDb));
+    expect(undoAtStart).toEqual({ ok: true, intent: "undo", droppedCount: 0 });
+    expect(await readAssignmentRows(testDb)).toEqual(only);
+
+    const redoAtEnd = await callAction(buildRequest({ intent: "redo" }), "evt_1", asD1(testDb));
+    expect(redoAtEnd).toEqual({ ok: true, intent: "redo", droppedCount: 0 });
+    expect(await readAssignmentRows(testDb)).toEqual(only);
   });
 });
