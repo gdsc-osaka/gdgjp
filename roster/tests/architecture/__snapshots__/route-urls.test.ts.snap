@@ -10,9 +10,11 @@ exports[`routes.ts URL surface > exposes a stable set of URLs 1`] = `
   "/dev/seed",
   "/e/:id/design",
   "/e/:id/roster",
+  "/e/:id/share",
   "/e/:id/staff",
   "/events/new",
   "/no-chapter",
+  "/r/:token",
   "/signin",
 ]
 `;
