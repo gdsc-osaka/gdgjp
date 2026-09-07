@@ -5,17 +5,19 @@ self-register through a public link, a solver auto-generates a draft schedule, o
 and publish. Full plan: `docs/roster/index.md`. Design decisions: `docs/roster/adr.md`. Read both
 before touching this app — every stage file assumes their domain model and solver spec.
 
-**Stage 07 of 9** (Stages 01–06 merged). Stage 01 was auth/chapter gate only; Stage 02 added the
-domain schema (events, the time-slot grid, tracks, the seeded role master); Stage 03 added demand
-input (the `demands` table, the `/e/:id/design` demand matrix); Stage 04 added staff registration
+**Stage 09 of 9 — the final stage** (Stages 01–07 merged; Stage 08/history developed in parallel
+with this one). Stage 01 was auth/chapter gate only; Stage 02 added the domain schema (events, the
+time-slot grid, tracks, the seeded role master); Stage 03 added demand input (the `demands` table,
+the `/e/:id/design` demand matrix); Stage 04 added staff registration
 (`applications`/`application_skills`/`availabilities`, the public `/apply/:applyToken` form,
 `/e/:id/staff`'s proxy-add entry point); Stage 05 cross-checked demand against applications
 (`app/features/supply/`) and added the staff list/owner-correction drawer to `/e/:id/staff`; Stage
-06 built the solver as a pure TS module, not yet wired into any route. **This stage** is where
-those all come together: the `assignments` table, `app/features/roster/` (assembling a real
-`SolverInput` from D1, the single `writeAssignments` write path, and the 3-view grid + manual-edit
-drawers), and the new `/e/:id/roster` route — see `README.md` and `ARCHITECTURE.md` for the
-current code map.
+06 built the solver as a pure TS module; Stage 07 wired it all together — the `assignments` table,
+`app/features/roster/`, and `/e/:id/roster`'s 3-view grid + manual-edit drawers. **This stage**
+ships the one public-facing screen everything else was built for: `app/features/public-roster/`,
+the new `/r/:viewToken` route (4 sub-views — staff/role/individual/party — no authentication at
+all), and `/e/:id/share` (the owner-side URL-copy + "what's public" card). See `README.md` and
+`ARCHITECTURE.md` for the current code map.
 
 ## Routes (`app/routes.ts`, config mode)
 
@@ -37,10 +39,19 @@ current code map.
   `DemandCoverageGrid`) selected by a segmented control, and 2 manual-edit dialogs (`CellDrawer`,
   `DemandCellDrawer`) — both warn-and-allow, never blocking, per index.md §5.1's deliberate
   asymmetry with auto-generation.
+- `/e/:id/share` — chapter-gated like the routes above. `ShareCard`: the `/r/:viewToken` URL with
+  one-click copy, the current status, and an explicit "what's public / what isn't" list. Reads
+  only — does not change `status` itself (`/e/:id/design`/`/e/:id/staff` already own that control).
 - `/apply/:token` — **public** staff self-registration. `getOptionalUser`, never
   `requireUserWithChapter` — Chapter membership must not be required to register as staff. Event
   lookup is by `apply_token` alone (`getEventByApplyToken`); the event id never appears in the
   URL. See "Applications / staff registration" below for the loader's PII constraint.
+- `/r/:token` — **fully public, zero authentication** (not even `getOptionalUser`). Event lookup is
+  by `view_token` alone (`getEventByViewToken`); an unknown token 404s, but an event that isn't
+  `published` still renders 200 with "まだ公開されていません" (`canView` gates data ASSEMBLY, not
+  just what's rendered — see "Public view" below). 4 tabs: staff-grid, role-grid (`RoleGrid` reused
+  with `readOnly`), individual timeline (`PersonTimeline` — the screen this stage exists for), and
+  party list (hidden when `event.hasParty` is false).
 - `/signin`, `/api/auth/*`, `/auth/signout` — gdg-lib relying-party plumbing (`cookiePrefix
   gdgjp-roster`, `ACCOUNTS` service binding).
 - `/no-chapter` — shown when the user has no GDG chapter.
@@ -69,7 +80,14 @@ current code map.
   `demand.server.ts`'s reads into the per-time-slot supply-vs-demand snapshot; writes nothing),
   `app/features/roster/roster.server.ts` (Stage 07 — `readAssignments`/`readAssignmentsMap` and
   `writeAssignments`, the **only** function that writes to `assignments`: always a full
-  delete-then-reinsert via `db.batch`, never a partial patch).
+  delete-then-reinsert via `db.batch`, never a partial patch),
+  `app/features/public-roster/public-roster.server.ts` (Stage 09 — `buildPublicRosterData`, the
+  `/r/:viewToken` loader's data assembly; writes nothing, reads through the accessors above rather
+  than duplicating any of their SQL).
+- `app/features/events/events.server.ts#getEventByViewToken` (Stage 09) resolves an event by its
+  public `view_token` alone, mirroring `getEventByApplyToken`'s shape exactly — same
+  `deleted_at IS NULL` filter, same "the token alone resolves the event, the id never appears in
+  the URL" contract.
 - `app/features/roster/solver-input.server.ts` (Stage 07) is the only place D1 rows are mapped
   onto the solver's plain `SolverInput` type (ADR-004) — reuses `demand`/`applications`/
   `schedule`'s reads verbatim, filters out withdrawn applicants entirely, and explicitly re-sorts
@@ -89,16 +107,31 @@ current code map.
   approach `wiki/workers/features/sources/test-db.ts` uses), not a hand-mocked `D1Database`. This
   is what lets `applications.server.test.ts` actually exercise the UNIQUE-index dedup rules
   instead of asserting a mock was called correctly.
+- **Public view (ADR-005, Stage 09).** `buildPublicRosterData` returns `PublicStaff` as
+  `{id, name, party}` only — never `email`/`contact`/`note`/`skills`/`availability`, and no
+  experience level anywhere — and excludes withdrawn applicants (and any residual assignment row
+  they still have) entirely. `canView(status)` gates the query itself: an unpublished event's
+  loader call never touches `applications`/`assignments`, verified in
+  `public-roster.server.test.ts` by spying on the actual SQL issued, not just on the returned
+  shape. `tests/architecture/public-view-exposure.test.ts` additionally scans
+  `app/features/public-roster/` source AND `app/routes/r.$token.tsx` (the rendered route itself,
+  not just its feature dependency) for a reintroduced `Level`/`LEVELS`/`"lead"`/`"exp"` reference.
 
 ## Layout (ADR-003 — feature-first from day one)
 
 - Domain code goes in `app/features/<domain>/` (server + client + UI + colocated tests). Auth,
-  events, schedule, demand, applications, the solver, supply, and roster are the features so far:
-  `app/features/{auth,events,schedule,demand,applications,solver,supply,roster}/`.
+  events, schedule, demand, applications, the solver, supply, roster, and public-roster are the
+  features so far:
+  `app/features/{auth,events,schedule,demand,applications,solver,supply,roster,public-roster}/`.
 - `roster/` (Stage 07) assembles the solver's `SolverInput` from D1 and owns the single
   `assignments` write path (`roster.server.ts#writeAssignments`) and the `/e/:id/roster` grid/
   drawer components. It imports from `demand/`, `applications/`, `schedule/`, and `solver/` —
   none of those import back. See `app/features/roster/README.md`.
+- `public-roster/` (Stage 09) is `/r/:viewToken`'s data assembly and its 3 own components
+  (`PublicStaffGrid`/`PersonTimeline`/`PartyList` — the role view instead reuses `roster/`'s
+  `RoleGrid` directly). Imports from `events/`, `schedule/`, `applications/`, and `roster/`
+  (`readAssignments`) — the same one-way pattern `supply/` uses, none of those import back. See
+  `app/features/public-roster/README.md`.
 - `supply/` (Stage 05) is the demand-vs-applications cross-check: it imports from both `demand/`
   and `applications/` — the only sanctioned direction. Neither of those two may import from
   `supply/`; `applications/staff-view.ts` deliberately takes a structurally-`supply/`-compatible
@@ -121,12 +154,17 @@ current code map.
 
 ## Architecture tests (`tests/architecture/`, ported from `wiki/`)
 
-Four tests make the rules above mechanical instead of aspirational (ADR-003): `layering.test.ts`,
+Five tests make the rules above mechanical instead of aspirational (ADR-003): `layering.test.ts`,
 `file-size.test.ts` (400-line cap), `test-colocation.test.ts` (`<subject>.test.ts` next to its
 source), `route-urls.test.ts` (snapshot of the public URL surface — expect it to fail when you
-add a route; update the snapshot once you've confirmed the new URL is intentional). **Every
-allowlist in these tests is shrink-only.** Adding to one instead of fixing the placement is not
-an option — see `docs/roster/index.md` §8.
+add a route; update the snapshot once you've confirmed the new URL is intentional), and Stage 09's
+`public-view-exposure.test.ts` (scans `app/features/public-roster/` AND `app/routes/r.$token.tsx`
+for a reintroduced experience-level type/constant/literal — `Level`/`LEVELS`/`"lead"`/`"exp"` —
+enforcing ADR-005 mechanically rather than by UI review alone; the route file is scanned
+explicitly, not just the feature directory, since it already imports from
+`~/features/solver/types` where `Level` also lives). **Every allowlist in these tests is
+shrink-only.** Adding to one
+instead of fixing the placement is not an option — see `docs/roster/index.md` §8.
 
 ## Auth / chapter ACL
 

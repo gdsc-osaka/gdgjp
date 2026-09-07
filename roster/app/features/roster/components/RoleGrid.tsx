@@ -15,6 +15,17 @@ type RoleInfo = { id: string; name: string; sortOrder: number };
  * merged cell selects the WHOLE range for `onSelectCell` (the caller opens
  * `DemandCellDrawer` and, on "add", places the chosen candidate into every
  * slot in the range at once — "一括で配置する", never one slot at a time).
+ *
+ * `readOnly` (docs/roster/09-share-public-views.md "Design" §2b) is Stage
+ * 09's public role view reusing this exact component rather than forking it:
+ * cells render as plain non-interactive containers (no `onSelectCell` call,
+ * no hover affordance) and the per-cell `count/ideal` badge is hidden
+ * outright, because the public caller has no real demand numbers to show —
+ * it only knows "who is actually here", synthesized into a `demands`-shaped
+ * map purely to reuse `buildGridColumns`/`buildRoleGridColumn`'s column
+ * derivation and merge-by-membership logic (`app/routes/r.$token.tsx`).
+ * Everything else (the merge algorithm, the member list, colors) is
+ * identical between the two callers.
  */
 export function RoleGrid({
   timeSlots,
@@ -24,6 +35,7 @@ export function RoleGrid({
   assignments,
   nameById,
   onSelectCell,
+  readOnly = false,
 }: {
   timeSlots: readonly RoleGridSlot[];
   tracks: readonly TrackInfo[];
@@ -31,7 +43,8 @@ export function RoleGrid({
   demands: ReadonlyMap<string, Demand>;
   assignments: Assignments;
   nameById: ReadonlyMap<string, string>;
-  onSelectCell: (trackId: string, roleId: string, slotIds: string[]) => void;
+  onSelectCell?: (trackId: string, roleId: string, slotIds: string[]) => void;
+  readOnly?: boolean;
 }) {
   const columns = useMemo(() => buildGridColumns(demands, tracks, roles), [demands, tracks, roles]);
   const trackById = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks]);
@@ -49,7 +62,11 @@ export function RoleGrid({
   );
 
   if (columns.length === 0) {
-    return <p className="text-sm text-neutral-600">需要が設定されていません。</p>;
+    return (
+      <p className="text-sm text-neutral-600">
+        {readOnly ? "誰も割り当てられていません。" : "需要が設定されていません。"}
+      </p>
+    );
   }
 
   return (
@@ -91,27 +108,44 @@ export function RoleGrid({
                   cell.span > 1
                     ? `${slot.start}–${timeSlots[rowIdx + cell.span - 1].end}`
                     : `${slot.start}–${slot.end}`;
-                return (
-                  <td key={colKey} rowSpan={cell.span} className="p-1 align-top">
-                    <button
-                      type="button"
-                      onClick={() => onSelectCell(col.trackId, col.roleId, rangeSlotIds)}
-                      aria-label={`${label} / ${trackById.get(col.trackId)?.name ?? col.trackId} / ${
-                        roleById.get(col.roleId)?.name ?? col.roleId
-                      }`}
-                      className="flex h-full w-full min-h-12 flex-col items-start gap-1 rounded-lg border-2 border-black bg-white p-2 text-left transition hover:bg-neutral-50"
-                    >
+                const ariaLabel = `${label} / ${trackById.get(col.trackId)?.name ?? col.trackId} / ${
+                  roleById.get(col.roleId)?.name ?? col.roleId
+                }`;
+                const cellBody = (
+                  <>
+                    {!readOnly ? (
                       <span className="text-xs font-bold text-neutral-500">
                         {cell.demand ? `${cell.memberIds.length}/${cell.demand.ideal}` : "需要なし"}
                       </span>
-                      <ul className="space-y-0.5">
-                        {cell.memberIds.length === 0 ? (
-                          <li className="text-neutral-400">空き</li>
-                        ) : (
-                          cell.memberIds.map((id) => <li key={id}>{nameById.get(id) ?? id}</li>)
-                        )}
-                      </ul>
-                    </button>
+                    ) : null}
+                    <ul className="space-y-0.5">
+                      {cell.memberIds.length === 0 ? (
+                        <li className="text-neutral-400">空き</li>
+                      ) : (
+                        cell.memberIds.map((id) => <li key={id}>{nameById.get(id) ?? id}</li>)
+                      )}
+                    </ul>
+                  </>
+                );
+                return (
+                  <td key={colKey} rowSpan={cell.span} className="p-1 align-top">
+                    {readOnly ? (
+                      <div
+                        aria-label={ariaLabel}
+                        className="flex h-full w-full min-h-12 flex-col items-start gap-1 rounded-lg border-2 border-black bg-white p-2 text-left"
+                      >
+                        {cellBody}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onSelectCell?.(col.trackId, col.roleId, rangeSlotIds)}
+                        aria-label={ariaLabel}
+                        className="flex h-full w-full min-h-12 flex-col items-start gap-1 rounded-lg border-2 border-black bg-white p-2 text-left transition hover:bg-neutral-50"
+                      >
+                        {cellBody}
+                      </button>
+                    )}
                   </td>
                 );
               })}

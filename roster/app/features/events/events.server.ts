@@ -185,6 +185,23 @@ export async function getEventByApplyToken(
   return row ? toEvent(row) : null;
 }
 
+/**
+ * Looks an event up by its public `view_token` (docs/roster/09-share-public-
+ * views.md "Design" §2): `/r/:viewToken` never sees an event id either,
+ * mirroring `getEventByApplyToken`'s shape exactly (same `deleted_at IS
+ * NULL` filter, same "the token alone resolves the event" contract).
+ */
+export async function getEventByViewToken(
+  db: D1Database,
+  viewToken: string,
+): Promise<EventRecord | null> {
+  const row = await db
+    .prepare(`SELECT ${EVENT_COLS} FROM events WHERE view_token = ? AND deleted_at IS NULL`)
+    .bind(viewToken)
+    .first<EventRow>();
+  return row ? toEvent(row) : null;
+}
+
 /** Chapter's events, newest event date first (docs/roster/02-domain-schema.md screen `/`). */
 export async function listEventsForChapters(
   db: D1Database,

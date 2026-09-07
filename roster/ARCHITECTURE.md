@@ -19,10 +19,16 @@
   shortage, and adds the rest of `/e/:id/staff`: the staff list (`StaffTable`), an
   owner-correction drawer (`StaffDrawer`), and the apply-link/status card (`ApplyLinkCard`). No
   new table, no new route.
-- **Stage 07 (this PR)** adds the `assignments` table and `app/features/roster/`: assembling a
+- **Stage 07** added the `assignments` table and `app/features/roster/`: assembling a
   real `SolverInput` from D1 (`solver-input.server.ts`), the single `writeAssignments` write path
   (`roster.server.ts`), pure grid-assembly logic (`grid.ts`), and the new `/e/:id/roster` route —
   the 3-view shift table (staff/role/coverage) plus the 2 manual-edit drawers.
+- **Stage 09 (this PR)** adds `app/features/public-roster/` and the app's one fully public,
+  unauthenticated screen: `/r/:viewToken` (4 sub-views: staff/role/individual/party) and
+  `/e/:id/share` (the owner-side URL-copy + "what's public" card). No new table — reads
+  `events`/`schedule`/`applications`/`roster`'s existing accessors and reshapes the result into a
+  deliberately smaller `PublicRosterData` (ADR-005: no PII, no experience level, ever). Reuses
+  `~/features/roster/components/RoleGrid` (new `readOnly` prop) rather than forking it.
 
 ## Code map
 
@@ -38,6 +44,7 @@
 | Staff registration (applications, application_skills, availabilities; proxy-registration claim; apply-form validation; owner-correction writes; the staff list `/` correction drawer) | `app/features/applications/` (README) |
 | Supply-demand cross-check (headcount vs. experience shortage per time slot/role; event-wide shortage summary) | `app/features/supply/` (README) |
 | Roster/shift table (`assignments` table; `SolverInput` assembly from D1; the single `writeAssignments` write path; grid/drawer view logic; `/e/:id/roster`) | `app/features/roster/` (README) |
+| Public view (`/r/:viewToken`'s data assembly and 4 sub-views; the individual-view merge logic; `/e/:id/share`'s "what's public" card) | `app/features/public-roster/` (README) |
 | Domain schema not yet built (revisions) | Stage 08, see `docs/roster/index.md` §4 |
 
 ## Route surface
@@ -53,7 +60,9 @@ app/routes/
                       apply URL/status card, proxy-add entry point (auth + chapter)
   e.$id.roster.tsx    "/e/:id/roster" — shift table: generate, 3 views, 2 manual-edit drawers
                       (auth + chapter)
+  e.$id.share.tsx     "/e/:id/share" — view-URL copy + "what's public" card (auth + chapter)
   apply.$token.tsx    "/apply/:token" — public staff registration (sign-in only, no Chapter)
+  r.$token.tsx        "/r/:token" — public read-only shift view, NO auth at all (canView gates data)
   signin.tsx         "/signin" — redirects into the gdg-lib auth flow
   no-chapter.tsx      "/no-chapter"
   api.auth.$.ts       "/api/auth/*" — gdg-lib RP plumbing
