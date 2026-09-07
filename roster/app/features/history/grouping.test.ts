@@ -87,9 +87,7 @@ describe("shouldMergeIntoHead", () => {
   });
 
   it("never merges when there is no head yet (first revision for the event)", () => {
-    expect(shouldMergeIntoHead(null, { kind: "edit", groupKey: "user_1" }, new Date())).toBe(
-      false,
-    );
+    expect(shouldMergeIntoHead(null, { kind: "edit", groupKey: "user_1" }, new Date())).toBe(false);
   });
 
   it("never merges when the candidate's groupKey is null", () => {

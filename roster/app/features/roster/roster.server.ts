@@ -1,6 +1,9 @@
+import { recordRevision } from "~/features/history/history.server";
+import type { Actor } from "~/features/history/types";
 import {
   type AssignmentValue,
   type Assignments,
+  type Metrics,
   assignmentKey,
   parseAssignmentKey,
 } from "~/features/solver/types";
@@ -25,6 +28,15 @@ import type { AssignmentRecord } from "./types";
  * (docs/roster/07-roster-manual-edit.md "Design" §6). Do not add a second
  * write path (e.g. a route calling `db.prepare("INSERT INTO assignments...")`
  * directly) no matter how small the change looks.
+ *
+ * **Stage 08's hook**: `writeAssignments` takes an optional `revision`
+ * argument. When present, it calls `~/features/history/history.server`'s
+ * `recordRevision` after the write (docs/roster/08-history.md "Design" §3:
+ * "`writeAssignments` から呼ぶ"). When omitted — exactly one caller does this:
+ * `history.server.ts#restoreRevision`, restoring a snapshot — no revision is
+ * recorded (docs/roster/08-history.md "Design" §5: "復元そのものは新しい履歴を
+ * 作らない"). See `history.server.ts`'s module doc comment for why this
+ * creates (and why it's safe to create) a two-way import with that file.
  */
 
 type AssignmentRow = {
@@ -97,6 +109,20 @@ function assignmentStatement(
     .bind(eventId, applicationId, timeSlotId, value.trackId, value.roleId, value.locked ? 1 : 0);
 }
 
+/** Stage 08's hook payload (module doc above) — `kind` excludes `"restore"`
+ * at the type level since restoring never passes this argument at all. */
+export type WriteAssignmentsRevision = {
+  metrics: Metrics;
+  label: string;
+  actor: Actor;
+  kind: "generate" | "edit";
+  /** The merge key `history.server.ts`'s `recordRevision` groups consecutive
+   * edits by — pass the acting user's id for `kind: "edit"` (docs/roster/
+   * 08-history.md "Design" §3: "同一ユーザー × 同一イベント"). Ignored for
+   * `kind: "generate"`, which never merges regardless of this value. */
+  groupKey?: string | null;
+};
+
 /**
  * Replaces an event's ENTIRE `assignments` set with `next` — the single
  * write path every caller uses (module doc). Always a full delete-then-
@@ -109,6 +135,7 @@ export async function writeAssignments(
   db: D1Database,
   eventId: string,
   next: Assignments,
+  revision?: WriteAssignmentsRevision,
 ): Promise<void> {
   const statements: D1PreparedStatement[] = [
     db.prepare("DELETE FROM assignments WHERE event_id = ?").bind(eventId),
@@ -118,4 +145,16 @@ export async function writeAssignments(
     statements.push(assignmentStatement(db, eventId, applicationId, slotId, value));
   }
   await db.batch(statements);
+
+  if (revision) {
+    await recordRevision(db, {
+      eventId,
+      assignments: next,
+      metrics: revision.metrics,
+      label: revision.label,
+      actor: revision.actor,
+      kind: revision.kind,
+      groupKey: revision.groupKey,
+    });
+  }
 }

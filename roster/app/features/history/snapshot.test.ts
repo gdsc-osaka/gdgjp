@@ -41,7 +41,10 @@ describe("toSnapshot / fromSnapshot", () => {
     // silently; keying by { a, s, t, r, l } object fields instead of a
     // tuple is what prevents it.
     const original = new Map([
-      [assignmentKey("app_1", "slot_0"), { trackId: "roleish_track", roleId: "trackish_role", locked: false }],
+      [
+        assignmentKey("app_1", "slot_0"),
+        { trackId: "roleish_track", roleId: "trackish_role", locked: false },
+      ],
     ]);
     const restored = fromSnapshot(toSnapshot(original));
     expect(restored.get(assignmentKey("app_1", "slot_0"))).toEqual({
