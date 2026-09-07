@@ -19,10 +19,17 @@
   shortage, and adds the rest of `/e/:id/staff`: the staff list (`StaffTable`), an
   owner-correction drawer (`StaffDrawer`), and the apply-link/status card (`ApplyLinkCard`). No
   new table, no new route.
-- **Stage 07 (this PR)** adds the `assignments` table and `app/features/roster/`: assembling a
+- **Stage 07** adds the `assignments` table and `app/features/roster/`: assembling a
   real `SolverInput` from D1 (`solver-input.server.ts`), the single `writeAssignments` write path
   (`roster.server.ts`), pure grid-assembly logic (`grid.ts`), and the new `/e/:id/roster` route —
   the 3-view shift table (staff/role/coverage) plus the 2 manual-edit drawers.
+- **Stage 08 (this PR)** adds the `revisions` table + `events.revision_cursor` and
+  `app/features/history/`: `recordRevision`/`restoreRevision` (D1 access), the pure
+  `grouping.ts`/`retention.ts`/`cursor.ts` decisions, a versioned `snapshot.ts` codec, and
+  `/e/:id/roster`'s new history panel + undo/redo buttons. `roster.server.ts#writeAssignments`
+  gains an optional `revision` argument that calls `recordRevision` — see
+  `app/features/history/README.md` for the two-way import this creates with `roster.server.ts`
+  and why it's safe. No new route (`route-urls.test.ts`'s snapshot is unchanged).
 
 ## Code map
 
@@ -38,7 +45,7 @@
 | Staff registration (applications, application_skills, availabilities; proxy-registration claim; apply-form validation; owner-correction writes; the staff list `/` correction drawer) | `app/features/applications/` (README) |
 | Supply-demand cross-check (headcount vs. experience shortage per time slot/role; event-wide shortage summary) | `app/features/supply/` (README) |
 | Roster/shift table (`assignments` table; `SolverInput` assembly from D1; the single `writeAssignments` write path; grid/drawer view logic; `/e/:id/roster`) | `app/features/roster/` (README) |
-| Domain schema not yet built (revisions) | Stage 08, see `docs/roster/index.md` §4 |
+| History (`revisions` table + `events.revision_cursor`; record/restore/undo/redo; consecutive-edit grouping; 50-entry retention; the history panel + undo/redo buttons) | `app/features/history/` (README) |
 
 ## Route surface
 
@@ -51,8 +58,8 @@ app/routes/
   e.$id.design.tsx    "/e/:id/design" — event settings, phases/time slots, tracks, roles, demand
   e.$id.staff.tsx     "/e/:id/staff" — staff list + owner-correction drawer, supply-demand view,
                       apply URL/status card, proxy-add entry point (auth + chapter)
-  e.$id.roster.tsx    "/e/:id/roster" — shift table: generate, 3 views, 2 manual-edit drawers
-                      (auth + chapter)
+  e.$id.roster.tsx    "/e/:id/roster" — shift table: generate, 3 views, 2 manual-edit drawers,
+                      history panel + undo/redo/restore (auth + chapter)
   apply.$token.tsx    "/apply/:token" — public staff registration (sign-in only, no Chapter)
   signin.tsx         "/signin" — redirects into the gdg-lib auth flow
   no-chapter.tsx      "/no-chapter"

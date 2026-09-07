@@ -5,17 +5,21 @@ self-register through a public link, a solver auto-generates a draft schedule, o
 and publish. Full plan: `docs/roster/index.md`. Design decisions: `docs/roster/adr.md`. Read both
 before touching this app — every stage file assumes their domain model and solver spec.
 
-**Stage 07 of 9** (Stages 01–06 merged). Stage 01 was auth/chapter gate only; Stage 02 added the
+**Stage 08 of 9** (Stages 01–07 merged). Stage 01 was auth/chapter gate only; Stage 02 added the
 domain schema (events, the time-slot grid, tracks, the seeded role master); Stage 03 added demand
 input (the `demands` table, the `/e/:id/design` demand matrix); Stage 04 added staff registration
 (`applications`/`application_skills`/`availabilities`, the public `/apply/:applyToken` form,
 `/e/:id/staff`'s proxy-add entry point); Stage 05 cross-checked demand against applications
 (`app/features/supply/`) and added the staff list/owner-correction drawer to `/e/:id/staff`; Stage
-06 built the solver as a pure TS module, not yet wired into any route. **This stage** is where
-those all come together: the `assignments` table, `app/features/roster/` (assembling a real
-`SolverInput` from D1, the single `writeAssignments` write path, and the 3-view grid + manual-edit
-drawers), and the new `/e/:id/roster` route — see `README.md` and `ARCHITECTURE.md` for the
-current code map.
+06 built the solver as a pure TS module; Stage 07 wired it up as the `assignments` table,
+`app/features/roster/` (assembling a real `SolverInput` from D1, the single `writeAssignments`
+write path, and the 3-view grid + manual-edit drawers), and the `/e/:id/roster` route. **This
+stage** adds operation history on top: the `revisions` table + `events.revision_cursor`,
+`app/features/history/` (`recordRevision`/`restoreRevision`, consecutive-edit grouping, 50-entry
+retention, a versioned snapshot codec), and `/e/:id/roster`'s new history panel + undo/redo/
+restore controls — see `README.md` and `ARCHITECTURE.md` for the current code map. Stage 09
+(public share views, `/r/:viewToken`, `/e/:id/share`) is a separate, independent stage this one
+does not touch.
 
 ## Routes (`app/routes.ts`, config mode)
 
@@ -34,9 +38,11 @@ current code map.
 - `/e/:id/roster` — chapter-gated like `/e/:id/design`/`/e/:id/staff`. The shift table: the
   `GeneratePanel` (自動生成/再生成, seed input), `MetricsRow`/`ShortageReport` (rendered from
   `evaluate()`'s `Report`, never a separate tally), 3 views (`StaffGrid`/`RoleGrid`/
-  `DemandCoverageGrid`) selected by a segmented control, and 2 manual-edit dialogs (`CellDrawer`,
+  `DemandCoverageGrid`) selected by a segmented control, 2 manual-edit dialogs (`CellDrawer`,
   `DemandCellDrawer`) — both warn-and-allow, never blocking, per index.md §5.1's deliberate
-  asymmetry with auto-generation.
+  asymmetry with auto-generation — and (Stage 08) `UndoRedoButtons` + `HistoryPanel` below the
+  grids, backed by `undo`/`redo`/`restore` action intents that move `events.revision_cursor`
+  without ever creating a new revision.
 - `/apply/:token` — **public** staff self-registration. `getOptionalUser`, never
   `requireUserWithChapter` — Chapter membership must not be required to register as staff. Event
   lookup is by `apply_token` alone (`getEventByApplyToken`); the event id never appears in the
@@ -50,10 +56,14 @@ current code map.
 
 - **D1 (`DB`)** — `user` + `oidc_session` (gdg-lib), `events`, `phases`, `time_slots`, `tracks`,
   `roles` (seeded, ADR-007), `event_roles` (Stage 02), `demands` (Stage 03), `applications`,
-  `application_skills`, `availabilities` (Stage 04), plus `assignments` (Stage 07 — the current
+  `application_skills`, `availabilities` (Stage 04), `assignments` (Stage 07 — the current
   shift table; `PRIMARY KEY (application_id, time_slot_id)`, not a surrogate id, is what makes
-  "never assign the same staff member to the same slot twice" structurally impossible). Migrations
-  in `migrations/`; `schema.sql` is generated (`pnpm migrate:local`) — never hand-edit it.
+  "never assign the same staff member to the same slot twice" structurally impossible), plus
+  `revisions` + `events.revision_cursor` (Stage 08 — operation history, ADR-006: a JSON snapshot
+  per revision, NOT a per-timepoint duplicate of `assignments` itself; `revision_cursor` is which
+  revision's snapshot is currently reflected in `assignments`, `NULL` meaning "no history yet").
+  Migrations in `migrations/`; `schema.sql` is generated (`pnpm migrate:local`) — never hand-edit
+  it.
 - No ORM. Every feature's `*.server.ts` hand-writes D1 (`*Row` type → `to*()` mapper →
   column-list constant → `RETURNING`, following `scheduler/app/lib/db.ts`'s pattern):
   `app/features/events/events.server.ts` (events CRUD, incl. `getEventByApplyToken`),
@@ -69,7 +79,13 @@ current code map.
   `demand.server.ts`'s reads into the per-time-slot supply-vs-demand snapshot; writes nothing),
   `app/features/roster/roster.server.ts` (Stage 07 — `readAssignments`/`readAssignmentsMap` and
   `writeAssignments`, the **only** function that writes to `assignments`: always a full
-  delete-then-reinsert via `db.batch`, never a partial patch).
+  delete-then-reinsert via `db.batch`, never a partial patch; Stage 08 gives it an optional
+  `revision` argument that, when present, calls `history.server.ts#recordRevision` after the
+  write — `writeManualEdit`, also here, is the `assign`/`unassign` intents' shared tail:
+  re-evaluate against the current `SolverInput` and write through with `kind: "edit"`),
+  `app/features/history/history.server.ts` (Stage 08 — `revisions` D1 access:
+  `recordRevision`/`restoreRevision`/`undoRevision`/`redoRevision`/`getHistoryState`; see
+  "History" below).
 - `app/features/roster/solver-input.server.ts` (Stage 07) is the only place D1 rows are mapped
   onto the solver's plain `SolverInput` type (ADR-004) — reuses `demand`/`applications`/
   `schedule`'s reads verbatim, filters out withdrawn applicants entirely, and explicitly re-sorts
@@ -90,15 +106,45 @@ current code map.
   is what lets `applications.server.test.ts` actually exercise the UNIQUE-index dedup rules
   instead of asserting a mock was called correctly.
 
+## History (Stage 08)
+
+- **`recordRevision` inserts a new `revisions` row, or — when `grouping.ts#shouldMergeIntoHead`
+  says the current head is a same-actor `edit` made within the last 5 minutes (`GROUP_WINDOW_MS`)
+  — overwrites that head row in place.** `generate` never merges regardless of timing. Truncates
+  any "future" (redo) rows past the cursor before inserting a new one (rewind-then-edit discards
+  the branch, no multi-branch history), and evicts the oldest row(s) once `retention.ts`'s 50-entry
+  cap (`RETENTION_LIMIT`) is exceeded — insert, truncation, and eviction are one `db.batch`.
+- **`restoreRevision` never creates a revision.** It reads a snapshot, filters out any
+  `application_id` that's gone or withdrawn and any `time_slot_id` that no longer exists for the
+  event (a withdrawal or a schedule regeneration since the snapshot was taken), writes the
+  filtered map through `writeAssignments` (no `revision` argument), and moves
+  `events.revision_cursor` — returning the filtered-out count as `droppedCount`, which the route
+  surfaces as "N件の割当は対象が存在しないため復元されませんでした。" `undoRevision`/`redoRevision`
+  move the cursor one step and call `restoreRevision`.
+- **Intentional two-way import**: `roster.server.ts#writeAssignments` imports
+  `history.server.ts#recordRevision` (the Stage 08 hook), and `history.server.ts#restoreRevision`
+  imports `roster.server.ts#writeAssignments` (reusing the one write path, never a bespoke
+  `INSERT`/`DELETE`). Both directions only call the other's function from inside an `async`
+  function body at request time, and both are `function` declarations (hoisted), so this carries
+  no ESM init-order hazard — see `app/features/history/README.md`.
+- `app/features/history/{grouping,retention,cursor}.ts` are pure functions (no D1) — the 5-minute
+  merge window, the 50-entry cap, and the undo/redo button enable/disable boundary are all
+  unit-tested independent of D1.
+
 ## Layout (ADR-003 — feature-first from day one)
 
 - Domain code goes in `app/features/<domain>/` (server + client + UI + colocated tests). Auth,
-  events, schedule, demand, applications, the solver, supply, and roster are the features so far:
-  `app/features/{auth,events,schedule,demand,applications,solver,supply,roster}/`.
+  events, schedule, demand, applications, the solver, supply, roster, and history are the features
+  so far: `app/features/{auth,events,schedule,demand,applications,solver,supply,roster,history}/`.
 - `roster/` (Stage 07) assembles the solver's `SolverInput` from D1 and owns the single
   `assignments` write path (`roster.server.ts#writeAssignments`) and the `/e/:id/roster` grid/
-  drawer components. It imports from `demand/`, `applications/`, `schedule/`, and `solver/` —
-  none of those import back. See `app/features/roster/README.md`.
+  drawer components. It imports from `demand/`, `applications/`, `schedule/`, `solver/`, and
+  (Stage 08) `history/` — none of those import back FROM `roster/`, except `history/` itself,
+  which `roster/` also imports from (see next bullet). See `app/features/roster/README.md`.
+- `history/` (Stage 08) is the one feature with a genuinely two-way relationship: it imports
+  `roster/`'s `writeAssignments` (for `restoreRevision`'s D1 write), and `roster/`'s
+  `writeAssignments` imports `history/`'s `recordRevision` (the hook on every write). See
+  `app/features/history/README.md` for why this specific cycle is safe.
 - `supply/` (Stage 05) is the demand-vs-applications cross-check: it imports from both `demand/`
   and `applications/` — the only sanctioned direction. Neither of those two may import from
   `supply/`; `applications/staff-view.ts` deliberately takes a structurally-`supply/`-compatible
