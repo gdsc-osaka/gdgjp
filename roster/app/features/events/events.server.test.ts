@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { asD1, createTestD1 } from "../../../tests/helpers/sqlite-d1";
-import { getEventByApplyToken, toEvent } from "./events.server";
+import { getEventByApplyToken, getEventByViewToken, toEvent } from "./events.server";
 
 const ROW = {
   id: "evt_1",
@@ -129,5 +129,54 @@ describe("getEventByApplyToken (real SQLite)", () => {
   it("returns null for a soft-deleted event's token", async () => {
     const db = seedDb();
     expect(await getEventByApplyToken(db, "apply-deleted")).toBeNull();
+  });
+});
+
+/**
+ * docs/roster/09-share-public-views.md "Design" §2: `/r/:viewToken` resolves
+ * an event by `view_token` alone — same precedent and same real-SQLite
+ * justification as `getEventByApplyToken` above, but this is the one public
+ * route with zero authentication at all, so getting the lookup wrong is an
+ * even more direct data-exposure risk than the apply-token case.
+ */
+describe("getEventByViewToken (real SQLite)", () => {
+  const MIGRATIONS = [
+    fileURLToPath(new URL("../../../migrations/0002_domain.sql", import.meta.url)),
+  ];
+
+  function seedDb() {
+    const testDb = createTestD1(MIGRATIONS);
+    const now = new Date().toISOString();
+    testDb
+      .prepare(
+        `INSERT INTO events (id, chapter_id, name, date, start_time, end_time, seed, apply_token, view_token, created_at, updated_at, deleted_at)
+         VALUES ('evt_live', 1, 'Live', '2026-11-07', '09:00', '19:00', 1, 'apply-live', 'view-live', ?, ?, NULL)`,
+      )
+      .bind(now, now)
+      .run();
+    testDb
+      .prepare(
+        `INSERT INTO events (id, chapter_id, name, date, start_time, end_time, seed, apply_token, view_token, created_at, updated_at, deleted_at)
+         VALUES ('evt_deleted', 1, 'Deleted', '2026-11-07', '09:00', '19:00', 1, 'apply-deleted', 'view-deleted', ?, ?, ?)`,
+      )
+      .bind(now, now, now)
+      .run();
+    return asD1(testDb);
+  }
+
+  it("finds the event by its view_token", async () => {
+    const db = seedDb();
+    const event = await getEventByViewToken(db, "view-live");
+    expect(event?.id).toBe("evt_live");
+  });
+
+  it("returns null for an unknown token", async () => {
+    const db = seedDb();
+    expect(await getEventByViewToken(db, "no-such-token")).toBeNull();
+  });
+
+  it("returns null for a soft-deleted event's token", async () => {
+    const db = seedDb();
+    expect(await getEventByViewToken(db, "view-deleted")).toBeNull();
   });
 });
