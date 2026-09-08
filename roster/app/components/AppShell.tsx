@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Plus,
   Share2,
+  UserRound,
   UsersRound,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -49,12 +50,6 @@ export function AppShell({
   const currentEvent = events.find((event) => event.id === id) ?? null;
   const chapterName = (chapterId: number) =>
     chapters.find((chapter) => chapter.id === chapterId)?.slug ?? `Chapter ${chapterId}`;
-  const accountInitials = (user.name || user.email)
-    .split(/\s+|@/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 
   return (
     <div className="app-shell">
@@ -139,7 +134,7 @@ export function AppShell({
             trigger={
               <button type="button" className="account-trigger" aria-label="アカウントメニュー">
                 <span className="account-avatar">
-                  {user.image ? <img src={user.image} alt="" /> : accountInitials || "?"}
+                  {user.image ? <img src={user.image} alt="" /> : <UserRound aria-hidden="true" />}
                 </span>
                 <span className="account-copy">
                   <span className="account-name">{user.name || user.email}</span>

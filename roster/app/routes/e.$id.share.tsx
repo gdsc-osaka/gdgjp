@@ -10,8 +10,8 @@ import type { Route } from "./+types/e.$id.share";
  * chapter-gated exactly like `/e/:id/design`/`/e/:id/staff`/`/e/:id/roster`
  * — the same `requireUserWithChapter` + `canManageEvent` pattern every other
  * owner route in this app uses. This route does not change `status`; it
- * only surfaces the `/r/:viewToken` URL and what it does/doesn't expose
- * (`ShareCard`). Changing status to `published` happens on `/e/:id/design`
+ * only surfaces the `/r/:viewToken` URL and its publish status (`ShareCard`).
+ * Changing status to `published` happens on `/e/:id/design`
  * or `/e/:id/staff`, both of which already own that control.
  */
 async function requireShareAccess(env: Env, request: Request, id: string | undefined) {

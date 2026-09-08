@@ -111,12 +111,10 @@ test("public roster: not-published message, no PII/experience leakage once publi
   await page.goto(`/dev/login?as=owner&chapter=1:e2e-public-owner&return_to=/e/${eventId}/design`);
   await setStatusOnDesignPage(page, "closed");
 
-  // /e/:id/share while not published: shows the message AND the hidden-field
-  // disclosure, and the view URL is visible even though it isn't live yet.
+  // /e/:id/share while not published: shows the message, and the view URL is
+  // visible even though it isn't live yet.
   await page.goto(`/e/${eventId}/share`);
   await expect(page.getByText("まだ公開されていません")).toBeVisible();
-  await expect(page.getByText("メールアドレス・連絡先")).toBeVisible();
-  await expect(page.getByText("経験レベル（リード / 経験あり / 初参加）")).toBeVisible();
   const viewUrlText = (await page.locator("code").first().textContent())?.trim();
   if (!viewUrlText) throw new Error("view URL not found on /e/:id/share");
   const viewPath = new URL(viewUrlText).pathname;
