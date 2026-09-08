@@ -3,34 +3,13 @@ import { type EventStatus, STATUS_LABELS, canView } from "~/features/events/stat
 
 /**
  * `/e/:id/share`'s single card (docs/roster/09-share-public-views.md
- * "Design" §1): one-click copy of `/r/:viewToken`, the current status, and
- * an explicit "what's public / what isn't" list so an owner can check it
- * before handing the URL out — mirrors `~/features/events/components
- * /ApplyLinkCard`'s copy-button pattern exactly. Deliberately has no status
- * select of its own (unlike `ApplyLinkCard`): `/e/:id/design` and
+ * "Design" §1): one-click copy of `/r/:viewToken` and the current status,
+ * mirroring `~/features/events/components/ApplyLinkCard`'s copy-button pattern.
+ * Deliberately has no status select of its own (unlike `ApplyLinkCard`): `/e/:id/design` and
  * `/e/:id/staff` already own that control, and duplicating it a third place
  * would be a second source of truth for the same `updateEventSettings` call
  * for no benefit — this card only ever reads `status`, never writes it.
- *
- * The two-column list below is copied verbatim from docs/roster/09-share-
- * public-views.md "Design" §1's table — do not add or reword an entry here
- * without updating that table too, they must stay in sync (this is the
- * literal on-screen disclosure of ADR-005's decision).
  */
-const PUBLIC_FIELDS = [
-  "イベント名・日付・時間",
-  "スタッフの表示名",
-  "役割・トラック・時間",
-  "懇親会の参加可否と人数",
-];
-
-const HIDDEN_FIELDS = [
-  "メールアドレス・連絡先",
-  "経験レベル（リード / 経験あり / 初参加）",
-  "備考",
-  "稼働可能時間の申告内容",
-];
-
 export function ShareCard({ viewUrl, status }: { viewUrl: string; status: EventStatus }) {
   const [copied, setCopied] = useState(false);
   const isPublished = canView(status);
@@ -75,35 +54,6 @@ export function ShareCard({ viewUrl, status }: { viewUrl: string; status: EventS
         >
           {copied ? "コピーしました" : "コピー"}
         </button>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <h3 className="font-bold">公開されるもの</h3>
-          <ul className="mt-2 space-y-1 text-sm">
-            {PUBLIC_FIELDS.map((f) => (
-              <li key={f} className="flex items-start gap-2">
-                <span aria-hidden className="font-bold text-gdg-blue">
-                  ○
-                </span>
-                <span>{f}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <h3 className="font-bold">公開されないもの</h3>
-          <ul className="mt-2 space-y-1 text-sm">
-            {HIDDEN_FIELDS.map((f) => (
-              <li key={f} className="flex items-start gap-2">
-                <span aria-hidden className="font-bold text-gdg-red">
-                  ×
-                </span>
-                <span>{f}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
     </section>
   );

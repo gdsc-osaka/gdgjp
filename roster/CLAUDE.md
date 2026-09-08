@@ -20,7 +20,7 @@ retention, a versioned snapshot codec), and `/e/:id/roster`'s new history panel 
 restore controls. Stage 09 (developed in parallel, already merged) shipped the one public-facing
 screen everything else was built for: `app/features/public-roster/`, the `/r/:viewToken` route (4
 sub-views — staff/role/individual/party — no authentication at all), and `/e/:id/share` (the
-owner-side URL-copy + "what's public" card). See `README.md` and `ARCHITECTURE.md` for the current
+owner-side URL-copy card). See `README.md` and `ARCHITECTURE.md` for the current
 code map.
 
 ## Routes (`app/routes.ts`, config mode)
@@ -46,7 +46,7 @@ code map.
   grids, backed by `undo`/`redo`/`restore` action intents that move `events.revision_cursor`
   without ever creating a new revision.
 - `/e/:id/share` — chapter-gated like the routes above. `ShareCard`: the `/r/:viewToken` URL with
-  one-click copy, the current status, and an explicit "what's public / what isn't" list. Reads
+  one-click copy and the current status. Reads
   only — does not change `status` itself (`/e/:id/design`/`/e/:id/staff` already own that control).
 - `/apply/:token` — **public** staff self-registration. `getOptionalUser`, never
   `requireUserWithChapter` — Chapter membership must not be required to register as staff. Event

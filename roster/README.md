@@ -22,7 +22,7 @@ the shift-generation solver as a pure module; Stage 07 wired it all together (`a
 its own PR for status. **This stage** ships the one fully public, unauthenticated screen
 the whole product exists to produce: `/r/:viewToken` (staff grid / role grid / individual timeline
 / party list — no experience level or contact info anywhere, ADR-005) and `/e/:id/share` (the
-owner-side URL-copy + "what's public" card). See `docs/roster/index.md` §7 for the full stage
+owner-side URL-copy card). See `docs/roster/index.md` §7 for the full stage
 graph.
 
 ## Screens
@@ -34,7 +34,7 @@ graph.
 | Design (time slots / tracks / roles) | `/e/:id/design` | Chapter required | Done (Stage 02/03) |
 | Recruiting / staff | `/e/:id/staff` | Chapter required | Done (Stage 04/05): apply URL + status, proxy-add, staff list, owner corrections, supply-demand view |
 | Shift schedule | `/e/:id/roster` | Chapter required | Done (Stage 07): generate, 3 views, manual edit; Stage 08 (parallel) adds history |
-| Share | `/e/:id/share` | Chapter required | Done (Stage 09): view-URL copy, "what's public" card |
+| Share | `/e/:id/share` | Chapter required | Done (Stage 09): view-URL copy and status |
 | Staff registration (public) | `/apply/:applyToken` | Sign-in only, no chapter | Done (Stage 04) |
 | Public shift view | `/r/:viewToken` | None | Done (Stage 09): staff/role/individual/party tabs |
 
