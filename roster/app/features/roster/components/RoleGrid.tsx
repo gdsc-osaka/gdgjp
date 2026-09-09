@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Assignments, Demand } from "~/features/solver/types";
 import { buildGridColumns, buildRoleGridColumn, gridColumnKey } from "../grid";
+import { GridLegend } from "./GridLegend";
 
 export type RoleGridSlot = { id: string; idx: number; start: string; end: string };
 type TrackInfo = { id: string; name: string; color: string; sortOrder: number };
@@ -26,6 +27,10 @@ type RoleInfo = { id: string; name: string; sortOrder: number };
  * derivation and merge-by-membership logic (`app/routes/r.$token.tsx`).
  * Everything else (the merge algorithm, the member list, colors) is
  * identical between the two callers.
+ *
+ * Merged cells are the one place in the grid system that top-aligns
+ * (`.data-grid-cell-top`): a lineup spanning four slots has to start at the
+ * hour it starts at, not float in the middle of its own block.
  */
 export function RoleGrid({
   timeSlots,
@@ -36,6 +41,7 @@ export function RoleGrid({
   nameById,
   onSelectCell,
   readOnly = false,
+  matchedIds,
 }: {
   timeSlots: readonly RoleGridSlot[];
   tracks: readonly TrackInfo[];
@@ -45,6 +51,10 @@ export function RoleGrid({
   nameById: ReadonlyMap<string, string>;
   onSelectCell?: (trackId: string, roleId: string, slotIds: string[]) => void;
   readOnly?: boolean;
+  /** Application ids matching the name search (`GridSearch`) — every
+   * occurrence of the name in a cell's lineup is marked, since the whole
+   * point of this view is "where is this person, and when". */
+  matchedIds?: ReadonlySet<string>;
 }) {
   const columns = useMemo(() => buildGridColumns(demands, tracks, roles), [demands, tracks, roles]);
   const trackById = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks]);
@@ -63,7 +73,7 @@ export function RoleGrid({
 
   if (columns.length === 0) {
     return (
-      <p className="text-sm text-neutral-600">
+      <p className="text-sm text-muted-foreground">
         {readOnly ? "誰も割り当てられていません。" : "需要が設定されていません。"}
       </p>
     );
@@ -71,45 +81,31 @@ export function RoleGrid({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground" aria-label="トラック凡例">
-        {tracks.map((track) => (
-          <span key={track.id} className="inline-flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className="size-2.5 rounded-sm border border-border"
-              style={{ backgroundColor: `${track.color}40` }}
-            />
-            {track.name}
-          </span>
-        ))}
-      </div>
+      <GridLegend tracks={tracks} />
       <div className="data-grid-wrap">
-        <table className="w-full border-collapse text-sm">
+        <table className="data-grid">
           <thead>
             <tr>
-              <th className="sticky left-0 border-b-2 border-black bg-neutral-50 p-2 text-left">
-                時間枠
+              <th scope="col" className="data-grid-rowhead">
+                時間
               </th>
-              {columns.map((col) => {
-                const track = trackById.get(col.trackId);
-                return (
-                  <th
-                    key={gridColumnKey(col.trackId, col.roleId)}
-                    className="border-b-2 border-black bg-neutral-50 p-2 text-left font-medium"
-                  >
-                    <div>{roleById.get(col.roleId)?.name ?? col.roleId}</div>
-                    <div className="text-xs font-normal text-neutral-500">
-                      {track?.name ?? col.trackId}
-                    </div>
-                  </th>
-                );
-              })}
+              {columns.map((col) => (
+                <th
+                  key={gridColumnKey(col.trackId, col.roleId)}
+                  scope="col"
+                  className="data-grid-colhead"
+                >
+                  {roleById.get(col.roleId)?.name ?? col.roleId}
+                  <span className="sub">{trackById.get(col.trackId)?.name ?? col.trackId}</span>
+                </th>
+              ))}
+              <th className="data-grid-filler" />
             </tr>
           </thead>
           <tbody>
             {timeSlots.map((slot, rowIdx) => (
-              <tr key={slot.id} className="border-b border-neutral-200 last:border-0">
-                <th scope="row" className="sticky left-0 bg-white p-2 text-left font-medium">
+              <tr key={slot.id}>
+                <th scope="row" className="data-grid-rowhead">
                   {slot.start}–{slot.end}
                 </th>
                 {columns.map((col) => {
@@ -121,52 +117,65 @@ export function RoleGrid({
                     cell.span > 1
                       ? `${slot.start}–${timeSlots[rowIdx + cell.span - 1].end}`
                       : `${slot.start}–${slot.end}`;
-                  const ariaLabel = `${label} / ${trackById.get(col.trackId)?.name ?? col.trackId} / ${
+                  const track = trackById.get(col.trackId);
+                  const ariaLabel = `${label} / ${track?.name ?? col.trackId} / ${
                     roleById.get(col.roleId)?.name ?? col.roleId
                   }`;
-                  const trackColor = trackById.get(col.trackId)?.color;
-                  const cellBody = (
+                  const empty = cell.memberIds.length === 0;
+                  const className = `data-grid-cell data-grid-cell-top${
+                    empty ? " data-grid-cell-empty" : ""
+                  }`;
+                  const style =
+                    track && !empty ? { backgroundColor: `${track.color}26` } : undefined;
+                  // "需要なし" already says the cell is empty, so the "空き"
+                  // placeholder would just repeat it — only one of the two
+                  // ever renders.
+                  const body = (
                     <>
-                      {!readOnly ? (
-                        <span className="text-xs font-bold text-neutral-500">
-                          {cell.demand
-                            ? `${cell.memberIds.length}/${cell.demand.ideal}`
-                            : "需要なし"}
+                      {!readOnly && cell.demand ? (
+                        <span className="note">
+                          {cell.memberIds.length}/{cell.demand.ideal}
                         </span>
                       ) : null}
-                      <ul className="space-y-0.5">
-                        {cell.memberIds.length === 0 ? (
-                          <li className="text-neutral-400">空き</li>
-                        ) : (
-                          cell.memberIds.map((id) => <li key={id}>{nameById.get(id) ?? id}</li>)
-                        )}
-                      </ul>
+                      {empty ? (
+                        <span>{!readOnly && !cell.demand ? "需要なし" : "空き"}</span>
+                      ) : (
+                        cell.memberIds.map((id) => {
+                          const hit = matchedIds?.has(id) ?? false;
+                          return (
+                            <span
+                              key={id}
+                              className={hit ? "grid-match" : undefined}
+                              data-search-match={hit ? "true" : undefined}
+                            >
+                              {nameById.get(id) ?? id}
+                            </span>
+                          );
+                        })
+                      )}
                     </>
                   );
                   return (
-                    <td key={colKey} rowSpan={cell.span} className="p-1 align-top">
+                    <td key={colKey} rowSpan={cell.span} className="align-top">
                       {readOnly ? (
-                        <div
-                          aria-label={ariaLabel}
-                          className="flex h-full w-full min-h-12 flex-col items-start gap-1 rounded-lg border-2 border-black bg-white p-2 text-left"
-                          style={trackColor ? { backgroundColor: `${trackColor}18` } : undefined}
-                        >
-                          {cellBody}
+                        <div aria-label={ariaLabel} className={className} style={style}>
+                          {body}
                         </div>
                       ) : (
                         <button
                           type="button"
                           onClick={() => onSelectCell?.(col.trackId, col.roleId, rangeSlotIds)}
                           aria-label={ariaLabel}
-                          className="flex h-full w-full min-h-12 flex-col items-start gap-1 rounded-lg border-2 border-black bg-white p-2 text-left transition hover:bg-neutral-50"
-                          style={trackColor ? { backgroundColor: `${trackColor}18` } : undefined}
+                          className={className}
+                          style={style}
                         >
-                          {cellBody}
+                          {body}
                         </button>
                       )}
                     </td>
                   );
                 })}
+                <td className="data-grid-filler" />
               </tr>
             ))}
           </tbody>

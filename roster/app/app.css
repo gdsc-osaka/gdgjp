@@ -581,36 +581,382 @@ dialog textarea {
   max-height: 100dvh;
 }
 
+/* ======================================= セグメンテッドコントロール (ビュー切替)
+ *
+ * 入れ子の角丸は「外の半径 − padding = 内の半径」で釣り合う。両方を pill
+ * (999px) にすればこの関係が自動的に成立する。
+ *
+ * これを component class にしているのは見た目の統一のためだけではない。
+ * 以前は外枠 `div.rounded-full` + 中身 `button.rounded-full` だったが、
+ * このファイル冒頭の互換シム `main button.rounded-full { border-radius: 7px }`
+ * が button にだけ効き、外枠は pill・中身は 7px という食い違いが生まれる。
+ * 結果、両端のボタンを選ぶと角が外枠のカーブからはみ出して青が縁に重なる。
+ * ボタン側に `rounded-full` を付けない (= シムに掴まれない) ことが要点なので、
+ * 呼び出し側で Tailwind の角丸クラスを足し直さないこと。
+ */
+.segmented {
+  display: inline-flex;
+  width: fit-content;
+  flex-wrap: wrap;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  padding: 4px;
+}
+
+.segmented button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 6px 16px;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.segmented button:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--color-gdg-blue);
+  color: #fff;
+}
+
+.segmented button[aria-pressed="true"]:hover {
+  background: var(--color-gdg-blue-strong);
+}
+
+/* ==================================== 2 次元表 (縦 = 時間 × 横 = 列) の格子
+ *
+ * roster の主要画面はすべて同じ形をしている — 縦軸が time_slot、横軸が
+ * スタッフ / (トラック × 役割) / フェーズ。StaffGrid・RoleGrid・
+ * DemandCoverageGrid・PublicStaffGrid・DemandMatrix はこの 1 セットの
+ * クラスを共有し、各コンポーネントは「何を出すか」だけを持つ。
+ * 元になっているのは local_data/standalone_demo.html の `.grid` / `.cell`。
+ */
+
 .data-grid-wrap {
   max-height: 74vh;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
 }
 
-.data-grid-wrap table {
+/* width:max-content + min-width:100% — `width:100%` にしないこと。
+ * 幅 100% の表を auto layout に載せると、余った幅は「コンテンツ圧の最も
+ * 低い列」へ回される。列が数本しかないとき時間列が表の半分を占めていたのは
+ * これが原因。max-content なら各列は自分の中身の幅に収まり、余りは末尾の
+ * `.data-grid-filler` が引き受ける。 */
+.data-grid {
+  width: max-content;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
-.data-grid-wrap thead th {
+/* padding は th/td ではなく必ずセルの中身側に置く。td に padding を入れると
+ * 罫線と塗りの間に隙間ができ、「1 シフト = 1 つの塊」として縦に読めなくなる。 */
+.data-grid th,
+.data-grid td {
+  padding: 0;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  text-align: left;
+}
+
+/* height:1px は誤植ではなく、セルの `height: 100%` を解決させるための定石。
+ * 高さが auto のままだと百分率の基準が無く、`height: 100%` は auto として
+ * 扱われる — 行の中に 2 行分のセルが 1 つでもあると、他のセルは min-height
+ * (40px) で止まり、行の下端に塗り残しの帯ができる。td は中身に合わせて伸びる
+ * ので、1px が実際の高さになることはない。 */
+.data-grid td {
+  height: 1px;
+}
+
+.data-grid tr > *:last-child {
+  border-right: 0;
+}
+
+.data-grid tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+/* --- 列ヘッダ (横スクロールしても上に残る) --- */
+/* max-width は飾りではなく列幅の制御。表が width:max-content なので、上限が
+ * ないと折り返さない見出し 1 行がそのまま列幅になる。 */
+.data-grid-colhead {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 3;
+  min-width: 7.25rem;
+  max-width: 13rem;
+  padding: 0.5rem 0.625rem;
   background: var(--muted);
+  font-weight: 600;
+  vertical-align: bottom;
 }
 
-.data-grid-wrap tr > :first-child {
+.data-grid-colhead .sub {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted-foreground);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+/* --- 2 段ヘッダ (需要マトリクスのトラック見出し + 役割見出し) ---
+ * sticky には「1 つ前の sticky 行の下に貼る」という指定がないので、
+ * グループ行の高さを固定し、2 段目をその分だけ下げる。この 2 つの値
+ * (height と top) は必ず同じ値に保つこと。 */
+.data-grid-colhead-group {
+  height: 1.75rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.data-grid-colhead-sub {
+  top: 1.75rem;
+}
+
+/* --- 行ヘッダ = 時間列 (縦スクロールしても左に残る) ---
+ * width:1% は auto layout に対する「この列は最小幅でよい」の指示。
+ * min-width:100% で表が伸びたときの余りをこの列に配らせないためにある。 */
+.data-grid-rowhead {
   position: sticky;
   left: 0;
-  z-index: 5;
+  z-index: 2;
+  width: 1%;
+  min-width: 6.25rem;
+  padding: 0.5rem 0.625rem;
   background: var(--card);
+  color: var(--muted-foreground);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.data-grid-wrap thead tr > :first-child {
-  z-index: 15;
+/* 左上の角セルは縦横どちらのスクロールでも残る — top と left の両方を留めた
+ * うえで、行ヘッダ・列ヘッダのどちらよりも上に重ねる。 */
+.data-grid thead .data-grid-rowhead {
+  top: 0;
+  z-index: 4;
   background: var(--muted);
+  color: var(--foreground);
+}
+
+.data-grid-rowhead .sub {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.66rem;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+/* --- 余白を吸収する末尾の列 ---
+ * これがないと min-width:100% の余りが実データ列に配られ、スタッフが 2 人の
+ * ときに 1 列 600px という表ができる。ヘッダの帯は端まで伸ばしたいので、
+ * 列を削るのではなく空の列に余りを押し付ける。 */
+.data-grid-filler {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border-right: 0;
+}
+
+/* --- セル本体 — td を余さず埋める ---
+ * height:100% は必須。行の中で背が高いセルが 1 つでもあると、埋めていない
+ * セルの塗りが行の高さに足りず、格子に穴が空いて見える。 */
+.data-grid-cell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 2.5rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  border: 0;
+  padding: 0.375rem 0.625rem;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.data-grid-cell {
+  cursor: pointer;
+}
+
+/* hover / focus は outline を内側へ入れる。背景はトラック色を inline style で
+ * 当てているので背景色では上書きできず、外向き outline だと隣のセルに被る。 */
+button.data-grid-cell:hover,
+.data-grid-cell:focus-visible {
+  outline: 2px solid var(--color-gdg-blue);
+  outline-offset: -2px;
+}
+
+.data-grid-cell .role {
+  font-weight: 650;
+}
+
+.data-grid-cell .track,
+.data-grid-cell .note {
+  color: color-mix(in srgb, currentcolor 62%, transparent);
+  font-size: 0.68rem;
+}
+
+/* 中身が縦に伸びるセル (RoleGrid の結合セルの顔ぶれ一覧) だけ上寄せ。 */
+.data-grid-cell-top {
+  justify-content: flex-start;
+}
+
+/* 数値グリッド (充足状況 / 需要マトリクス) は中央寄せ。ヘッダとセルの両方に
+ * 効かせるのが要点 — 片方だけ動かすと縦のラインがずれる。 */
+.data-grid-numeric .data-grid-colhead,
+.data-grid-numeric .data-grid-cell {
+  align-items: center;
+  text-align: center;
+}
+
+/* --- 状態 --- 塗りを潰さないよう inset box-shadow で重ねる。 */
+.data-grid-cell-empty {
+  color: color-mix(in srgb, var(--muted-foreground) 55%, transparent);
+}
+
+/* 稼働不可 (×) の時間枠。空欄と「入れない」を見分けられるようにする。 */
+.data-grid-cell-unavail {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    var(--muted) 5px,
+    var(--muted) 10px
+  );
+}
+
+/* △ (可能なら) の枠を使った割当。 */
+.data-grid-cell-soft {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-gdg-yellow) 72%, transparent);
+}
+
+/* ハード制約違反。 */
+.data-grid-cell-violate {
+  box-shadow: inset 0 0 0 2px var(--color-gdg-red);
+}
+
+/* --- 充足状況ビュー / 需要マトリクスの塗り ---
+ * Tailwind の `bg-*` ユーティリティはここでは使えない。このファイルの
+ * コンポーネントクラスはレイヤ無しで書かれており、レイヤ無しのCSSは
+ * Tailwind の utilities レイヤより強い。つまり `.data-grid-cell` の
+ * `background: none` が `bg-gdg-green/25` を無条件に打ち消す。塗りも
+ * ここに置くこと。 */
+.data-grid-cell-ok {
+  background: color-mix(in srgb, var(--color-gdg-green) 20%, var(--card));
+}
+
+.data-grid-cell-under {
+  background: color-mix(in srgb, var(--color-gdg-blue) 13%, var(--card));
+}
+
+.data-grid-cell-lead-short {
+  background: color-mix(in srgb, var(--color-gdg-yellow) 34%, var(--card));
+}
+
+.data-grid-cell-warn {
+  background: color-mix(in srgb, var(--color-gdg-red) 12%, var(--card));
+}
+
+.data-grid-cell-short {
+  background: color-mix(in srgb, var(--color-gdg-red) 22%, var(--card));
+  color: var(--color-gdg-red);
+}
+
+.data-grid-cell-set {
+  background: color-mix(in srgb, var(--color-gdg-blue) 11%, var(--card));
+}
+
+/* --- 名前検索のハイライト ---
+ * find-in-page と同じ黄色の下地。トラック色と競合させないため、セルの塗りは
+ * 触らず「名前そのもの」だけを塗る。状態表示 (soft / violate) が inset
+ * box-shadow を使い切っているので、こちらは background で住み分ける。 */
+.grid-match {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-gdg-yellow) 62%, var(--card));
+  padding: 0 3px;
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+/* 一致したスタッフ列のヘッダ。列全体を塗ると縦のトラック色の帯が読めなく
+ * なるので、名前のある見出しだけを立てて、そこへスクロールさせる。 */
+.data-grid-colhead-match {
+  background: color-mix(in srgb, var(--color-gdg-yellow) 34%, var(--card));
+  box-shadow: inset 0 -3px 0 var(--color-gdg-yellow);
+}
+
+/* --- 検索ボックス --- */
+.grid-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.grid-search input {
+  width: min(18rem, 100%);
+  border: 1px solid var(--input);
+  border-radius: 999px;
+  background: var(--card);
+  padding: 6px 14px;
+  font-size: 0.8rem;
+}
+
+.grid-search input:focus-visible {
+  outline: 2px solid var(--color-gdg-blue);
+  outline-offset: -1px;
+}
+
+.grid-search-status {
+  color: var(--muted-foreground);
+  font-size: 0.74rem;
+}
+
+.grid-search-status[data-empty="true"] {
+  color: var(--color-gdg-red);
+}
+
+/* --- 凡例 --- */
+.data-grid-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+}
+
+.data-grid-legend > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.data-grid-legend .sw {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 3px;
 }
 
 @keyframes enter {

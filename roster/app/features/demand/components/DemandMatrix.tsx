@@ -99,27 +99,29 @@ export function DemandMatrix({
         </p>
       ) : (
         <div className="data-grid-wrap">
-          <table className="w-full border-collapse text-sm">
+          <table className="data-grid data-grid-numeric">
             <thead>
               <TrackHeaderRow columns={columns} trackName={trackName} />
               <tr>
-                <th className="border-b-2 border-black bg-neutral-50 p-2 text-left">
+                <th scope="col" className="data-grid-rowhead data-grid-colhead-sub">
                   {mode === "phase" ? "フェーズ" : "時間枠"}
                 </th>
                 {columns.map((col) => (
                   <th
                     key={columnKey(col.trackId, col.roleId)}
-                    className="border-b-2 border-black bg-neutral-50 p-2 text-left font-medium"
+                    scope="col"
+                    className="data-grid-colhead data-grid-colhead-sub"
                   >
                     {roleName.get(col.roleId) ?? col.roleId}
                   </th>
                 ))}
+                <th className="data-grid-filler" />
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.key} className="border-b border-neutral-200 last:border-0">
-                  <th scope="row" className="p-2 text-left font-medium">
+                <tr key={row.key}>
+                  <th scope="row" className="data-grid-rowhead">
                     {row.label}
                   </th>
                   {columns.map((col) => {
@@ -129,7 +131,7 @@ export function DemandMatrix({
                       roleName.get(col.roleId) ?? col.roleId
                     }`;
                     return (
-                      <td key={key} className="p-1">
+                      <td key={key}>
                         <DemandCell
                           cell={cell}
                           label={label}
@@ -145,6 +147,7 @@ export function DemandMatrix({
                       </td>
                     );
                   })}
+                  <td className="data-grid-filler" />
                 </tr>
               ))}
             </tbody>
@@ -176,17 +179,9 @@ function ModeToggle({
   onChange,
 }: { mode: MatrixMode; onChange: (mode: MatrixMode) => void }) {
   return (
-    <div className="inline-flex rounded-full border-2 border-black bg-white p-1">
+    <div className="segmented">
       {(["phase", "slot"] as const).map((m) => (
-        <button
-          key={m}
-          type="button"
-          onClick={() => onChange(m)}
-          aria-pressed={mode === m}
-          className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
-            mode === m ? "bg-gdg-blue text-white" : "text-neutral-600 hover:bg-neutral-100"
-          }`}
-        >
+        <button key={m} type="button" onClick={() => onChange(m)} aria-pressed={mode === m}>
           {m === "phase" ? "フェーズ単位" : "時間枠単位"}
         </button>
       ))}
@@ -256,16 +251,18 @@ function TrackHeaderRow({
   }
   return (
     <tr>
-      <th className="border-b border-neutral-200 p-2" />
+      <th className="data-grid-rowhead data-grid-colhead-group" />
       {groups.map((g) => (
         <th
           key={g.trackId}
           colSpan={g.span}
-          className="border-b border-neutral-200 p-2 text-left text-xs font-bold tracking-wide text-neutral-500 uppercase"
+          scope="colgroup"
+          className="data-grid-colhead data-grid-colhead-group font-bold tracking-wide text-muted-foreground uppercase"
         >
           {trackName.get(g.trackId) ?? g.trackId}
         </th>
       ))}
+      <th className="data-grid-filler" />
     </tr>
   );
 }

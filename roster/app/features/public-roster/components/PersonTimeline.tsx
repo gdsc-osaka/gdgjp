@@ -28,6 +28,7 @@ export function PersonTimeline({
   trackById,
   roleNameById,
   nameById,
+  matchedIds,
 }: {
   staff: readonly StaffOption[];
   timeSlots: readonly PersonTimelineSlot[];
@@ -35,12 +36,26 @@ export function PersonTimeline({
   trackById: ReadonlyMap<string, TrackInfo>;
   roleNameById: ReadonlyMap<string, string>;
   nameById: ReadonlyMap<string, string>;
+  /** Application ids matching the name search. This tab has no grid to
+   * highlight — it already shows one person at a time — so a search that
+   * narrows to exactly one person selects them instead. Two or more matches
+   * leave the picker alone rather than guessing which one was meant. */
+  matchedIds?: ReadonlySet<string>;
 }) {
   const [selectedId, setSelectedId] = useState("");
   const sortedStaff = useMemo(
     () => [...staff].sort((a, b) => a.name.localeCompare(b.name, "ja")),
     [staff],
   );
+
+  const soleMatch = matchedIds?.size === 1 ? [...matchedIds][0] : undefined;
+  // Render-phase adjustment rather than an effect: this is "derive selection
+  // from props", and an effect would render the previous person once first.
+  const [lastSoleMatch, setLastSoleMatch] = useState<string | undefined>(undefined);
+  if (soleMatch !== lastSoleMatch) {
+    setLastSoleMatch(soleMatch);
+    if (soleMatch && soleMatch !== selectedId) setSelectedId(soleMatch);
+  }
   const items = useMemo(
     () => (selectedId ? buildPersonTimeline(timeSlots, assignments, selectedId) : []),
     [selectedId, timeSlots, assignments],

@@ -15,12 +15,10 @@ import {
 import type { Actor } from "~/features/history/types";
 import { CellDrawer } from "~/features/roster/components/CellDrawer";
 import { DemandCellDrawer } from "~/features/roster/components/DemandCellDrawer";
-import { DemandCoverageGrid } from "~/features/roster/components/DemandCoverageGrid";
 import { GeneratePanel, type GenerateResult } from "~/features/roster/components/GeneratePanel";
 import { MetricsRow } from "~/features/roster/components/MetricsRow";
-import { RoleGrid } from "~/features/roster/components/RoleGrid";
+import { RosterGridViews } from "~/features/roster/components/RosterGridViews";
 import { ShortageReport } from "~/features/roster/components/ShortageReport";
-import { StaffGrid } from "~/features/roster/components/StaffGrid";
 import { buildStaffColumns } from "~/features/roster/grid";
 import {
   readAssignmentsMap,
@@ -28,7 +26,6 @@ import {
   writeManualEdit,
 } from "~/features/roster/roster.server";
 import { buildSolverInput } from "~/features/roster/solver-input.server";
-import { ROSTER_VIEWS, ROSTER_VIEW_LABELS, type RosterView } from "~/features/roster/types";
 import { useRosterDrawers } from "~/features/roster/use-roster-drawers";
 import { listTimeSlots } from "~/features/schedule/schedule.server";
 import { listEventRoleIds, listRoles, listTracks } from "~/features/schedule/tracks.server";
@@ -238,8 +235,6 @@ export default function RosterPage({ loaderData, actionData }: Route.ComponentPr
     [applicationNameById],
   );
 
-  const [view, setView] = useState<RosterView>("staff");
-
   const actionIntent = actionData && "intent" in actionData ? actionData.intent : undefined;
   const actionError = actionData && "error" in actionData ? actionData.error : undefined;
   const actionSucceeded =
@@ -316,57 +311,21 @@ export default function RosterPage({ loaderData, actionData }: Route.ComponentPr
             roleNameById={roleNameById}
           />
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex w-fit rounded-full border-2 border-black bg-white p-1">
-              {ROSTER_VIEWS.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setView(v)}
-                  aria-pressed={view === v}
-                  className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
-                    view === v ? "bg-gdg-blue text-white" : "text-neutral-600 hover:bg-neutral-100"
-                  }`}
-                >
-                  {ROSTER_VIEW_LABELS[v]}
-                </button>
-              ))}
-            </div>
-            <UndoRedoButtons canUndo={canUndo(history)} canRedo={canRedo(history)} />
-          </div>
-
-          {view === "staff" ? (
-            <StaffGrid
-              timeSlots={timeSlots}
-              columns={staffColumns}
-              assignments={assignments}
-              trackById={trackInfoById}
-              roleNameById={roleNameById}
-              onCellClick={drawers.openStaffCell}
-            />
-          ) : null}
-          {view === "role" ? (
-            <RoleGrid
-              timeSlots={timeSlots}
-              tracks={tracks}
-              roles={roles}
-              demands={input.demands}
-              assignments={assignments}
-              nameById={applicationNameByIdMap}
-              onSelectCell={drawers.openDemandCell}
-            />
-          ) : null}
-          {view === "coverage" ? (
-            <DemandCoverageGrid
-              timeSlots={timeSlots}
-              tracks={tracks}
-              roles={roles}
-              demands={input.demands}
-              assignments={assignments}
-              report={report}
-              onSelectCell={drawers.openDemandCell}
-            />
-          ) : null}
+          <RosterGridViews
+            timeSlots={timeSlots}
+            tracks={tracks}
+            roles={roles}
+            staffColumns={staffColumns}
+            assignments={assignments}
+            demands={input.demands}
+            report={report}
+            trackInfoById={trackInfoById}
+            roleNameById={roleNameById}
+            applicationNameById={applicationNameById}
+            onStaffCellClick={drawers.openStaffCell}
+            onDemandCellSelect={drawers.openDemandCell}
+            toolbarRight={<UndoRedoButtons canUndo={canUndo(history)} canRedo={canRedo(history)} />}
+          />
         </>
       ) : null}
 

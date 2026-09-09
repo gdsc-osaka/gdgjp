@@ -9,7 +9,15 @@ import type { PublicStaff } from "../types";
  * the same way `RoleGrid` doesn't re-check `canView` either; gating is the
  * route's job, rendering is this component's.
  */
-export function PartyList({ staff }: { staff: readonly PublicStaff[] }) {
+export function PartyList({
+  staff,
+  matchedIds,
+}: {
+  staff: readonly PublicStaff[];
+  /** Application ids matching the name search — the chips light up the same
+   * way names do in the grids, so one query works across every tab. */
+  matchedIds?: ReadonlySet<string>;
+}) {
   const displayOrder: readonly PartyStatus[] = ["yes", "undecided", "no"];
   const groups = new Map<PartyStatus, PublicStaff[]>(PARTY_STATUSES.map((s) => [s, []]));
   for (const member of staff) groups.get(member.party)?.push(member);
@@ -25,14 +33,20 @@ export function PartyList({ staff }: { staff: readonly PublicStaff[] }) {
             </h3>
             {members.length > 0 ? (
               <ul className="mt-2 flex flex-wrap gap-2">
-                {members.map((m) => (
-                  <li
-                    key={m.id}
-                    className="rounded-full border-2 border-black bg-white px-3 py-1 text-sm"
-                  >
-                    {m.name}
-                  </li>
-                ))}
+                {members.map((m) => {
+                  const matched = matchedIds?.has(m.id) ?? false;
+                  return (
+                    <li
+                      key={m.id}
+                      className={`rounded-full border-2 border-black px-3 py-1 text-sm ${
+                        matched ? "grid-match" : "bg-white"
+                      }`}
+                      data-search-match={matched ? "true" : undefined}
+                    >
+                      {m.name}
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="mt-2 text-sm text-neutral-500">該当者なし</p>

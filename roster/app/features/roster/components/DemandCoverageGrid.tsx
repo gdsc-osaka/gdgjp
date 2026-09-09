@@ -22,6 +22,15 @@ type RoleInfo = { id: string; name: string; sortOrder: number };
  * `evaluate()`'s own `Report` (via `grid.ts#indexReportByCell`) — never
  * re-judged here. Unlike `RoleGrid`, cells are never merged: coverage is a
  * per-slot fact, not a "who is here" lineup that can repeat unchanged.
+ *
+ * `.data-grid-numeric` centers the header AND the cell together — the two
+ * have to move as a pair or the numbers stop lining up under their column.
+ *
+ * The lead line spells out **リード**, matching `CellDrawer` (the drawer this
+ * grid opens) and index.md §3's own label for the `lead` level. It used to
+ * read `LOK` / `L不足` — an unexplained initial that formed a nonsense word.
+ * Note this measures the `lead` level ONLY, not `exp`, which is why it is not
+ * called 経験者 here even though `ShortageReport`/`MetricsRow` still do.
  */
 export function DemandCoverageGrid({
   timeSlots,
@@ -47,95 +56,123 @@ export function DemandCoverageGrid({
   const reportByCell = useMemo(() => indexReportByCell(report), [report]);
 
   if (columns.length === 0) {
-    return <p className="text-sm text-neutral-600">需要が設定されていません。</p>;
+    return <p className="text-sm text-muted-foreground">需要が設定されていません。</p>;
   }
 
   return (
-    <div className="data-grid-wrap">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className="sticky left-0 border-b-2 border-black bg-neutral-50 p-2 text-left">
-              時間枠
-            </th>
-            {columns.map((col) => (
-              <th
-                key={gridColumnKey(col.trackId, col.roleId)}
-                className="border-b-2 border-black bg-neutral-50 p-2 text-left font-medium"
-              >
-                <div>{roleById.get(col.roleId)?.name ?? col.roleId}</div>
-                <div className="text-xs font-normal text-neutral-500">
-                  {trackById.get(col.trackId)?.name ?? col.trackId}
-                </div>
+    <div className="space-y-2">
+      <div className="data-grid-legend" aria-label="凡例">
+        {COVERAGE_LEGEND.map(({ label, className }) => (
+          <span key={label}>
+            <span aria-hidden="true" className={`sw ${className}`} />
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="data-grid-wrap">
+        <table className="data-grid data-grid-numeric">
+          <thead>
+            <tr>
+              <th scope="col" className="data-grid-rowhead">
+                時間
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {timeSlots.map((slot) => (
-            <tr key={slot.id} className="border-b border-neutral-200 last:border-0">
-              <th scope="row" className="sticky left-0 bg-white p-2 text-left font-medium">
-                {slot.start}–{slot.end}
-              </th>
-              {columns.map((col) => {
-                const key = demandKey(slot.id, col.trackId, col.roleId);
-                const demand = demands.get(key);
-                const current = membersByCell.get(key)?.length ?? 0;
-                const cellReport = reportByCell.get(key);
-                return (
-                  <td key={gridColumnKey(col.trackId, col.roleId)} className="p-1">
-                    <button
-                      type="button"
-                      onClick={() => onSelectCell(col.trackId, col.roleId, [slot.id])}
-                      aria-label={coverageLabel(demand, current, cellReport)}
-                      className={`flex h-full min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-lg border-2 p-1 text-center transition hover:brightness-95 ${coverageClass(
-                        demand,
-                        current,
-                        cellReport,
-                      )}`}
-                    >
-                      {demand ? (
-                        <>
-                          <span className="font-bold">
-                            {current}/{demand.ideal}
-                          </span>
-                          {demand.leadMin > 0 ? (
-                            <span className="text-[10px]">
-                              L{cellReport?.leadShort ? "不足" : "OK"}
-                            </span>
-                          ) : null}
-                          {cellReport && cellReport.violations.length > 0 ? (
-                            <span className="text-[10px] font-bold text-gdg-red">
-                              {VIOLATION_LABELS[cellReport.violations[0]]}
-                            </span>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="text-neutral-300">–</span>
-                      )}
-                    </button>
-                  </td>
-                );
-              })}
+              {columns.map((col) => (
+                <th
+                  key={gridColumnKey(col.trackId, col.roleId)}
+                  scope="col"
+                  className="data-grid-colhead"
+                >
+                  {roleById.get(col.roleId)?.name ?? col.roleId}
+                  <span className="sub">{trackById.get(col.trackId)?.name ?? col.trackId}</span>
+                </th>
+              ))}
+              <th className="data-grid-filler" />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {timeSlots.map((slot) => (
+              <tr key={slot.id}>
+                <th scope="row" className="data-grid-rowhead">
+                  {slot.start}–{slot.end}
+                </th>
+                {columns.map((col) => {
+                  const key = demandKey(slot.id, col.trackId, col.roleId);
+                  const demand = demands.get(key);
+                  const current = membersByCell.get(key)?.length ?? 0;
+                  const cellReport = reportByCell.get(key);
+                  return (
+                    <td key={gridColumnKey(col.trackId, col.roleId)}>
+                      <button
+                        type="button"
+                        onClick={() => onSelectCell(col.trackId, col.roleId, [slot.id])}
+                        aria-label={coverageLabel(demand, current, cellReport)}
+                        className={`data-grid-cell ${coverageClass(demand, current, cellReport)}`}
+                      >
+                        {demand ? (
+                          <>
+                            <span className="font-bold tabular-nums">
+                              {current}/{demand.ideal}
+                            </span>
+                            {demand.leadMin > 0 ? (
+                              <span className="note">
+                                {cellReport?.leadShort
+                                  ? `リード${cellReport.leadShort}名不足`
+                                  : `リード${demand.leadMin}名充足`}
+                              </span>
+                            ) : null}
+                            {cellReport && cellReport.violations.length > 0 ? (
+                              <span className="text-[0.66rem] font-bold text-gdg-red">
+                                {VIOLATION_LABELS[cellReport.violations[0]]}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span aria-hidden="true">–</span>
+                        )}
+                      </button>
+                    </td>
+                  );
+                })}
+                <td className="data-grid-filler" />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
+/** Mirrors `coverageClass` below — keep the two in step, they are the only
+ * two places that name a coverage state's colour. */
+const COVERAGE_LEGEND = [
+  { label: "理想を充足", className: "data-grid-cell-ok" },
+  { label: "理想に未達", className: "data-grid-cell-under" },
+  { label: "リードが不足", className: "data-grid-cell-lead-short" },
+  { label: "頭数が不足", className: "data-grid-cell-short" },
+] as const;
+
+/**
+ * Coverage colour comes from `evaluate()`'s `Report`, never from a fresh
+ * comparison here (docs/roster/07-roster-manual-edit.md "制約": "evaluate を
+ * 再実装しない").
+ *
+ * These are `.data-grid-cell-*` classes, NOT Tailwind `bg-*` utilities:
+ * `app.css`'s unlayered `.data-grid-cell { background: none }` outranks
+ * anything in Tailwind's utilities layer, so a `bg-gdg-green/25` here would
+ * silently render transparent. See that file's note next to the fills.
+ */
 function coverageClass(
   demand: Demand | undefined,
   current: number,
   cellReport?: CellReport,
 ): string {
-  if (!demand) return "border-transparent";
-  if ((cellReport?.headcountShort ?? 0) > 0) return "border-gdg-red bg-gdg-red/10";
-  if ((cellReport?.violations.length ?? 0) > 0) return "border-gdg-red bg-gdg-red/5";
-  if ((cellReport?.leadShort ?? 0) > 0) return "border-gdg-yellow bg-gdg-yellow/20";
-  if (current >= demand.ideal) return "border-black bg-white";
-  return "border-neutral-300 bg-white";
+  if (!demand) return "data-grid-cell-empty";
+  if ((cellReport?.headcountShort ?? 0) > 0) return "data-grid-cell-short";
+  if ((cellReport?.violations.length ?? 0) > 0) return "data-grid-cell-warn";
+  if ((cellReport?.leadShort ?? 0) > 0) return "data-grid-cell-lead-short";
+  if (current >= demand.ideal) return "data-grid-cell-ok";
+  return "data-grid-cell-under";
 }
 
 function coverageLabel(

@@ -6,7 +6,9 @@ import { PersonTimeline } from "~/features/public-roster/components/PersonTimeli
 import { PublicStaffGrid } from "~/features/public-roster/components/PublicStaffGrid";
 import { buildPublicRosterData } from "~/features/public-roster/public-roster.server";
 import { PUBLIC_VIEWS, PUBLIC_VIEW_LABELS, type PublicView } from "~/features/public-roster/types";
+import { GridSearch } from "~/features/roster/components/GridSearch";
 import { RoleGrid } from "~/features/roster/components/RoleGrid";
+import { matchStaffIds } from "~/features/roster/search";
 import { type Assignments, type Demand, assignmentKey, demandKey } from "~/features/solver/types";
 import { getDb } from "~/lib/db.server";
 import type { Route } from "./+types/r.$token";
@@ -98,6 +100,9 @@ export default function PublicRosterPage({ loaderData }: Route.ComponentProps) {
   }, [slots, rawAssignments]);
 
   const [view, setView] = useState<PublicView>("staff");
+  const [search, setSearch] = useState("");
+  // Same matcher the owner grid uses, over the only names this page has.
+  const matchedIds = useMemo(() => matchStaffIds(search, staff), [search, staff]);
 
   if (!loaderData.published) {
     return (
@@ -135,20 +140,23 @@ export default function PublicRosterPage({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
 
-      <div className="inline-flex w-fit flex-wrap rounded-full border-2 border-black bg-white p-1">
-        {visibleViews.map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setView(v)}
-            aria-pressed={view === v}
-            className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
-              view === v ? "bg-gdg-blue text-white" : "text-neutral-600 hover:bg-neutral-100"
-            }`}
-          >
-            {PUBLIC_VIEW_LABELS[v]}
-          </button>
-        ))}
+      <div className="space-y-3">
+        <div className="segmented">
+          {visibleViews.map((v) => (
+            <button key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v}>
+              {PUBLIC_VIEW_LABELS[v]}
+            </button>
+          ))}
+        </div>
+        {/* Shown on every tab — all four render names, and finding your own
+         * shift on a phone is what this page is for. `key={view}` re-runs the
+         * scroll against the newly mounted tab; see GridSearch's doc comment. */}
+        <GridSearch
+          key={view}
+          query={search}
+          onQueryChange={setSearch}
+          matchCount={matchedIds.size}
+        />
       </div>
 
       {view === "staff" ? (
@@ -158,6 +166,7 @@ export default function PublicRosterPage({ loaderData }: Route.ComponentProps) {
           assignments={assignments}
           trackById={trackInfoById}
           roleNameById={roleNameById}
+          matchedIds={matchedIds}
         />
       ) : null}
       {view === "role" ? (
@@ -169,6 +178,7 @@ export default function PublicRosterPage({ loaderData }: Route.ComponentProps) {
           assignments={assignments}
           nameById={nameById}
           readOnly
+          matchedIds={matchedIds}
         />
       ) : null}
       {view === "person" ? (
@@ -179,9 +189,12 @@ export default function PublicRosterPage({ loaderData }: Route.ComponentProps) {
           trackById={trackInfoById}
           roleNameById={roleNameById}
           nameById={nameById}
+          matchedIds={matchedIds}
         />
       ) : null}
-      {view === "party" && event.hasParty ? <PartyList staff={staff} /> : null}
+      {view === "party" && event.hasParty ? (
+        <PartyList staff={staff} matchedIds={matchedIds} />
+      ) : null}
     </PublicShell>
   );
 }
