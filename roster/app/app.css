@@ -735,20 +735,18 @@ dialog textarea {
   white-space: nowrap;
 }
 
-/* 2 段目は「行ヘッダ列」にも当たる。左上の「フェーズ/時間枠」セルは
- * `.data-grid-rowhead.data-grid-colhead-sub` の両方を持ち、下の
- * `.data-grid thead .data-grid-rowhead` が (0,2,1) で `top: 0` を当てて
- * くるため、素の `.data-grid-colhead-sub` (0,1,0) では負けて 1 段目の位置に
- * 貼り付き、縦スクロール時に役割見出しから 1 行分ずれて浮く。
+/* 2 段目のセルは 2 種類あり、それぞれ別の `top: 0` と競合する:
+ *   - 左上の「フェーズ/時間枠」セル … `.data-grid-rowhead` も持つので
+ *     `.data-grid thead .data-grid-rowhead` (0,2,1) と競合
+ *   - 役割見出しセル … `.data-grid-colhead` (0,1,0) と競合
+ * どちらも負けると 1 段目の位置に貼り付き、縦スクロール時に 2 段目が
+ * 1 行分ずれて浮く。
  *
- * 両クラスを連結した (0,3,1) で明確に上回らせる。同値 (0,2,1) にして
- * ソース順に頼るのは不可 — 打ち消したい規則の方が後にあるうえ、
- * 順序依存はこのブロックを動かした瞬間に黙って壊れる。 */
-.data-grid-colhead-sub {
-  top: 1.75rem;
-}
-
-.data-grid thead .data-grid-rowhead.data-grid-colhead-sub {
+ * **両方とも (0,3,1) にして詳細度だけで勝たせる。** 同点にしてソース順に
+ * 頼らないこと — 順序依存はこのブロックを動かした瞬間に黙って壊れるうえ、
+ * 実際このファイルで一度その形で直したつもりになって外している。 */
+.data-grid thead .data-grid-rowhead.data-grid-colhead-sub,
+.data-grid thead .data-grid-colhead.data-grid-colhead-sub {
   top: 1.75rem;
 }
 
