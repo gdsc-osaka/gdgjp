@@ -127,18 +127,22 @@ export function RoleGrid({
                   }`;
                   const style =
                     track && !empty ? { backgroundColor: `${track.color}26` } : undefined;
-                  // "需要なし" already says the cell is empty, so the "空き"
-                  // placeholder would just repeat it — only one of the two
-                  // ever renders.
+                  // "需要なし" is a fact about the CELL, so it belongs on the
+                  // count line and has to survive even when people are
+                  // assigned there — a manual edit can place staff into a
+                  // zero-demand slot, and this view is where that shows up.
+                  // Only the redundant "空き" underneath it is suppressed.
                   const body = (
                     <>
-                      {!readOnly && cell.demand ? (
+                      {readOnly ? null : (
                         <span className="note">
-                          {cell.memberIds.length}/{cell.demand.ideal}
+                          {cell.demand
+                            ? `${cell.memberIds.length}/${cell.demand.ideal}`
+                            : "需要なし"}
                         </span>
-                      ) : null}
+                      )}
                       {empty ? (
-                        <span>{!readOnly && !cell.demand ? "需要なし" : "空き"}</span>
+                        <span>{!readOnly && !cell.demand ? null : "空き"}</span>
                       ) : (
                         cell.memberIds.map((id) => {
                           const hit = matchedIds?.has(id) ?? false;
@@ -156,7 +160,12 @@ export function RoleGrid({
                     </>
                   );
                   return (
-                    <td key={colKey} rowSpan={cell.span} className="align-top">
+                    // No `align-top` here: app.css's unlayered
+                    // `.data-grid td { vertical-align: middle }` outranks the
+                    // utilities layer, so it would be dead. `.data-grid-cell-top`
+                    // on the cell itself is what actually top-aligns a merged
+                    // range's lineup.
+                    <td key={colKey} rowSpan={cell.span}>
                       {readOnly ? (
                         <div aria-label={ariaLabel} className={className} style={style}>
                           {body}

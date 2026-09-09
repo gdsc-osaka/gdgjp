@@ -17,6 +17,20 @@ describe("normalizeName", () => {
   it("removes full-width spaces too — a Japanese name is often typed with one", () => {
     expect(normalizeName("佐藤　陽菜")).toBe("佐藤陽菜");
   });
+
+  it("folds katakana to hiragana — which one a person types is a habit, not a distinction", () => {
+    expect(normalizeName("サトウ")).toBe(normalizeName("さとう"));
+    expect(normalizeName("ヴァイオリン")).toBe(normalizeName("ゔぁいおりん"));
+  });
+
+  it("folds width via NFKC, so an IME's full-width latin still matches", () => {
+    expect(normalizeName("Ａｌｉｃｅ")).toBe("alice");
+    expect(normalizeName("ｶﾄｳ")).toBe(normalizeName("かとう"));
+  });
+
+  it("leaves kanji alone", () => {
+    expect(normalizeName("加藤")).toBe("加藤");
+  });
 });
 
 describe("matchStaffIds", () => {
@@ -42,5 +56,11 @@ describe("matchStaffIds", () => {
 
   it("returns an empty set when nothing matches", () => {
     expect(matchStaffIds("田中", STAFF)).toEqual(new Set());
+  });
+
+  it("finds a katakana-registered name typed in hiragana", () => {
+    const staff = [{ id: "k1", name: "サトウ ハルナ" }];
+    expect(matchStaffIds("さとう", staff)).toEqual(new Set(["k1"]));
+    expect(matchStaffIds("ハルナ", staff)).toEqual(new Set(["k1"]));
   });
 });

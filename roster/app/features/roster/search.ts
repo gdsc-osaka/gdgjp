@@ -9,8 +9,23 @@
  * (`佐藤陽菜`) at least as often as the way it was registered.
  */
 
+/**
+ * Folds the three ways the same Japanese name gets typed into one form:
+ *
+ * - **NFKC** collapses width — full-width `Ａｌｉｃｅ` to `alice`, half-width
+ *   `ｶﾄｳ` to `カトウ`. Without it a phone IME's full-width digits and latin
+ *   never match a name registered in half-width.
+ * - **Katakana to hiragana** (a flat +0x60 offset over the katakana block)
+ *   so `サトウ` finds `さとう`. Which of the two a person uses is a habit,
+ *   not a distinction they expect the search to enforce.
+ * - Case, then all whitespace — see the module doc for why inner spaces go.
+ */
 export function normalizeName(value: string): string {
-  return value.toLowerCase().replace(/\s+/gu, "");
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[ァ-ヶ]/gu, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/\s+/gu, "");
 }
 
 /**

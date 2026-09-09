@@ -675,6 +675,13 @@ dialog textarea {
   text-align: left;
 }
 
+/* 列見出しだけ下寄せ — 名前だけの列と、その下に .sub を持つ列を、同じ
+ * ベースラインに揃えるため。上のまとめ書きが (0,1,1) なので、`.data-grid-colhead`
+ * 単体 (0,1,0) に書いても効かない。同じ (0,1,1) で上書きする。 */
+.data-grid th.data-grid-colhead {
+  vertical-align: bottom;
+}
+
 /* height:1px は誤植ではなく、セルの `height: 100%` を解決させるための定石。
  * 高さが auto のままだと百分率の基準が無く、`height: 100%` は auto として
  * 扱われる — 行の中に 2 行分のセルが 1 つでもあると、他のセルは min-height
@@ -704,7 +711,6 @@ dialog textarea {
   padding: 0.5rem 0.625rem;
   background: var(--muted);
   font-weight: 600;
-  vertical-align: bottom;
 }
 
 .data-grid-colhead .sub {
@@ -718,14 +724,24 @@ dialog textarea {
 /* --- 2 段ヘッダ (需要マトリクスのトラック見出し + 役割見出し) ---
  * sticky には「1 つ前の sticky 行の下に貼る」という指定がないので、
  * グループ行の高さを固定し、2 段目をその分だけ下げる。この 2 つの値
- * (height と top) は必ず同じ値に保つこと。 */
+ * (height と top) は必ず同じ値に保つこと。
+ *
+ * nowrap も固定高の一部。トラック名が 2 行に折り返すとグループ行が
+ * 1.75rem を超え、2 段目がその下端に重なる。 */
 .data-grid-colhead-group {
   height: 1.75rem;
   padding-top: 0.25rem;
   padding-bottom: 0.25rem;
+  white-space: nowrap;
 }
 
-.data-grid-colhead-sub {
+/* 2 段目は「行ヘッダ列」にも当たる。`.data-grid thead .data-grid-rowhead`
+ * が (0,2,1) で `top: 0` を設定しているため、素の `.data-grid-colhead-sub`
+ * (0,1,0) では左上の「フェーズ/時間枠」セルだけが 1 段目の位置に貼り付き、
+ * 縦スクロール時に役割見出しから外れて浮く。同じ (0,2,1) をソース順で後に
+ * 置いて打ち消す。 */
+.data-grid-colhead-sub,
+.data-grid thead .data-grid-colhead-sub {
   top: 1.75rem;
 }
 

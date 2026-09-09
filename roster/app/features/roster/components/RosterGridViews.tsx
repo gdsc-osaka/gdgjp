@@ -58,19 +58,24 @@ export function RosterGridViews({
   const [view, setView] = useState<RosterView>("staff");
   const [search, setSearch] = useState("");
 
+  // Display lookup keeps every application, so a name still resolves for
+  // someone the grid wouldn't list on its own.
   const nameById = useMemo(
     () => new Map(Object.entries(applicationNameById)),
     [applicationNameById],
   );
-  // Matched against the same names the grids render from, so "what the box
-  // found" and "what is highlighted" can never disagree.
+  // Matching, though, runs over `staffColumns` — the exact set `StaffGrid`
+  // renders (`buildStaffColumns` drops anyone withdrawn AND unassigned), and
+  // a superset of the assigned people `RoleGrid` names. Matching over every
+  // application instead would report "1名が一致" for a withdrawn, unassigned
+  // person while nothing on screen highlighted or scrolled.
   const matchedIds = useMemo(
     () =>
       matchStaffIds(
         search,
-        [...nameById].map(([id, name]) => ({ id, name })),
+        staffColumns.map((c) => ({ id: c.applicationId, name: c.name })),
       ),
-    [search, nameById],
+    [search, staffColumns],
   );
 
   return (
