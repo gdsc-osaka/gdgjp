@@ -141,22 +141,21 @@ export function RoleGrid({
                             : "需要なし"}
                         </span>
                       )}
-                      {empty ? (
-                        <span>{!readOnly && !cell.demand ? null : "空き"}</span>
-                      ) : (
-                        cell.memberIds.map((id) => {
-                          const hit = matchedIds?.has(id) ?? false;
-                          return (
-                            <span
-                              key={id}
-                              className={hit ? "grid-match" : undefined}
-                              data-search-match={hit ? "true" : undefined}
-                            >
-                              {nameById.get(id) ?? id}
-                            </span>
-                          );
-                        })
-                      )}
+                      {empty && (readOnly || cell.demand) ? <span>空き</span> : null}
+                      {empty
+                        ? null
+                        : cell.memberIds.map((id) => {
+                            const hit = matchedIds?.has(id) ?? false;
+                            return (
+                              <span
+                                key={id}
+                                className={hit ? "grid-match" : undefined}
+                                data-search-match={hit ? "true" : undefined}
+                              >
+                                {nameById.get(id) ?? id}
+                              </span>
+                            );
+                          })}
                     </>
                   );
                   return (
