@@ -25,6 +25,15 @@ import {
  * `solve()` is the only caller that treats a non-empty result as "do not
  * place this candidate" — that policy lives in solve.ts, not here.
  *
+ * **Each message states the constraint, never who violated it.** This module
+ * is pure (ADR-004), so `SolverApplication` carries no display name — the
+ * messages used to interpolate `app.id` and surfaced as literal
+ * "app-2 はこの役割を担当できません" in the manual-edit drawers. Both callers
+ * already render the person's name immediately above the warning list
+ * (`CellDrawer`'s title is the applicant; `DemandCellDrawer` labels every
+ * candidate row), so a subject here is redundant on top of unreadable. Keep
+ * new messages subject-free for the same reason.
+ *
  * Skill-mix conditions (`leadMin` / `newMax` / no-solo-newcomer) are
  * intentionally NOT part of this function. index.md §5.1 item 5 groups them
  * with the other hard constraints, but 06-solver.md Design §2 carves them out
@@ -45,19 +54,19 @@ export function hardViolations(
   const warnings: string[] = [];
 
   if (assignments.has(assignmentKey(app.id, slot.id))) {
-    warnings.push(`${app.id} は既にこの時間枠に割り当てられています（1人2箇所は不可）`);
+    warnings.push("既にこの時間枠に割り当てられています（1人2箇所は不可）");
   }
 
   if (!app.skills[roleId]) {
-    warnings.push(`${app.id} はこの役割を担当できません（スキル登録がありません）`);
+    warnings.push("この役割を担当できません（スキル登録がありません）");
   }
 
   if (getAvailability(app, slot.id) === "x") {
-    warnings.push(`${app.id} はこの時間枠は稼働不可（×）です`);
+    warnings.push("この時間枠は稼働不可（×）です");
   }
 
   if (app.withdrawn) {
-    warnings.push(`${app.id} は辞退済みです`);
+    warnings.push("辞退済みです");
   }
 
   const demand = input.demands.get(demandKey(slot.id, trackId, roleId));
