@@ -54,7 +54,22 @@ describe("hardViolations", () => {
     ]);
     const warnings = hardViolations(input, app, SLOT, TRACK_ID, ROLE_ID, assignments);
     expect(warnings.length).toBeGreaterThan(0);
-    expect(warnings.some((w) => w.includes(app.id))).toBe(true);
+    expect(warnings.some((w) => w.includes("1人2箇所"))).toBe(true);
+  });
+
+  it("names the constraint, never the applicant — the id must not leak into the UI", () => {
+    // Regression: these strings used to interpolate `app.id`, which has no
+    // display meaning and reached the manual-edit drawers verbatim
+    // ("app-2 はこの役割を担当できません"). Both callers already show the
+    // person's name next to the warning; see constraints.ts's doc comment.
+    const input = baseInput();
+    const app = baseApp({ withdrawn: true, skills: {}, availability: { [SLOT.id]: "x" } });
+    const assignments: Assignments = new Map([
+      [assignmentKey(app.id, SLOT.id), { trackId: TRACK_ID, roleId: ROLE_ID, locked: false }],
+    ]);
+    const warnings = hardViolations(input, app, SLOT, "no-such-track", ROLE_ID, assignments);
+    expect(warnings.length).toBe(5);
+    expect(warnings.every((w) => !w.includes(app.id))).toBe(true);
   });
 
   it("flags a role the applicant has no skill record for (rule 2)", () => {

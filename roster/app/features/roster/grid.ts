@@ -323,7 +323,11 @@ export function suggestForRange(
 
 /** One `StaffGrid` column — a display-ready staff member (docs/roster/07-
  * roster-manual-edit.md "Design" §3a). Experience level lives here (the
- * column header) and nowhere else — `StaffGrid` never receives it per cell. */
+ * column header) and nowhere else — `StaffGrid` never receives it per cell.
+ *
+ * `skills` is ordered first-choice first (see `buildStaffColumns`), so
+ * `skills[0]` is the role this person actually asked for — that is what the
+ * narrow column header shows, with the rest collapsed into a "+N". */
 export type StaffGridColumn = {
   applicationId: string;
   name: string;
@@ -359,10 +363,19 @@ export function buildStaffColumns(
         applicationId: a.id,
         name: a.name,
         withdrawn: a.withdrawn,
-        skills: Object.entries(solverApp?.skills ?? {}).map(([roleId, s]) => ({
-          roleName: roleNameById.get(roleId) ?? roleId,
-          level: s.level,
-        })),
+        // Sorted by pref (first choice first), tie-broken by role name so the
+        // order never depends on `skills`' object key order. `StaffGrid`'s
+        // header shows only `skills[0]` — the column is too narrow for the
+        // full list — so which entry lands first is a display decision, not
+        // an incidental one.
+        skills: Object.entries(solverApp?.skills ?? {})
+          .map(([roleId, s]) => ({
+            roleName: roleNameById.get(roleId) ?? roleId,
+            level: s.level,
+            pref: s.pref,
+          }))
+          .sort((x, y) => x.pref - y.pref || x.roleName.localeCompare(y.roleName, "ja"))
+          .map(({ roleName, level }) => ({ roleName, level })),
         availability: solverApp?.availability ?? {},
       };
     });

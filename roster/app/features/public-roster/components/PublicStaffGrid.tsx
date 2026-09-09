@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { GridLegend } from "~/features/roster/components/GridLegend";
 import { groupAssignmentsByApplication } from "~/features/roster/grid";
 import type { Assignments } from "~/features/solver/types";
 
@@ -15,7 +16,9 @@ type TrackInfo = { name: string; color: string };
  * leaves `roster.server.ts`), and no click handler (read-only). Reuses
  * `roster/grid.ts#groupAssignmentsByApplication` for the per-application
  * per-slot lookup rather than re-deriving it — the same pure function
- * `StaffGrid` itself is built on top of (`buildStaffColumns`).
+ * `StaffGrid` itself is built on top of (`buildStaffColumns`), and the same
+ * `.data-grid*` layout classes, so the public page and the owner page are
+ * the same table with less in it.
  */
 export function PublicStaffGrid({
   timeSlots,
@@ -23,54 +26,54 @@ export function PublicStaffGrid({
   assignments,
   trackById,
   roleNameById,
+  matchedIds,
 }: {
   timeSlots: readonly PublicStaffGridSlot[];
   columns: readonly PublicStaffGridColumn[];
   assignments: Assignments;
   trackById: ReadonlyMap<string, TrackInfo>;
   roleNameById: ReadonlyMap<string, string>;
+  /** Application ids matching the name search — same contract as the
+   * owner-side `StaffGrid`: the column header lights up, the cells keep
+   * their track colour. */
+  matchedIds?: ReadonlySet<string>;
 }) {
   const byApp = useMemo(() => groupAssignmentsByApplication(assignments), [assignments]);
 
   if (columns.length === 0) {
-    return <p className="text-sm text-neutral-600">表示できるスタッフがいません。</p>;
+    return <p className="text-sm text-muted-foreground">表示できるスタッフがいません。</p>;
   }
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground" aria-label="トラック凡例">
-        {[...trackById.values()].map((track) => (
-          <span key={track.name} className="inline-flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className="size-2.5 rounded-sm border border-border"
-              style={{ backgroundColor: `${track.color}40` }}
-            />
-            {track.name}
-          </span>
-        ))}
-      </div>
+      <GridLegend tracks={[...trackById.values()]} />
       <div className="data-grid-wrap">
-        <table className="w-full border-collapse text-sm">
+        <table className="data-grid">
           <thead>
             <tr>
-              <th className="sticky left-0 border-b-2 border-black bg-neutral-50 p-2 text-left">
-                時間枠
+              <th scope="col" className="data-grid-rowhead">
+                時間
               </th>
-              {columns.map((col) => (
-                <th
-                  key={col.id}
-                  className="border-b-2 border-black bg-neutral-50 p-2 text-left font-medium"
-                >
-                  {col.name}
-                </th>
-              ))}
+              {columns.map((col) => {
+                const matched = matchedIds?.has(col.id) ?? false;
+                return (
+                  <th
+                    key={col.id}
+                    scope="col"
+                    className={`data-grid-colhead${matched ? " data-grid-colhead-match" : ""}`}
+                    data-search-match={matched ? "true" : undefined}
+                  >
+                    {matched ? <span className="grid-match">{col.name}</span> : col.name}
+                  </th>
+                );
+              })}
+              <th className="data-grid-filler" />
             </tr>
           </thead>
           <tbody>
             {timeSlots.map((slot) => (
-              <tr key={slot.id} className="border-b border-neutral-200 last:border-0">
-                <th scope="row" className="sticky left-0 bg-white p-2 text-left font-medium">
+              <tr key={slot.id}>
+                <th scope="row" className="data-grid-rowhead">
                   {slot.start}–{slot.end}
                 </th>
                 {columns.map((col) => {
@@ -78,24 +81,27 @@ export function PublicStaffGrid({
                   const track = value ? trackById.get(value.trackId) : undefined;
                   const roleName = value ? (roleNameById.get(value.roleId) ?? value.roleId) : "";
                   return (
-                    <td key={col.id} className="p-1">
+                    <td key={col.id}>
                       <div
                         aria-label={`${col.name} / ${slot.start}–${slot.end}${
                           track ? `：${track.name} ${roleName}` : "：空き"
                         }`}
-                        className="flex h-full min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-lg border border-neutral-200 p-1 text-center"
+                        className={`data-grid-cell${value ? "" : " data-grid-cell-empty"}`}
                         style={track ? { backgroundColor: `${track.color}26` } : undefined}
                       >
-                        {track ? (
+                        {value ? (
                           <>
-                            <span className="text-xs font-bold">{roleName}</span>
-                            <span className="text-[10px] text-neutral-600">{track.name}</span>
+                            <span className="role">{roleName}</span>
+                            <span className="track">{track?.name ?? value.trackId}</span>
                           </>
-                        ) : null}
+                        ) : (
+                          <span aria-hidden="true">—</span>
+                        )}
                       </div>
                     </td>
                   );
                 })}
+                <td className="data-grid-filler" />
               </tr>
             ))}
           </tbody>
